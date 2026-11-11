@@ -14,6 +14,8 @@ const json = (b: unknown, status = 200) =>
 
 // Longest names first so "chicken broth" wins over "chicken", etc.
 const KW: [string, string][] = ([
+  ["peppercorn",""],["black pepper",""],["kosher salt",""],["sea salt",""],["corn tortilla","tortillas"],["flour tortilla","tortillas"],
+  ["bread crumb","breadcrumbs"],["butter lettuce","lettuce"],["paneer","paneer"],["lasagna","lasagna noodles"],["juniper berr","juniper berries"],
   ["potato gnocchi","gnocchi"],["egg noodle","noodles"],["egg yolk","eggs"],["chicken bouillon","broth"],["bouillon","broth"],
   ["garlic powder","garlic"],["onion powder","onion"],["coconut cream","coconut milk"],["half-and-half","heavy cream"],
   ["rotisserie chicken","rotisserie chicken"],["chicken breast","chicken breast"],["chicken thigh","chicken"],
@@ -62,11 +64,14 @@ const KW: [string, string][] = ([
 function names(lines: string[]): string[] {
   const out = new Set<string>();
   for (const raw of lines) {
-    let l = " " + raw.toLowerCase().replace(/\(.*?\)/g, " ") + " ";
+    let l = " " + raw.toLowerCase().replace(/\(.*?\)/g, " ")
+      .replace(/(chicken|vegetable|beef)( or (chicken|vegetable|beef))+ (broth|stock)/g, "broth") + " ";
     for (const [k, v] of KW) {
-      if (l.includes(k)) { out.add(v); l = l.split(k).join(" "); }
+      if (l.includes(k)) { if (v) out.add(v); l = l.split(k).join(" "); }
     }
   }
+  // A specific pasta shape makes the generic "pasta" redundant.
+  if (["short pasta","spaghetti","linguine","bucatini","orzo","lasagna noodles","pastina"].some((x) => out.has(x))) out.delete("pasta");
   return [...out].sort();
 }
 
