@@ -156,12 +156,13 @@ a{color:var(--green)}
   </section>
 
   <section class="panel" id="pantry">
-    <p class="intro"><b>What's already at home.</b> Buying from the shopping list adds here, and marking a meal as cooked takes its ingredients out, so leftovers (like half a carton of broth) count toward the next recipe. Adjust anything that's off.</p>
+    <p class="intro"><b>What's already at home</b>, sorted into the fridge, freezer and pantry. Buying from the shopping list adds here, and marking a meal as cooked takes its ingredients out, so leftovers (like half a carton of broth) count toward the next recipe. Adjust anything that's off.</p>
     <form id="pantryAdd" class="row">
       <input type="text" id="panIng" list="ingList" placeholder="Ingredient" required style="flex:1 1 200px">
       <datalist id="ingList"></datalist>
       <input type="number" id="panQ" step="any" min="0" placeholder="Amount" required style="width:110px">
       <select id="panU"></select>
+      <select id="panLoc"><option value="">Where? (auto)</option><option value="fridge">🧊 Fridge</option><option value="freezer">❄️ Freezer</option><option value="pantry">🥫 Pantry</option></select>
       <button class="btn primary">Add / update</button>
     </form>
     <div id="pantryList"></div>
@@ -248,7 +249,7 @@ a{color:var(--green)}
 <footer>Recipes link to their original sites. Only the title, photo link, servings and ingredient amounts are kept here (no steps). Prices come from <a href="https://shop.fairwaymarket.com/store/fairway/storefront" target="_blank" rel="noopener">shop.fairwaymarket.com</a> or are entered by the household, and may have changed since.</footer>
 <div class="toast" id="toast"></div>
 
-<script src="config.js?v=9"></script>
+<script src="config.js?v=10"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 const CFG = window.BLP_CONFIG || {};
@@ -332,6 +333,27 @@ function fmtAmt(q,u){
   return String(round(q,10));
 }
 const pantryOf = i => S.pantry.find(p=>p.ingredient===i);
+// Where things are normally kept. Anything not listed goes in the pantry; each item can be moved in At Home.
+const FRIDGE = new Set(['butter','milk','heavy cream','sour cream','yogurt','buttermilk','eggs','parmesan','pecorino','gruyere','cheddar','mozzarella','feta','halloumi',
+  'ricotta','cream cheese','goat cheese','cottage cheese','cotija','monterey jack','fontina','paneer','chicken','chicken breast','ground chicken','ground turkey','ground beef',
+  'ground pork','pork','bacon','sausage','prosciutto','steak','flank steak','beef','lamb','salmon','tuna steak','shrimp','cod','crab','scallops','mussels','tofu','tempeh',
+  'rotisserie chicken','gnocchi','tortillas','miso','mayonnaise','mustard','hoisin','oyster sauce','fish sauce','chile crisp','gochujang','tahini','lemons','limes',
+  'scallions','leeks','celery','carrots','cucumber','zucchini','asparagus','green beans','broccoli','broccolini','broccoli rabe','cauliflower','brussels sprouts','cabbage',
+  'bok choy','kale','spinach','arugula','lettuce','sugar snap peas','snow peas','mushrooms','shiitake mushrooms','bell peppers','jalapeño','serrano peppers','poblano peppers',
+  'fresh chiles','ginger','basil','parsley','cilantro','dill','mint','thyme','rosemary','sage','chives','tarragon','berries','apples','melon','corn','cherry tomatoes','eggplant',
+  'radishes','fennel','white wine','edamame']);
+const FREEZER = new Set(['peas','puff pastry','dumplings','frozen dumplings']);
+const defaultStore = i => FREEZER.has(i)?'freezer':FRIDGE.has(i)?'fridge':'pantry';
+// Shelf-stable until opened: a partly used package goes in the fridge.
+const FRIDGE_ONCE_OPEN = new Set(['broth','coconut milk','canned tomatoes','tomato paste','chipotle','white wine','red wine','shaoxing wine','mirin','fish sauce',
+  'oyster sauce','hoisin','mayonnaise','mustard','tahini','miso','worcestershire','maple syrup','black beans','white beans','chickpeas','kidney beans','sriracha','hot sauce']);
+function storeOf(i){
+  const p=pantryOf(i); if(p?.location) return p.location;
+  if(p&&FRIDGE_ONCE_OPEN.has(i)){ const pk=pkgOf(i); const n=conv(+p.q,p.u,pk.u,i,pk)/pk.q; if(n>0&&Math.abs(n-Math.round(n))>0.02) return 'fridge'; }
+  return defaultStore(i);
+}
+const STORE_LABEL = {fridge:'the fridge',freezer:'the freezer',pantry:'the pantry'};
+const STORE_ICON = {fridge:'🧊',freezer:'❄️',pantry:'🥫'};
 function haveIn(i,u,pk){ const p=pantryOf(i); return p?conv(+p.q,p.u,u,i,pk):0; }
 
 // Walk every uncooked meal up to the end of the shown week, in date order, using up what's in the
@@ -395,11 +417,12 @@ const DB = {
     for(const [i,a] of Object.entries(r.amounts||{})){
       const p=pantryOf(i); if(!p) continue;
       const d=conv(+a.q,a.u,p.u,i,pkgOf(i)); if(d==null) continue;
-      rows.push({ingredient:i,q:Math.max(0,+p.q+sign*d),u:p.u,updated_by:me.user_id,updated_at:new Date().toISOString()});
+      rows.push({ingredient:i,q:Math.max(0,+p.q+sign*d),u:p.u,location:p.location||null,updated_by:me.user_id,updated_at:new Date().toISOString()});
     }
     if(rows.length) await DB.run(sb.from('pantry').upsert(rows));
   },
-  setPantry:(ingredient,q,u)=>DB.run(sb.from('pantry').upsert({ingredient,q:Math.max(0,q),u,updated_by:me.user_id,updated_at:new Date().toISOString()})),
+  setPantry:(ingredient,q,u,location)=>DB.run(sb.from('pantry').upsert({ingredient,q:Math.max(0,q),u,location:location||null,updated_by:me.user_id,updated_at:new Date().toISOString()})),
+  moveTo:(ingredient,location)=>DB.run(sb.from('pantry').update({location,updated_by:me.user_id,updated_at:new Date().toISOString()}).eq('ingredient',ingredient)),
   removePantry:i=>DB.run(sb.from('pantry').delete().eq('ingredient',i)),
   async bought(o,v){
     const add=o.buy*o.pk.q, cur=haveIn(o.i,o.D,o.pk);
@@ -516,19 +539,18 @@ function renderShop(){
   for(const o of toBuy){ if(o.pk.price==null) unpriced++; else total+=o.buy*o.pk.price; }
   const byDay={}; for(const o of rows) (byDay[o.first]=byDay[o.first]||[]).push(o);
   window._shop=Object.fromEntries(rows.map(o=>[o.i,o]));
-  $('#shopList').innerHTML=`<div class="meta" style="margin-bottom:6px"><b>${toBuy.length}</b> to buy · ${rows.length-toBuy.length} covered by what's At Home${hideSt?' · staples hidden':''} · about <b>$${total.toFixed(2)}</b>${unpriced?` + ${unpriced} without a price`:''}</div>`+
+  $('#shopList').innerHTML=`<div class="meta" style="margin-bottom:6px"><b>${toBuy.length}</b> to buy · ${rows.length-toBuy.length} already in the fridge, freezer or pantry${hideSt?' · staples hidden':''} · about <b>$${total.toFixed(2)}</b>${unpriced?` + ${unpriced} without a price`:''}</div>`+
     Object.keys(byDay).sort().map(d=>`<div class="needby">Needed by ${dayName(d,'long')} ${shortDate(d)}${d<TODAY?' (past)':''}</div>
     <table><tr><th>Ingredient</th><th>For</th><th>Need</th><th>At home</th><th>Buy</th><th>Price</th></tr>${byDay[d].sort((a,b)=>b.buy-a.buy||a.i.localeCompare(b.i)).map(o=>{
       const br=boughtRec(o.i), price=o.pk.price;
       const buyCell = o.buy>0
         ? `<b>${o.pk.u==='each'&&o.pk.label==='1'?o.buy:`${o.buy} × ${esc(o.pk.label)}`}</b>${price!=null?`<div class="meta">$${(o.buy*price).toFixed(2)}</div>`:''}<button class="btn small" data-bought="${esc(o.i)}" style="margin-top:4px">Got it ✓</button>`
-        : br ? `<span style="color:var(--green)">✓ bought by ${esc(nameOf(br.marked_by))}</span> <a href="#" class="meta" data-unbuy="${esc(o.i)}">undo</a>`
-        : `<span style="color:var(--green)">Have enough</span>`;
+        : `<span style="color:var(--green)">${STORE_ICON[storeOf(o.i)]} In ${STORE_LABEL[storeOf(o.i)]}</span>${br?`<div class="meta">bought by ${esc(nameOf(br.marked_by))} · <a href="#" data-unbuy="${esc(o.i)}">undo</a></div>`:''}`;
       return `<tr class="${o.buy>0?'':'have'}">
       <td><span class="${o.buy>0?'':'name'}">${esc(cap(o.i))}</span>${o.uses.length>1?` <span class="tag cooked">${o.uses.length} meals</span>`:''}</td>
       <td class="meta">${o.uses.map(m=>`${dayName(m.planned_for)} · ${esc(rec(m.recipe_id).title)}`).join('<br>')}</td>
       <td>${o.unknown&&!o.need?'<span class="meta">some</span>':esc(fmtAmt(o.need,o.D))}${o.unknown&&o.need?' <span class="meta">+ some</span>':''}</td>
-      <td>${esc(fmtAmt(o.have,o.D))}${o.buy>0||o.left>0?`<div class="meta">${esc(fmtAmt(o.left,o.D))} left after</div>`:''}</td>
+      <td>${o.have>0?`${esc(fmtAmt(o.have,o.D))}<div class="meta">${STORE_ICON[storeOf(o.i)]} in ${STORE_LABEL[storeOf(o.i)]}</div>`:'0'}${o.left>0?`<div class="meta">${esc(fmtAmt(o.left,o.D))} left after</div>`:''}</td>
       <td>${buyCell}</td><td>${priceCell(o.i)}</td></tr>`}).join('')}</table>`).join('');
 }
 function renderImport(){
@@ -617,14 +639,16 @@ let editingPantry=null;
 function renderPantry(){
   if(!$('#panU').options.length) $('#panU').innerHTML=unitOpts();
   $('#ingList').innerHTML=allIngredients().map(i=>`<option value="${esc(i)}">`).join('');
-  const rows=[...S.pantry].sort((a,b)=>(b.q>0)-(a.q>0)||a.ingredient.localeCompare(b.ingredient));
-  $('#pantryList').innerHTML=rows.length?`<table><tr><th>Ingredient</th><th>On hand</th><th>Package</th><th>Updated</th><th></th></tr>${rows.map(p=>{const pk=pkgOf(p.ingredient);
+  const groups=['fridge','freezer','pantry'].map(loc=>[loc,S.pantry.filter(p=>storeOf(p.ingredient)===loc).sort((a,b)=>(b.q>0)-(a.q>0)||a.ingredient.localeCompare(b.ingredient))]);
+  const rowHtml=p=>{const pk=pkgOf(p.ingredient), loc=storeOf(p.ingredient);
     return `<tr class="${+p.q>0?'':'have'}"><td><span class="${+p.q>0?'':'name'}">${esc(cap(p.ingredient))}</span></td>
     <td>${editingPantry===p.ingredient?`<form class="row" data-panedit="${esc(p.ingredient)}" style="margin:0;gap:6px"><input name="q" type="number" step="any" min="0" value="${round(+p.q,100)}" style="width:90px"><select name="u">${Object.keys(UNITS).map(u=>`<option ${UNITS[u][0]===p.u&&UNITS[u][1]===1?'selected':''}>${u}</option>`).join('')}</select><button class="btn small primary">Save</button></form>`
-      :`<b>${esc(fmtAmt(+p.q,p.u))}</b>${pk.u===p.u&&pk.q&&+p.q>0&&pk.u!=='pkg'?` <span class="meta">(${round(+p.q/pk.q,4)} of a ${esc(pk.label)})</span>`:''}`}</td>
-    <td class="meta">${esc(S.prices[p.ingredient]?.item||'')}${pk.label?` · ${esc(pk.label)}`:''}</td>
+      :`<b>${esc(fmtAmt(+p.q,p.u))}</b>${pk.u===p.u&&pk.q&&+p.q>0&&pk.u!=='pkg'&&pk.label!=='1'?` <span class="meta">(${round(+p.q/pk.q,4)} of a ${esc(pk.label)})</span>`:''}${!p.location&&FRIDGE_ONCE_OPEN.has(p.ingredient)&&storeOf(p.ingredient)==='fridge'?' <span class="meta">· opened</span>':''}`}</td>
+    <td><select data-moveto="${esc(p.ingredient)}" style="font-size:12.5px;padding:4px 6px">${['fridge','freezer','pantry'].map(l=>`<option value="${l}" ${l===loc?'selected':''}>${STORE_ICON[l]} ${cap(l)}</option>`).join('')}</select></td>
     <td class="meta">${p.updated_by?esc(nameOf(p.updated_by))+', ':''}${ago(p.updated_at)}</td>
-    <td class="num"><a href="#" data-panedit-open="${esc(p.ingredient)}">edit</a> · <a href="#" data-panzero="${esc(p.ingredient)}">used up</a></td></tr>`}).join('')}</table>`
+    <td class="num"><a href="#" data-panedit-open="${esc(p.ingredient)}">edit</a> · <a href="#" data-panzero="${esc(p.ingredient)}">used up</a></td></tr>`};
+  $('#pantryList').innerHTML=S.pantry.length?groups.map(([loc,rows])=>`<h2 style="margin-top:18px">${STORE_ICON[loc]} ${cap(loc)} <span class="meta" style="font:inherit;font-size:13px">${rows.filter(r=>+r.q>0).length} item${rows.filter(r=>+r.q>0).length===1?'':'s'}</span></h2>`+
+    (rows.length?`<table><tr><th>Item</th><th>On hand</th><th>Kept in</th><th>Updated</th><th></th></tr>${rows.map(rowHtml).join('')}</table>`:`<p class="meta">Nothing in ${STORE_LABEL[loc]} yet.</p>`)).join('')
     :'<div class="empty">Nothing tracked yet. Tap <b>Got it ✓</b> on the shopping list after shopping, or add what you already have above.</div>';
 }
 function renderAll(){
@@ -665,7 +689,7 @@ document.addEventListener('submit',async e=>{
   if(f.id==='pantryAdd'){
     const i=$('#panIng').value.trim().toLowerCase(), [u,mult]=UNITS[$('#panU').value]; const q=parseFloat($('#panQ').value)*mult;
     if(!i||isNaN(q)) return; const pk=pkgOf(i); const D=pk.u==='pkg'&&u!=='pkg'?u:pk.u; const v=u==='pkg'?conv(q,'pkg',D,i,pk)??q:conv(q,u,D,i,pk);
-    await DB.setPantry(i,v,D); f.reset(); toast('At Home updated'); renderAll(); return;
+    await DB.setPantry(i,v,D,$('#panLoc').value||null); f.reset(); toast('At Home updated'); renderAll(); return;
   }
   if(f.dataset.panedit!==undefined){
     const i=f.dataset.panedit, [u,mult]=UNITS[f.u.value]; const q=parseFloat(f.q.value)*mult; const p=pantryOf(i);
@@ -723,6 +747,7 @@ document.addEventListener('change',async e=>{
   if(el.dataset.addday!==undefined&&el.value){ await DB.plan(el.value,el.dataset.addday); toast('Planned for '+dayName(el.dataset.addday,'long')); renderAll(); return; }
   if(el.dataset.planfor!==undefined&&el.value){ await DB.plan(el.dataset.planfor,el.value); toast('Planned for '+dayName(el.value,'long')); renderAll(); return; }
   if(el.dataset.move!==undefined&&el.value){ await DB.move(el.dataset.move,el.value); renderAll(); return; }
+  if(el.dataset.moveto!==undefined){ await DB.moveTo(el.dataset.moveto,el.value); toast('Moved to '+STORE_LABEL[el.value]); renderAll(); return; }
   if(el.id==='hideStaples') renderShop();
   if(el.id==='recList'||el.id==='recSort') renderRecipes();
   if(el.id==='needPriceOnly') renderIngredients();
