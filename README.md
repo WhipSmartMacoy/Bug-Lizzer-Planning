@@ -2,18 +2,19 @@
 
 Household hub. It starts with the **Kitchen** and will grow to cover tasks, bills and more.
 
+Live: https://whipsmartmacoy.github.io/Bug-Lizzer-Planning/ (sign in by email; an admin approves new members)
+
 ## Kitchen
-- **Plan & shop:** pick the week's recipes and get one combined shopping list with Fairway prices. Tick what's already at home, then share the list by link.
-- **Use it up:** tap what's in the fridge to see the recipes that use it.
-- **Recipes:** every recipe links to its original page. Nothing is copied here except the name and plain ingredient names, which are used for tracking.
-- **What we use most:** ingredients ranked by how often the household actually cooks with them.
-- **Discover:** recipes we haven't made yet that reuse ingredients we already buy.
+- **Recipe box:** paste a recipe link to add it. The box keeps only the title, a link to the photo, and plain ingredient names, and always links back to the original. No amounts or steps are copied.
+- **Plan & shop:** plan one week at a time by putting recipes on days. The shopping list covers just that week, grouped by the day each ingredient is first needed, with Fairway prices.
+- **What we use most:** ingredients counted only from meals that were planned or cooked.
+- **Use it up / Discover:** recipes in the box that use what's in the fridge or what you already buy.
+- **Who did what:** activity feed and members.
 
 ### Rules
-- No made-up recipes. Recipes come only from the household's NYT Cooking box or from sites like Serious Eats, and every one is a link to the source.
-- Prices come from Fairway Market (store 4000) and are refreshed by hand.
+- No made-up recipes, and nothing is preloaded. Recipes come only from links the household adds.
+- Prices are kept per ingredient. They come from https://shop.fairwaymarket.com/store/fairway/storefront or are entered by a household member. The view `ingredients_needing_price` lists what still needs one; Claude fills those in when recipes are added.
 
-### Data
-- `data/recipes.json`: recipe links, the lists each one is on (saved, cooked, "Ham did", to try), and ingredient names
-- `data/prices.json`: Fairway product, price and search link for each ingredient
-- `data/cook-log.json`: record of what was made
+### Setup (Supabase)
+Run in order in the SQL editor: `supabase/setup.sql`, `supabase/002_weekly_plan.sql`, `supabase/003_recipe_box.sql`.
+Edge function: `supabase/functions/import-recipe` (JWT verification off; the function checks membership itself).
