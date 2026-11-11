@@ -61,18 +61,85 @@ const KW: [string, string][] = ([
   ["paprika","paprika"],["cayenne","cayenne"],["cinnamon","cinnamon"],["nutmeg","nutmeg"],["vanilla","vanilla"],["chocolate","chocolate"],["cocoa","cocoa"],
 ] as [string, string][]).sort((a, b) => b[0].length - a[0].length);
 
-function names(lines: string[]): string[] {
-  const out = new Set<string>();
-  for (const raw of lines) {
-    let l = " " + raw.toLowerCase().replace(/\(.*?\)/g, " ")
-      .replace(/(chicken|vegetable|beef)( or (chicken|vegetable|beef))+ (broth|stock)/g, "broth") + " ";
-    for (const [k, v] of KW) {
-      if (l.includes(k)) { if (v) out.add(v); l = l.split(k).join(" "); }
+function lineNames(raw: string): string[] {
+  const found: string[] = [];
+  let l = " " + raw.toLowerCase().replace(/\(.*?\)/g, " ")
+    .replace(/(chicken|vegetable|beef)( or (chicken|vegetable|beef))+ (broth|stock)/g, "broth") + " ";
+  for (const [k, v] of KW) {
+    if (l.includes(k)) {
+      // Remember where the word appeared so the first-mentioned ingredient is treated as the main one.
+      if (v && !found.includes(v)) found.push(v + "\u0000" + l.indexOf(k));
+      l = l.split(k).join(" ".repeat(k.length));
     }
   }
+  return found.sort((a, b) => +a.split("\u0000")[1] - +b.split("\u0000")[1]).map((x) => x.split("\u0000")[0]);
+}
+
+function names(lines: string[]): string[] {
+  const out = new Set<string>();
+  for (const raw of lines) for (const n of lineNames(raw)) out.add(n);
   // A specific pasta shape makes the generic "pasta" redundant.
   if (["short pasta","spaghetti","linguine","bucatini","orzo","lasagna noodles","pastina"].some((x) => out.has(x))) out.delete("pasta");
   return [...out].sort();
+}
+
+// ---- amounts: how much of each ingredient the recipe uses, in base units ----
+// ml (volume), g (weight), each (whole items), pkg (a can/jar/package of unknown size)
+const VOL: Record<string, number> = { teaspoon: 4.93, tsp: 4.93, tablespoon: 14.79, tbsp: 14.79, tbs: 14.79, cup: 236.6, "fluid ounce": 29.57, "fl oz": 29.57,
+  pint: 473, quart: 946, qt: 946, gallon: 3785, milliliter: 1, ml: 1, liter: 1000, litre: 1000, l: 1000, pinch: 0.3, dash: 0.6 };
+const WT: Record<string, number> = { ounce: 28.35, oz: 28.35, pound: 453.6, lb: 453.6, gram: 1, g: 1, kilogram: 1000, kg: 1000 };
+const EACH_PART: Record<string, number> = { clove: 0.1, sprig: 0.1, stalk: 0.12, rib: 0.12, slice: 0.1, leaf: 0.05, leaves: 0.05, bunch: 1, head: 1 };
+const PKG = ["can", "jar", "package", "pkg", "box", "bag", "bottle", "carton", "container", "sheet", "tube"];
+
+function num(t: string): number {
+  t = t.trim();
+  const m = t.match(/^(\d+)\s+(\d+)\/(\d+)$/); if (m) return +m[1] + +m[2] / +m[3];
+  const f = t.match(/^(\d+)\/(\d+)$/); if (f) return +f[1] / +f[2];
+  return parseFloat(t);
+}
+function amountOf(raw: string): { q: number; u: string } | null {
+  let l = raw.toLowerCase()
+    .replace(/½/g, " 1/2").replace(/⅓/g, " 1/3").replace(/⅔/g, " 2/3").replace(/¼/g, " 1/4").replace(/¾/g, " 3/4")
+    .replace(/⅛/g, " 1/8").replace(/(\d)\s+(\d\/\d)/g, "$1 $2").replace(/\s+/g, " ").trim();
+  // "1 (15-ounce) can chickpeas" -> 15 oz
+  const sized = l.match(/(\d+(?:\.\d+)?|\d+ \d\/\d|\d\/\d)?\s*\((\d+(?:\.\d+)?)[- ]?(ounce|oz|gram|g|pound|lb|fluid ounce|fl oz|ml)s?\b/);
+  if (sized) {
+    const n = sized[1] ? num(sized[1]) : 1, size = +sized[2], u = sized[3];
+    if (VOL[u]) return { q: n * size * VOL[u], u: "ml" };
+    return { q: n * size * WT[u], u: "g" };
+  }
+  const NUM = "(\\d+ \\d\\/\\d|\\d+\\/\\d|\\d*\\.?\\d+)";
+  const m = l.match(new RegExp("^" + NUM + "(?:\\s*(?:to|-|–|or)\\s*" + NUM + ")?\\s*(.*)$"));
+  let q: number, rest: string;
+  if (m) { q = Math.max(num(m[1]), m[2] ? num(m[2]) : 0); rest = m[3]; }
+  else {
+    const any = l.match(/\b(?:of|from)\s+(\d+)\b/); // "juice of 1 lemon"
+    if (!any) return null;
+    q = +any[1]; rest = l.slice(l.indexOf(any[0]) + any[0].length);
+  }
+  if (!isFinite(q) || q <= 0) return null;
+  rest = rest.replace(/^(heaping|scant|level|large|medium|small|generous|about|whole)\s+/g, "").replace(/^(heaping|scant|level|large|medium|small)\s+/g, "");
+  const w = rest.match(/^([a-z]+(?: [a-z]+)?)/)?.[1] || "";
+  for (const unit of Object.keys(VOL).sort((a, b) => b.length - a.length)) if (w === unit || w.startsWith(unit + "s") || w.split(" ")[0] === unit || w.split(" ")[0] === unit + "s" || w === unit + "s") return { q: q * VOL[unit], u: "ml" };
+  for (const unit of Object.keys(WT).sort((a, b) => b.length - a.length)) if (w.split(" ")[0] === unit || w.split(" ")[0] === unit + "s") return { q: q * WT[unit], u: "g" };
+  const first = w.split(" ")[0];
+  const words = rest.split(/[\s,]+/).slice(0, 3);
+  for (const [unit, f] of Object.entries(EACH_PART)) if (words.some((x) => x === unit || x === unit + "s" || x === unit + "es")) return { q: q * f, u: "each" };
+  if (PKG.some((p) => first === p || first === p + "s")) return { q, u: "pkg" };
+  return { q, u: "each" };
+}
+function amounts(lines: string[]): Record<string, { q: number; u: string }> {
+  const out: Record<string, { q: number; u: string }> = {};
+  for (const raw of lines) {
+    const n = lineNames(raw)[0]; if (!n) continue;
+    const a = amountOf(raw); if (!a) continue;
+    const cur = out[n];
+    if (!cur) out[n] = { q: a.q, u: a.u };
+    else if (cur.u === a.u) cur.q += a.q;
+    else if ((cur.u === "ml" && a.u === "g") || (cur.u === "g" && a.u === "ml")) cur.q += a.q; // ~1 g per ml
+  }
+  for (const k of Object.keys(out)) out[k].q = Math.round(out[k].q * 100) / 100;
+  return out;
 }
 
 function findRecipe(node: any): any {
@@ -132,6 +199,7 @@ Deno.serve(async (req) => {
       site: (meta(html, "og:site_name") ? decode(meta(html, "og:site_name")) : u.hostname.replace(/^www\./, "")),
       servings,
       ingredients: names(lines),
+      amounts: amounts(lines),
       found_ingredients: lines.length > 0,
     });
   } catch (e) {

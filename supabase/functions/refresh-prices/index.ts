@@ -45,7 +45,18 @@ async function readProduct(url: string) {
           available: !/OutOfStock|Discontinued/i.test(String(offer?.availability || "")),
         };
       }
-    } catch { /* try next block */ }
+    } catch {
+      // Some pages have characters that break strict JSON parsing; read the fields directly instead.
+      const block = m[1];
+      if (/"@type"\s*:\s*"Product"/.test(block)) {
+        const price = block.match(/"price"\s*:\s*"?([\d.]+)/)?.[1];
+        const name = block.match(/"name"\s*:\s*"([^"]+)"/)?.[1] || "";
+        const size = block.match(/"size"\s*:\s*"([^"]+)"/)?.[1] || "";
+        const avail = block.match(/"availability"\s*:\s*"([^"]+)"/)?.[1] || "";
+        if (price) return { name, size, price: Number(price), available: !/OutOfStock|Discontinued/i.test(avail) };
+        return { name, size, price: null, available: false };
+      }
+    }
   }
   throw new Error("No price found on that page");
 }
@@ -84,7 +95,13 @@ Deno.serve(async (req) => {
       await Promise.all(linked.slice(i, i + 6).map(async (r) => {
         try {
           const p = await readProduct(r.link);
-          if (p.price == null) throw new Error("No price listed");
+          if (p.price == null) {
+            // Product page exists but lists no price: most likely discontinued. Keep the old price, flag it.
+            unavailable.push(r.ingredient);
+            await admin.from("prices").update({ available: false, checked_at: now }).eq("ingredient", r.ingredient);
+            failed.push({ ingredient: r.ingredient, reason: "No price listed (may be discontinued)" });
+            return;
+          }
           const price = label(p.price, p.size, r.price);
           const size = /per lb/i.test(p.size) ? "" : (r.size || p.size);
           if (price !== r.price) changed.push({ ingredient: r.ingredient, from: r.price, to: price });

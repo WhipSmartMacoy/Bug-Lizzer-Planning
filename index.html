@@ -29,7 +29,7 @@ main{max-width:1080px;margin:auto;padding:18px 20px 60px}
 .panel{display:none}.panel.on{display:block}
 .intro{color:var(--muted);margin:0 0 14px;max-width:70ch}
 .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:14px}
-input[type=search],input[type=email],input[type=text],input[type=url],select{font:inherit;padding:9px 12px;border:1px solid var(--line);border-radius:10px;background:var(--card);min-width:0}
+input[type=search],input[type=email],input[type=text],input[type=url],input[type=number],select{font:inherit;padding:9px 12px;border:1px solid var(--line);border-radius:10px;background:var(--card);min-width:0}
 input[type=search]{flex:1 1 240px}
 .btn{font:inherit;font-weight:600;padding:9px 14px;border-radius:10px;border:1px solid var(--line);background:var(--card);cursor:pointer;color:inherit}
 .btn.primary{background:var(--green);color:#fff;border-color:var(--green)}
@@ -127,6 +127,7 @@ a{color:var(--green)}
   <div class="areas"><span class="on">Kitchen</span><span title="Coming later">Tasks</span><span title="Coming later">Bills</span></div>
   <nav class="tabs" id="tabs">
     <button data-p="plan" class="on">Plan &amp; shop</button>
+    <button data-p="pantry">Pantry</button>
     <button data-p="useup">Use it up</button>
     <button data-p="recipes">Recipe box</button>
     <button data-p="ingredients">What we use most</button>
@@ -138,7 +139,7 @@ a{color:var(--green)}
 
 <main>
   <section class="panel on" id="plan">
-    <p class="intro">Plan one week at a time. Put recipes on the days you'll cook them, and the shopping list fills in with just that week's ingredients, in the order you'll need them. Tick what's already at home so nobody buys it twice.</p>
+    <p class="intro">Plan one week at a time. Put recipes on the days you'll cook them. The shopping list works out how much each meal needs, uses up what's already in the Pantry first (leftovers included), and tells you how many packages to buy. Tap <b>Got it ✓</b> after shopping and it goes into the Pantry.</p>
     <div class="weeknav">
       <button class="btn small" id="wkPrev">‹ Prev</button>
       <span class="label" id="wkLabel"></span>
@@ -150,9 +151,20 @@ a{color:var(--green)}
     <div class="row">
       <button class="btn primary" id="shareList">Share this list</button>
       <label class="meta"><input type="checkbox" id="hideStaples" checked> Hide pantry staples</label>
-      <label class="meta"><input type="checkbox" id="hideCooked" checked> Skip meals already cooked</label>
     </div>
     <div id="shopList"></div>
+  </section>
+
+  <section class="panel" id="pantry">
+    <p class="intro">What's in the kitchen right now. Buying from the shopping list adds here, and marking a meal as cooked takes its ingredients out, so leftovers (like half a carton of broth) count toward the next recipe. Adjust anything that's off.</p>
+    <form id="pantryAdd" class="row">
+      <input type="text" id="panIng" list="ingList" placeholder="Ingredient" required style="flex:1 1 200px">
+      <datalist id="ingList"></datalist>
+      <input type="number" id="panQ" step="any" min="0" placeholder="Amount" required style="width:110px">
+      <select id="panU"></select>
+      <button class="btn primary">Add / update</button>
+    </form>
+    <div id="pantryList"></div>
   </section>
 
   <section class="panel" id="useup">
@@ -233,10 +245,10 @@ a{color:var(--green)}
 
   <div class="note" id="syncNote"></div>
 </main>
-<footer>Recipes link to their original sites. Only the title, photo link and ingredient names are kept here. Prices come from <a href="https://shop.fairwaymarket.com/store/fairway/storefront" target="_blank" rel="noopener">shop.fairwaymarket.com</a> or are entered by the household, and may have changed since.</footer>
+<footer>Recipes link to their original sites. Only the title, photo link, servings and ingredient amounts are kept here (no steps). Prices come from <a href="https://shop.fairwaymarket.com/store/fairway/storefront" target="_blank" rel="noopener">shop.fairwaymarket.com</a> or are entered by the household, and may have changed since.</footer>
 <div class="toast" id="toast"></div>
 
-<script src="config.js?v=8"></script>
+<script src="config.js?v=9"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 const CFG = window.BLP_CONFIG || {};
@@ -264,7 +276,7 @@ let week = mondayOf(TODAY);
 const weekDays = () => [...Array(7)].map((_,i)=>addDays(week,i));
 
 let me=null;
-let S = { recipes:[], prices:{}, meals:[], have:[], members:[], activity:[] };
+let S = { recipes:[], prices:{}, meals:[], have:[], members:[], activity:[], pantry:[] };
 let byId = {};
 let fridge = LS.get('fridge',[]);
 let draft = null;        // recipe being imported
@@ -274,19 +286,95 @@ const nameOf = uid => (S.members.find(m=>m.user_id===uid)||{}).name || 'Someone'
 const colorOf = uid => { const i=S.members.findIndex(m=>m.user_id===uid); return COLORS[(i<0?0:i)%COLORS.length]; };
 const av = uid => `<span class="avatar" style="background:${colorOf(uid)}" title="${esc(nameOf(uid))}">${esc(nameOf(uid).slice(0,1).toUpperCase())}</span>`;
 const rec = id => byId[String(id)];
+// ---------------- amounts, packages and the pantry ----------------
+// Base units: ml (volume), g (weight), each (whole items), pkg (one package of unknown size).
+// Volume and weight are treated as ~1 g per ml when they have to be compared (close enough for shopping).
+const EACH_G = {lemons:100,limes:65,onion:250,'red onion':250,shallots:45,garlic:50,tomatoes:150,'cherry tomatoes':15,cucumber:300,potatoes:200,'sweet potatoes':250,
+  apples:200,avocados:180,carrots:70,celery:450,'bell peppers':160,'jalapeño':15,'serrano peppers':6,'fresh chiles':15,eggs:50,zucchini:200,eggplant:450,
+  cabbage:900,cauliflower:600,broccoli:300,lettuce:250,kale:250,scallions:100,cilantro:60,parsley:60,basil:20,dill:20,mint:20,thyme:20,rosemary:20,sage:20,chives:20,
+  ginger:200,'ground chicken':450,'ground turkey':450,tortillas:30,bread:450};
+const eachG = i => EACH_G[i] || 100;
+function pkgOf(i){
+  const p=S.prices[i]||{}; const text=((p.size||'')+' '+(p.item||'')).toLowerCase();
+  const price=parseFloat(String(p.price||'').replace(/[^0-9.]/g,''))||null;
+  if(/\/\s*lb/.test(p.price||'')) return {q:453.6,u:'g',price,label:'1 lb'};
+  let m=text.match(/about ([\d.]+) lb each/); if(m) return {q:1,u:'each',price,label:'1',eachG:+m[1]*453.6};
+  m=text.match(/([\d.]+)\s*(fl\.? oz|oz|lbs?|ct|count|pt|pint|qt|quart|gal|ml|l|g|kg)\b/);
+  if(m){ const n=+m[1], u=m[2].replace('.','');
+    if(u==='ct'||u==='count') return {q:n,u:'each',price,label:`${n} ct`};
+    const V={'fl oz':29.57,pt:473,pint:473,qt:946,quart:946,gal:3785,ml:1,l:1000}, W={oz:28.35,lb:453.6,lbs:453.6,g:1,kg:1000};
+    // "oz" on a liquid (broth, cream, sauces) means fluid ounces: use volume when recipes measure it by volume.
+    if(u==='oz' && S.recipes.some(r=>r.amounts?.[i]?.u==='ml')) return {q:n*29.57,u:'ml',price,label:`${n} oz`};
+    if(V[u]) return {q:n*V[u],u:'ml',price,label:`${n} ${u}`};
+    if(W[u]) return {q:n*W[u],u:'g',price,label:`${n} ${u}`};
+  }
+  if(/\b(each|bunch|head)\b/.test(text)) return {q:1,u:'each',price,label:/bunch/.test(text)?'1 bunch':'1'};
+  return {q:1,u:'pkg',price,label:'1 package'};
+}
+// Convert q from unit a to unit b for ingredient i (pk = its package, for "pkg" and per-item weights).
+// Returns null when it can't be converted (e.g. "1 package" of something with an unknown package size).
+function conv(q,a,b,i,pk){
+  if(q==null) return null; if(a===b) return q;
+  const ew=pk?.eachG||eachG(i);
+  const toG=(x,u)=>u==='each'?x*ew:x, fromG=(x,u)=>u==='each'?x/ew:x;   // ml ≈ g
+  let g;
+  if(a==='pkg'){ if(!pk||pk.u==='pkg') return null; g=toG(q*pk.q,pk.u); } else g=toG(q,a);
+  if(b==='pkg'){ if(!pk||pk.u==='pkg') return null; return fromG(g,pk.u)/pk.q; }
+  return fromG(g,b);
+}
+const round = (x,s=4)=>Math.round(x*s)/s;
+function fmtAmt(q,u){
+  if(q==null) return '—';
+  if(q<=0.0001) return '0';
+  if(u==='ml'){ if(q>=59) return `${round(q/236.6)} cup${q/236.6>1.01?'s':''}`; if(q>=14) return `${round(q/14.79,2)} tbsp`; return `${round(q/4.93,2)} tsp`; }
+  if(u==='g'){ if(q>=453.6) return `${round(q/453.6)} lb`; return `${round(q/28.35,2)} oz`; }
+  if(u==='pkg') return `${round(q)} pkg`;
+  return String(round(q,10));
+}
+const pantryOf = i => S.pantry.find(p=>p.ingredient===i);
+function haveIn(i,u,pk){ const p=pantryOf(i); return p?conv(+p.q,p.u,u,i,pk):0; }
+
+// Walk every uncooked meal up to the end of the shown week, in date order, using up what's in the
+// pantry first and buying whole packages only when it runs out. Leftovers carry to the next meal.
+function shopPlan(){
+  const end=addDays(week,6);
+  const meals=S.meals.filter(m=>!m.cooked_at&&m.planned_for<=end&&rec(m.recipe_id)).sort((a,b)=>a.planned_for.localeCompare(b.planned_for));
+  const stock={}, out={};
+  for(const m of meals){
+    const r=rec(m.recipe_id), inWeek=m.planned_for>=week;
+    for(const i of r.ingredients){
+      const pk=pkgOf(i), D=pk.u;
+      if(stock[i]==null) stock[i]=haveIn(i,D,pk);
+      const a=(r.amounts||{})[i];
+      let need=a?conv(+a.q,a.u,D,i,pk):null, unknown=need==null;
+      if(unknown) need = stock[i]>0 ? 0 : 0.0001;               // amount not listed: make sure there's some
+      const before=stock[i]; let buy=0;
+      if(stock[i]<need-1e-9){ buy=Math.max(1,Math.ceil((need-stock[i])/pk.q-1e-9)); stock[i]+=buy*pk.q; }
+      stock[i]=Math.max(0,stock[i]-need);
+      if(inWeek){
+        const o=out[i]||(out[i]={i,pk,D,first:m.planned_for,have:before,need:0,buy:0,uses:[],unknown:false});
+        o.need+=unknown?0:need; o.buy+=buy; o.uses.push(m); o.unknown=o.unknown||unknown; o.left=stock[i];
+      }
+    }
+  }
+  return Object.values(out);
+}
+
 
 // ---------------- data ----------------
 const DB = {
   async load(){
-    const [r,p,m,h,mem,act]=await Promise.all([
+    const [r,p,m,h,mem,act,pan]=await Promise.all([
       sb.from('recipes').select('*').order('added_at',{ascending:false}),
       sb.from('prices').select('*'),
       sb.from('meal_plan').select('*').order('planned_for').order('added_at'),
       sb.from('week_have').select('*'),
       sb.from('members').select('*').order('created_at'),
-      sb.from('activity').select('*').order('created_at',{ascending:false}).limit(150)
+      sb.from('activity').select('*').order('created_at',{ascending:false}).limit(150),
+      sb.from('pantry').select('*').order('ingredient')
     ]);
-    for(const x of [r,p,m,h,mem,act]) if(x.error) console.warn(x.error.message);
+    for(const x of [r,p,m,h,mem,act,pan]) if(x.error) console.warn(x.error.message);
+    S.pantry=pan.data||[];
     S.recipes=r.data||[]; S.prices=Object.fromEntries((p.data||[]).map(x=>[x.ingredient,x]));
     S.meals=m.data||[]; S.have=h.data||[]; S.members=mem.data||[]; S.activity=act.data||[];
     byId=Object.fromEntries(S.recipes.map(x=>[String(x.id),x]));
@@ -295,7 +383,32 @@ const DB = {
   plan:(recipe_id,day)=>DB.run(sb.from('meal_plan').insert({recipe_id,planned_for:day})),
   unplan:id=>DB.run(sb.from('meal_plan').delete().eq('id',id)),
   move:(id,day)=>DB.run(sb.from('meal_plan').update({planned_for:day}).eq('id',id)),
-  setCooked:(id,v)=>DB.run(sb.from('meal_plan').update(v?{cooked_at:new Date().toISOString(),cooked_by:me.user_id}:{cooked_at:null,cooked_by:null}).eq('id',id)),
+  async setCooked(id,v){
+    const m=S.meals.find(x=>String(x.id)===String(id)); const r=m&&rec(m.recipe_id);
+    const ok=await DB.run(sb.from('meal_plan').update(v?{cooked_at:new Date().toISOString(),cooked_by:me.user_id}:{cooked_at:null,cooked_by:null}).eq('id',id));
+    if(ok&&r) await DB.usePantry(r, v?-1:1);   // cooking uses ingredients up; undo puts them back
+    return ok;
+  },
+  // Add (sign=1) or remove (sign=-1) a recipe's amounts from the pantry, for items the pantry tracks.
+  async usePantry(r,sign){
+    const rows=[];
+    for(const [i,a] of Object.entries(r.amounts||{})){
+      const p=pantryOf(i); if(!p) continue;
+      const d=conv(+a.q,a.u,p.u,i,pkgOf(i)); if(d==null) continue;
+      rows.push({ingredient:i,q:Math.max(0,+p.q+sign*d),u:p.u,updated_by:me.user_id,updated_at:new Date().toISOString()});
+    }
+    if(rows.length) await DB.run(sb.from('pantry').upsert(rows));
+  },
+  setPantry:(ingredient,q,u)=>DB.run(sb.from('pantry').upsert({ingredient,q:Math.max(0,q),u,updated_by:me.user_id,updated_at:new Date().toISOString()})),
+  removePantry:i=>DB.run(sb.from('pantry').delete().eq('ingredient',i)),
+  async bought(o,v){
+    const add=o.buy*o.pk.q, cur=haveIn(o.i,o.D,o.pk);
+    if(v){ await sb.from('week_have').upsert({week_start:week,ingredient:o.i,marked_by:me.user_id,bought_q:add,bought_u:o.D}); return DB.setPantry(o.i,cur+add,o.D); }
+    const rec0=S.have.find(h=>h.week_start===week&&h.ingredient===o.i);
+    await sb.from('week_have').delete().eq('week_start',week).eq('ingredient',o.i);
+    const back=rec0?.bought_q!=null?conv(+rec0.bought_q,rec0.bought_u,o.D,o.i,o.pk):0;
+    return DB.setPantry(o.i,Math.max(0,cur-(back||0)),o.D);
+  },
   async madeToday(recipe_id){
     const m=S.meals.find(m=>String(m.recipe_id)===String(recipe_id)&&m.planned_for===TODAY&&!m.cooked_at);
     if(m) return DB.setCooked(m.id,true);
@@ -306,7 +419,7 @@ const DB = {
   setHave:(i,v)=>DB.run(v?sb.from('week_have').insert({week_start:week,ingredient:i}):sb.from('week_have').delete().eq('week_start',week).eq('ingredient',i)),
   setPrice:(ingredient,price,item,link)=>DB.run(sb.from('prices').upsert({ingredient,price:price||null,item:item||null,source:'Household',link:link||FAIRWAY(ingredient),updated_by:me.user_id,updated_at:new Date().toISOString()})),
   refresh:async(ingredient)=>{const {data,error}=await sb.functions.invoke('refresh-prices',{body:ingredient?{ingredient}:{}}); let b=data; if(error&&error.context){try{b=await error.context.json()}catch(e){}} await DB.load(); return b||{error:error?.message||'Refresh failed'};},
-  saveRecipe:d=>DB.run(sb.from('recipes').insert({url:d.url,title:d.title,image_url:d.image||null,site:d.site||null,servings:d.servings||null,ingredients:d.ingredients,status:d.status})),
+  saveRecipe:d=>DB.run(sb.from('recipes').insert({url:d.url,title:d.title,image_url:d.image||null,site:d.site||null,servings:d.servings||null,ingredients:d.ingredients,amounts:Object.fromEntries(Object.entries(d.amounts||{}).filter(([k])=>d.ingredients.includes(k))),status:d.status})),
   setStatus:(id,status)=>DB.run(sb.from('recipes').update({status}).eq('id',id)),
   deleteRecipe:id=>DB.run(sb.from('recipes').delete().eq('id',id))
 };
@@ -395,20 +508,28 @@ function renderPlan(){
 }
 function renderShop(){
   if(!S.recipes.length){ $('#shopList').innerHTML='<div class="empty">The recipe box is empty. Add a recipe by pasting its link under <b>Recipe box</b>, then put it on a day.</div>'; return; }
-  const hideSt=$('#hideStaples').checked, hideCk=$('#hideCooked').checked;
-  const meals=weekMeals().filter(m=>rec(m.recipe_id)&&!(hideCk&&m.cooked_at)).sort((a,b)=>a.planned_for.localeCompare(b.planned_for));
-  if(!meals.length){ $('#shopList').innerHTML='<div class="empty">Put recipes on days above and this week\'s shopping list fills in here.</div>'; return; }
-  const need={};
-  for(const m of meals) for(const i of rec(m.recipe_id).ingredients){ if(hideSt&&STAPLES.has(i)) continue; (need[i]=need[i]||{first:m.planned_for,uses:[]}).uses.push(m); }
-  const byDay={}; for(const [i,v] of Object.entries(need)) (byDay[v.first]=byDay[v.first]||[]).push([i,v]);
-  const all=Object.keys(need), left=all.filter(i=>!haveIt(i));
-  let total=0, unknown=0; for(const i of left){ const v=parseFloat((S.prices[i]?.price||'').replace(/[^0-9.]/g,'')); if(isNaN(v)) unknown++; else total+=v; }
-  $('#shopList').innerHTML=`<div class="meta" style="margin-bottom:6px">${left.length} to buy · ${all.length-left.length} already at home${hideSt?' · staples hidden':''} · about <b>$${total.toFixed(2)}</b>${unknown?` + ${unknown} item${unknown>1?'s':''} without a price`:''}</div>`+
+  const hideSt=$('#hideStaples').checked;
+  const rows=shopPlan().filter(o=>!(hideSt&&STAPLES.has(o.i)));
+  if(!rows.length){ $('#shopList').innerHTML='<div class="empty">Put recipes on days above and this week\'s shopping list fills in here.</div>'; return; }
+  const boughtRec=i=>S.have.find(h=>h.week_start===week&&h.ingredient===i);
+  let total=0, unpriced=0; const toBuy=rows.filter(o=>o.buy>0);
+  for(const o of toBuy){ if(o.pk.price==null) unpriced++; else total+=o.buy*o.pk.price; }
+  const byDay={}; for(const o of rows) (byDay[o.first]=byDay[o.first]||[]).push(o);
+  window._shop=Object.fromEntries(rows.map(o=>[o.i,o]));
+  $('#shopList').innerHTML=`<div class="meta" style="margin-bottom:6px"><b>${toBuy.length}</b> to buy · ${rows.length-toBuy.length} covered by what's at home${hideSt?' · staples hidden':''} · about <b>$${total.toFixed(2)}</b>${unpriced?` + ${unpriced} without a price`:''}</div>`+
     Object.keys(byDay).sort().map(d=>`<div class="needby">Needed by ${dayName(d,'long')} ${shortDate(d)}${d<TODAY?' (past)':''}</div>
-    <table><tr><th style="width:52px">Have</th><th>Ingredient</th><th>For</th><th>Price</th></tr>${byDay[d].sort((a,b)=>b[1].uses.length-a[1].uses.length||a[0].localeCompare(b[0])).map(([i,v])=>{const h=haveIt(i);return `<tr class="${h?'have':''}">
-      <td><input type="checkbox" data-have="${esc(i)}" ${h?'checked':''}></td>
-      <td><span class="name">${esc(cap(i))}</span>${v.uses.length>1?` <span class="tag cooked">${v.uses.length} meals</span>`:''}${h?`<div class="meta">${esc(nameOf(h.marked_by))} has it</div>`:''}</td>
-      <td class="meta">${v.uses.map(m=>`${dayName(m.planned_for)} · ${esc(rec(m.recipe_id).title)}`).join('<br>')}</td><td>${priceCell(i)}</td></tr>`}).join('')}</table>`).join('');
+    <table><tr><th>Ingredient</th><th>For</th><th>Need</th><th>At home</th><th>Buy</th><th>Price</th></tr>${byDay[d].sort((a,b)=>b.buy-a.buy||a.i.localeCompare(b.i)).map(o=>{
+      const br=boughtRec(o.i), price=o.pk.price;
+      const buyCell = o.buy>0
+        ? `<b>${o.pk.u==='each'&&o.pk.label==='1'?o.buy:`${o.buy} × ${esc(o.pk.label)}`}</b>${price!=null?`<div class="meta">$${(o.buy*price).toFixed(2)}</div>`:''}<button class="btn small" data-bought="${esc(o.i)}" style="margin-top:4px">Got it ✓</button>`
+        : br ? `<span style="color:var(--green)">✓ bought by ${esc(nameOf(br.marked_by))}</span> <a href="#" class="meta" data-unbuy="${esc(o.i)}">undo</a>`
+        : `<span style="color:var(--green)">Have enough</span>`;
+      return `<tr class="${o.buy>0?'':'have'}">
+      <td><span class="${o.buy>0?'':'name'}">${esc(cap(o.i))}</span>${o.uses.length>1?` <span class="tag cooked">${o.uses.length} meals</span>`:''}</td>
+      <td class="meta">${o.uses.map(m=>`${dayName(m.planned_for)} · ${esc(rec(m.recipe_id).title)}`).join('<br>')}</td>
+      <td>${o.unknown&&!o.need?'<span class="meta">some</span>':esc(fmtAmt(o.need,o.D))}${o.unknown&&o.need?' <span class="meta">+ some</span>':''}</td>
+      <td>${esc(fmtAmt(o.have,o.D))}${o.buy>0||o.left>0?`<div class="meta">${esc(fmtAmt(o.left,o.D))} left after</div>`:''}</td>
+      <td>${buyCell}</td><td>${priceCell(o.i)}</td></tr>`}).join('')}</table>`).join('');
 }
 function renderImport(){
   const el=$('#importPreview');
@@ -423,8 +544,8 @@ function renderImport(){
       <label class="meta">Servings (from the recipe page)</label>
       <input type="text" id="draftServings" value="${esc(draft.servings||'')}" placeholder="e.g. 4 servings" style="width:100%;margin:2px 0 10px">
       <div class="meta">From ${esc(draft.site||'')} · <a href="${esc(draft.url)}" target="_blank" rel="noopener">open original ↗</a> · saving as a <b>${document.querySelector('input[name=kind]:checked')?.value==='past'?'past':'new'} recipe</b> (switch above)</div>
-      <div class="meta" style="margin:10px 0 4px">Ingredients (names only: tap × to drop one, or add any that were missed)</div>
-      <div class="chips" id="draftIngs">${draft.ingredients.map(i=>`<span class="chip on" data-droping="${esc(i)}">${esc(i)}<span class="x">×</span></span>`).join('')||'<span class="meta">None found yet</span>'}</div>
+      <div class="meta" style="margin:10px 0 4px">Ingredients (tap × to drop one, or add any that were missed). ${Object.keys(draft.amounts||{}).length} have amounts, used to track leftovers.</div>
+      <div class="chips" id="draftIngs">${draft.ingredients.map(i=>`<span class="chip on" data-droping="${esc(i)}">${esc(i)}${draft.amounts?.[i]?` · ${esc(fmtAmt(+draft.amounts[i].q,draft.amounts[i].u))}`:''}<span class="x">×</span></span>`).join('')||'<span class="meta">None found yet</span>'}</div>
       <form id="addIngForm" class="row" style="margin:8px 0"><input type="text" id="newIng" placeholder="add an ingredient, e.g. leeks" style="flex:1 1 200px"><button class="btn small">Add</button></form>
       <div class="row" style="margin:0"><button class="btn primary" id="saveDraft">Save to recipe box</button><button class="btn" id="cancelDraft">Cancel</button></div>
     </div></div>`;
@@ -490,8 +611,24 @@ function renderSettings(){
    (r.changed.length?`<table><tr><th>Ingredient</th><th>Was</th><th>Now</th></tr>${r.changed.map(c=>`<tr><td>${esc(cap(c.ingredient))}</td><td>${esc(c.from||'—')}</td><td><b>${esc(c.to)}</b></td></tr>`).join('')}</table>`:'')+
    (r.failed.length?`<p class="meta">Couldn't read: ${r.failed.map(f=>esc(f.ingredient)).join(', ')}. Their last price is kept.</p>`:'');
 }
+const UNITS={cups:['ml',236.6],tbsp:['ml',14.79],tsp:['ml',4.93],'fl oz':['ml',29.57],quarts:['ml',946],ml:['ml',1],oz:['g',28.35],lb:['g',453.6],g:['g',1],each:['each',1],packages:['pkg',1]};
+const unitOpts=()=>Object.keys(UNITS).map(u=>`<option>${u}</option>`).join('');
+let editingPantry=null;
+function renderPantry(){
+  if(!$('#panU').options.length) $('#panU').innerHTML=unitOpts();
+  $('#ingList').innerHTML=allIngredients().map(i=>`<option value="${esc(i)}">`).join('');
+  const rows=[...S.pantry].sort((a,b)=>(b.q>0)-(a.q>0)||a.ingredient.localeCompare(b.ingredient));
+  $('#pantryList').innerHTML=rows.length?`<table><tr><th>Ingredient</th><th>On hand</th><th>Package</th><th>Updated</th><th></th></tr>${rows.map(p=>{const pk=pkgOf(p.ingredient);
+    return `<tr class="${+p.q>0?'':'have'}"><td><span class="${+p.q>0?'':'name'}">${esc(cap(p.ingredient))}</span></td>
+    <td>${editingPantry===p.ingredient?`<form class="row" data-panedit="${esc(p.ingredient)}" style="margin:0;gap:6px"><input name="q" type="number" step="any" min="0" value="${round(+p.q,100)}" style="width:90px"><select name="u">${Object.keys(UNITS).map(u=>`<option ${UNITS[u][0]===p.u&&UNITS[u][1]===1?'selected':''}>${u}</option>`).join('')}</select><button class="btn small primary">Save</button></form>`
+      :`<b>${esc(fmtAmt(+p.q,p.u))}</b>${pk.u===p.u&&pk.q&&+p.q>0&&pk.u!=='pkg'?` <span class="meta">(${round(+p.q/pk.q,4)} of a ${esc(pk.label)})</span>`:''}`}</td>
+    <td class="meta">${esc(S.prices[p.ingredient]?.item||'')}${pk.label?` · ${esc(pk.label)}`:''}</td>
+    <td class="meta">${p.updated_by?esc(nameOf(p.updated_by))+', ':''}${ago(p.updated_at)}</td>
+    <td class="num"><a href="#" data-panedit-open="${esc(p.ingredient)}">edit</a> · <a href="#" data-panzero="${esc(p.ingredient)}">used up</a></td></tr>`}).join('')}</table>`
+    :'<div class="empty">Nothing tracked yet. Tap <b>Got it ✓</b> on the shopping list after shopping, or add what you already have above.</div>';
+}
 function renderAll(){
-  renderWho();renderSettings();renderPlan();renderUseup();renderRecipes();renderIngredients();renderDiscover();renderActivity();
+  renderWho();renderSettings();renderPantry();renderPlan();renderUseup();renderRecipes();renderIngredients();renderDiscover();renderActivity();
   $('#shareList').style.display='none';
   $('#syncNote').innerHTML=`<b>Live:</b> everything you add, plan, tick or cook shows up for the whole household right away, with your name on it.`;
 }
@@ -516,7 +653,7 @@ document.addEventListener('submit',async e=>{
     draft={url,loading:true}; renderImport();
     const {data,error}=await sb.functions.invoke('import-recipe',{body:{url}});
     let host=''; try{host=new URL(url).hostname.replace(/^www\./,'')}catch(e){}
-    draft={url,site:data?.site||host,title:data?.title||'',image:data?.image||null,servings:data?.servings||'',ingredients:data?.ingredients||[],
+    draft={url,site:data?.site||host,title:data?.title||'',image:data?.image||null,servings:data?.servings||'',amounts:data?.amounts||{},ingredients:data?.ingredients||[],
       error:error?'Couldn\'t read that page.':data?.error?data.error:(!data?.found_ingredients?'No ingredient list found on that page (it may need a sign-in).':null)};
     renderImport();
   }
@@ -524,6 +661,15 @@ document.addEventListener('submit',async e=>{
     const v=$('#newIng').value.trim().toLowerCase(); if(!v) return;
     for(const x of v.split(',').map(s=>s.trim()).filter(Boolean)) if(!draft.ingredients.includes(x)) draft.ingredients.push(x);
     draft.ingredients.sort(); draft.title=$('#draftTitle').value; draft.servings=$('#draftServings').value; renderImport(); $('#newIng')?.focus();
+  }
+  if(f.id==='pantryAdd'){
+    const i=$('#panIng').value.trim().toLowerCase(), [u,mult]=UNITS[$('#panU').value]; const q=parseFloat($('#panQ').value)*mult;
+    if(!i||isNaN(q)) return; const pk=pkgOf(i); const D=pk.u==='pkg'&&u!=='pkg'?u:pk.u; const v=u==='pkg'?conv(q,'pkg',D,i,pk)??q:conv(q,u,D,i,pk);
+    await DB.setPantry(i,v,D); f.reset(); toast('Pantry updated'); renderAll(); return;
+  }
+  if(f.dataset.panedit!==undefined){
+    const i=f.dataset.panedit, [u,mult]=UNITS[f.u.value]; const q=parseFloat(f.q.value)*mult; const p=pantryOf(i);
+    const v=conv(q,u,p.u,i,pkgOf(i)); editingPantry=null; await DB.setPantry(i,v??q,v==null?u:p.u); renderAll(); return;
   }
   if(f.dataset.priceform!==undefined){
     const i=f.dataset.priceform; let price=f.price.value.trim(); if(price&&!price.startsWith('$')) price='$'+price;
@@ -535,7 +681,7 @@ document.addEventListener('submit',async e=>{
   }
 });
 document.addEventListener('click',async e=>{
-  const t=e.target.closest('button,[data-fridge],[data-p],[data-droping],[data-editprice]'); if(!t) return;
+  const t=e.target.closest('button,[data-fridge],[data-p],[data-droping],[data-editprice],[data-unbuy],[data-panzero],[data-panedit-open]'); if(!t) return;
   if(t.id==='signOut'){ await sb.auth.signOut(); location.reload(); return; }
   if(t.id==='backToSignIn') return showSignIn();
   if(t.closest('form')&&!t.dataset.cancelprice&&t.type!=='button') return; // let forms submit
@@ -549,6 +695,10 @@ document.addEventListener('click',async e=>{
     draft.status=document.querySelector('input[name=kind]:checked').value;
     if(await DB.saveRecipe(draft)){ toast(draft.status==='past'?'Added as a past recipe':'Added as a new recipe'); draft=null; $('#importUrl').value=''; }
   }
+  else if(t.dataset.bought){ const o=window._shop?.[t.dataset.bought]; if(o){ await DB.bought(o,true); toast(`Added to the pantry: ${o.buy} × ${o.pk.label}`);} }
+  else if(t.dataset.unbuy){ e.preventDefault(); const o=window._shop?.[t.dataset.unbuy]; const pk=pkgOf(t.dataset.unbuy); await DB.bought(o||{i:t.dataset.unbuy,buy:1,pk,D:pk.u},false); }
+  else if(t.dataset.panzero){ e.preventDefault(); const p=pantryOf(t.dataset.panzero); await DB.setPantry(p.ingredient,0,p.u); toast('Marked as used up'); }
+  else if(t.dataset.paneditOpen){ e.preventDefault(); editingPantry=t.dataset.paneditOpen; renderPantry(); return; }
   else if(t.id==='refreshPrices'){ t.disabled=true; lastRefresh={loading:true}; renderSettings(); lastRefresh=await DB.refresh(); t.disabled=false; if(!lastRefresh.error) toast('Prices refreshed'); }
   else if(t.id==='wkPrev'){ week=addDays(week,-7); }
   else if(t.id==='wkNext'){ week=addDays(week,7); }
@@ -573,7 +723,7 @@ document.addEventListener('change',async e=>{
   if(el.dataset.addday!==undefined&&el.value){ await DB.plan(el.value,el.dataset.addday); toast('Planned for '+dayName(el.dataset.addday,'long')); renderAll(); return; }
   if(el.dataset.planfor!==undefined&&el.value){ await DB.plan(el.dataset.planfor,el.value); toast('Planned for '+dayName(el.value,'long')); renderAll(); return; }
   if(el.dataset.move!==undefined&&el.value){ await DB.move(el.dataset.move,el.value); renderAll(); return; }
-  if(el.id==='hideStaples'||el.id==='hideCooked') renderShop();
+  if(el.id==='hideStaples') renderShop();
   if(el.id==='recList'||el.id==='recSort') renderRecipes();
   if(el.id==='needPriceOnly') renderIngredients();
   if(el.name==='kind') renderImport();
