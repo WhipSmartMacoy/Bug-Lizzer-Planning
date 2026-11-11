@@ -6,7 +6,7 @@ Live: https://whipsmartmacoy.github.io/Bug-Lizzer-Planning/ (sign in by email; a
 
 ## Kitchen
 - **Recipe box:** choose **New recipe** (not cooked yet) or **Past recipe** (cooked before), then paste a recipe link to add it. Cooking a new recipe moves it to Past. The box keeps only the title, a link to the photo, servings, ingredient names and how much of each is used (for leftover tracking), and always links back to the original. No amounts or steps are copied.
-- **Pantry:** what's on hand. Buying adds to it and cooking takes away, so leftovers count toward the next recipe.
+- **At Home:** what's on hand. Buying adds to it and cooking takes away, so leftovers count toward the next recipe.
 - **Plan & shop:** plan one week at a time by putting recipes on days. The shopping list covers just that week, grouped by the day each ingredient is first needed, with Fairway prices.
 - **What we use most:** ingredients counted only from meals that were planned or cooked.
 - **Use it up / Discover:** recipes in the box that use what's in the fridge or what you already buy.

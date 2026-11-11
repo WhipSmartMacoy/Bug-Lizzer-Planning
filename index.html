@@ -127,7 +127,7 @@ a{color:var(--green)}
   <div class="areas"><span class="on">Kitchen</span><span title="Coming later">Tasks</span><span title="Coming later">Bills</span></div>
   <nav class="tabs" id="tabs">
     <button data-p="plan" class="on">Plan &amp; shop</button>
-    <button data-p="pantry">Pantry</button>
+    <button data-p="pantry">At Home</button>
     <button data-p="useup">Use it up</button>
     <button data-p="recipes">Recipe box</button>
     <button data-p="ingredients">What we use most</button>
@@ -139,7 +139,7 @@ a{color:var(--green)}
 
 <main>
   <section class="panel on" id="plan">
-    <p class="intro">Plan one week at a time. Put recipes on the days you'll cook them. The shopping list works out how much each meal needs, uses up what's already in the Pantry first (leftovers included), and tells you how many packages to buy. Tap <b>Got it ✓</b> after shopping and it goes into the Pantry.</p>
+    <p class="intro">Plan one week at a time. Put recipes on the days you'll cook them. The shopping list works out how much each meal needs, uses up what's already At Home first (leftovers included), and tells you how many packages to buy. Tap <b>Got it ✓</b> after shopping and it's added to At Home.</p>
     <div class="weeknav">
       <button class="btn small" id="wkPrev">‹ Prev</button>
       <span class="label" id="wkLabel"></span>
@@ -156,7 +156,7 @@ a{color:var(--green)}
   </section>
 
   <section class="panel" id="pantry">
-    <p class="intro">What's in the kitchen right now. Buying from the shopping list adds here, and marking a meal as cooked takes its ingredients out, so leftovers (like half a carton of broth) count toward the next recipe. Adjust anything that's off.</p>
+    <p class="intro"><b>What's already at home.</b> Buying from the shopping list adds here, and marking a meal as cooked takes its ingredients out, so leftovers (like half a carton of broth) count toward the next recipe. Adjust anything that's off.</p>
     <form id="pantryAdd" class="row">
       <input type="text" id="panIng" list="ingList" placeholder="Ingredient" required style="flex:1 1 200px">
       <datalist id="ingList"></datalist>
@@ -516,7 +516,7 @@ function renderShop(){
   for(const o of toBuy){ if(o.pk.price==null) unpriced++; else total+=o.buy*o.pk.price; }
   const byDay={}; for(const o of rows) (byDay[o.first]=byDay[o.first]||[]).push(o);
   window._shop=Object.fromEntries(rows.map(o=>[o.i,o]));
-  $('#shopList').innerHTML=`<div class="meta" style="margin-bottom:6px"><b>${toBuy.length}</b> to buy · ${rows.length-toBuy.length} covered by what's at home${hideSt?' · staples hidden':''} · about <b>$${total.toFixed(2)}</b>${unpriced?` + ${unpriced} without a price`:''}</div>`+
+  $('#shopList').innerHTML=`<div class="meta" style="margin-bottom:6px"><b>${toBuy.length}</b> to buy · ${rows.length-toBuy.length} covered by what's At Home${hideSt?' · staples hidden':''} · about <b>$${total.toFixed(2)}</b>${unpriced?` + ${unpriced} without a price`:''}</div>`+
     Object.keys(byDay).sort().map(d=>`<div class="needby">Needed by ${dayName(d,'long')} ${shortDate(d)}${d<TODAY?' (past)':''}</div>
     <table><tr><th>Ingredient</th><th>For</th><th>Need</th><th>At home</th><th>Buy</th><th>Price</th></tr>${byDay[d].sort((a,b)=>b.buy-a.buy||a.i.localeCompare(b.i)).map(o=>{
       const br=boughtRec(o.i), price=o.pk.price;
@@ -665,7 +665,7 @@ document.addEventListener('submit',async e=>{
   if(f.id==='pantryAdd'){
     const i=$('#panIng').value.trim().toLowerCase(), [u,mult]=UNITS[$('#panU').value]; const q=parseFloat($('#panQ').value)*mult;
     if(!i||isNaN(q)) return; const pk=pkgOf(i); const D=pk.u==='pkg'&&u!=='pkg'?u:pk.u; const v=u==='pkg'?conv(q,'pkg',D,i,pk)??q:conv(q,u,D,i,pk);
-    await DB.setPantry(i,v,D); f.reset(); toast('Pantry updated'); renderAll(); return;
+    await DB.setPantry(i,v,D); f.reset(); toast('At Home updated'); renderAll(); return;
   }
   if(f.dataset.panedit!==undefined){
     const i=f.dataset.panedit, [u,mult]=UNITS[f.u.value]; const q=parseFloat(f.q.value)*mult; const p=pantryOf(i);
@@ -695,7 +695,7 @@ document.addEventListener('click',async e=>{
     draft.status=document.querySelector('input[name=kind]:checked').value;
     if(await DB.saveRecipe(draft)){ toast(draft.status==='past'?'Added as a past recipe':'Added as a new recipe'); draft=null; $('#importUrl').value=''; }
   }
-  else if(t.dataset.bought){ const o=window._shop?.[t.dataset.bought]; if(o){ await DB.bought(o,true); toast(`Added to the pantry: ${o.buy} × ${o.pk.label}`);} }
+  else if(t.dataset.bought){ const o=window._shop?.[t.dataset.bought]; if(o){ await DB.bought(o,true); toast(`Added to At Home: ${o.buy} × ${o.pk.label}`);} }
   else if(t.dataset.unbuy){ e.preventDefault(); const o=window._shop?.[t.dataset.unbuy]; const pk=pkgOf(t.dataset.unbuy); await DB.bought(o||{i:t.dataset.unbuy,buy:1,pk,D:pk.u},false); }
   else if(t.dataset.panzero){ e.preventDefault(); const p=pantryOf(t.dataset.panzero); await DB.setPantry(p.ingredient,0,p.u); toast('Marked as used up'); }
   else if(t.dataset.paneditOpen){ e.preventDefault(); editingPantry=t.dataset.paneditOpen; renderPantry(); return; }
