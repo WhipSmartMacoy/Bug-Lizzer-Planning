@@ -132,6 +132,7 @@ a{color:var(--green)}
     <button data-p="ingredients">What we use most</button>
     <button data-p="discover">Discover</button>
     <button data-p="activity">Who did what</button>
+    <button data-p="settings">Settings</button>
   </nav>
 </header>
 
@@ -215,12 +216,27 @@ a{color:var(--green)}
     </div>
   </section>
 
+  <section class="panel" id="settings">
+    <div class="card" style="max-width:760px">
+      <h2 style="margin:0">Prices</h2>
+      <p class="meta" style="margin:0">Each ingredient is linked to one product on <a href="https://shop.fairwaymarket.com/store/fairway/storefront" target="_blank" rel="noopener">shop.fairwaymarket.com</a>. Refreshing re-checks every linked product page for today's price and flags anything out of stock.</p>
+      <div id="priceStats" class="meta"></div>
+      <div class="row" style="margin:4px 0 0"><button class="btn primary" id="refreshPrices">Refresh prices</button></div>
+      <div id="refreshResult"></div>
+    </div>
+    <div class="card" style="max-width:760px;margin-top:14px">
+      <h2 style="margin:0">Ingredients without a Fairway product</h2>
+      <p class="meta" style="margin:0">Find the product on Fairway, copy its page link, then tap <b>Set price</b> and paste it in. The price fills in automatically.</p>
+      <div id="needLinks"></div>
+    </div>
+  </section>
+
   <div class="note" id="syncNote"></div>
 </main>
 <footer>Recipes link to their original sites. Only the title, photo link and ingredient names are kept here. Prices come from <a href="https://shop.fairwaymarket.com/store/fairway/storefront" target="_blank" rel="noopener">shop.fairwaymarket.com</a> or are entered by the household, and may have changed since.</footer>
 <div class="toast" id="toast"></div>
 
-<script src="config.js?v=7"></script>
+<script src="config.js?v=8"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 const CFG = window.BLP_CONFIG || {};
@@ -288,7 +304,8 @@ const DB = {
     return DB.setCooked(data.id,true);
   },
   setHave:(i,v)=>DB.run(v?sb.from('week_have').insert({week_start:week,ingredient:i}):sb.from('week_have').delete().eq('week_start',week).eq('ingredient',i)),
-  setPrice:(ingredient,price,item)=>DB.run(sb.from('prices').upsert({ingredient,price:price||null,item:item||null,source:'Household',link:FAIRWAY(ingredient),updated_by:me.user_id,updated_at:new Date().toISOString()})),
+  setPrice:(ingredient,price,item,link)=>DB.run(sb.from('prices').upsert({ingredient,price:price||null,item:item||null,source:'Household',link:link||FAIRWAY(ingredient),updated_by:me.user_id,updated_at:new Date().toISOString()})),
+  refresh:async(ingredient)=>{const {data,error}=await sb.functions.invoke('refresh-prices',{body:ingredient?{ingredient}:{}}); let b=data; if(error&&error.context){try{b=await error.context.json()}catch(e){}} await DB.load(); return b||{error:error?.message||'Refresh failed'};},
   saveRecipe:d=>DB.run(sb.from('recipes').insert({url:d.url,title:d.title,image_url:d.image||null,site:d.site||null,servings:d.servings||null,ingredients:d.ingredients,status:d.status})),
   setStatus:(id,status)=>DB.run(sb.from('recipes').update({status}).eq('id',id)),
   deleteRecipe:id=>DB.run(sb.from('recipes').delete().eq('id',id))
@@ -327,11 +344,11 @@ const lastCooked = id => S.meals.filter(m=>String(m.recipe_id)===String(id)&&m.c
 
 // ---------------- pieces ----------------
 function priceCell(i){
-  if(editingPrice===i) return `<form class="pricecell row" data-priceform="${esc(i)}" style="margin:0;gap:6px"><input name="price" placeholder="$0.00" value="${esc(S.prices[i]?.price||'')}" autofocus><input name="item" placeholder="what you bought (optional)" value="${esc(S.prices[i]?.item||'')}" style="width:170px"><button class="btn small primary">Save</button><button type="button" class="btn small" data-cancelprice>Cancel</button></form>`;
+  if(editingPrice===i) return `<form class="pricecell row" data-priceform="${esc(i)}" style="margin:0;gap:6px"><input name="price" placeholder="$0.00" value="${esc(S.prices[i]?.price||'')}" autofocus><input name="item" placeholder="what you bought (optional)" value="${esc(S.prices[i]?.item||'')}" style="width:170px"><input name="link" type="url" placeholder="or paste a Fairway product link" value="${esc(/products\//.test(S.prices[i]?.link||'')?S.prices[i].link:'')}" style="width:230px"><button class="btn small primary">Save</button><button type="button" class="btn small" data-cancelprice>Cancel</button></form>`;
   const p=S.prices[i];
   const search=`<a href="${FAIRWAY(p?.item||i)}" target="_blank" rel="noopener">Fairway ↗</a>`;
   if(!p||!p.price) return `<span class="needprice">Needs price</span> · ${search} · <a href="#" data-editprice="${esc(i)}">Set price</a>`;
-  return `<a href="${esc(p.link||FAIRWAY(i))}" target="_blank" rel="noopener">${esc(p.price)}</a> <a href="#" class="meta" data-editprice="${esc(i)}">edit</a><div class="meta">${esc([p.item,p.size].filter(Boolean).join(', '))}${p.source==='Household'&&p.updated_by?((p.item||p.size)?' · ':'')+'set by '+esc(nameOf(p.updated_by)):''}</div>`;
+  return `<a href="${esc(p.link||FAIRWAY(i))}" target="_blank" rel="noopener">${esc(p.price)}</a>${p.available===false?' <span class="needprice">out of stock</span>':''} <a href="#" class="meta" data-editprice="${esc(i)}">edit</a><div class="meta">${esc([p.item,p.size].filter(Boolean).join(', '))}${p.source==='Household'&&p.updated_by?((p.item||p.size)?' · ':'')+'set by '+esc(nameOf(p.updated_by)):''}</div>`;
 }
 function dayOptions(){ return weekDays().map(d=>`<option value="${d}">${dayName(d)} ${shortDate(d)}</option>`).join(''); }
 function card(r, extra=''){
@@ -459,8 +476,22 @@ function renderActivity(){
   const rows=S.members.filter(m=>m.approved).map(m=>[m,S.recipes.filter(r=>r.added_by===m.user_id).length,S.meals.filter(x=>x.added_by===m.user_id).length,S.meals.filter(x=>x.cooked_by===m.user_id)]).sort((a,b)=>b[3].length-a[3].length);
   $('#cookStats').innerHTML=`<table><tr><th>Person</th><th>Recipes added</th><th>Meals planned</th><th>Cooked</th></tr>${rows.map(([m,ad,pl,ck])=>`<tr><td>${esc(m.name)}</td><td class="num">${ad}</td><td class="num">${pl}</td><td class="num">${ck.length}</td></tr>`).join('')}</table>`;
 }
+const isFair = l => /^https:\/\/shop\.fairwaymarket\.com\/store\/fairway\/products\//.test(l||'');
+let lastRefresh=null;
+function renderSettings(){
+  const all=allIngredients(); const linked=all.filter(i=>isFair(S.prices[i]?.link)); const need=all.filter(i=>!isFair(S.prices[i]?.link));
+  const times=Object.values(S.prices).map(p=>p.checked_at).filter(Boolean).sort(); const last=times[times.length-1];
+  const oos=all.filter(i=>S.prices[i]?.available===false);
+  $('#priceStats').innerHTML=`<b>${linked.length}</b> of ${all.length} ingredients are linked to a Fairway product · last refreshed ${last?ago(last):'never'}${oos.length?` · <span class="needprice">${oos.length} out of stock: ${oos.map(esc).join(', ')}</span>`:''}`;
+  $('#needLinks').innerHTML=need.length?`<table><tr><th>Ingredient</th><th>Price</th></tr>${need.map(i=>`<tr><td>${esc(cap(i))}</td><td>${priceCell(i)}</td></tr>`).join('')}</table>`:'<p class="meta">Every ingredient in the recipe box is linked. 🎉</p>';
+  const r=lastRefresh;
+  $('#refreshResult').innerHTML=!r?'':r.loading?'<p class="meta">Checking Fairway… this takes about a minute.</p>':r.error?`<p class="needprice">${esc(r.error)}</p>`:
+   `<p class="meta"><b>Done.</b> Checked ${r.checked} products: ${r.changed.length?`${r.changed.length} price${r.changed.length>1?'s':''} changed`:'no price changes'}${r.failed.length?`, ${r.failed.length} couldn't be read`:''}.</p>`+
+   (r.changed.length?`<table><tr><th>Ingredient</th><th>Was</th><th>Now</th></tr>${r.changed.map(c=>`<tr><td>${esc(cap(c.ingredient))}</td><td>${esc(c.from||'—')}</td><td><b>${esc(c.to)}</b></td></tr>`).join('')}</table>`:'')+
+   (r.failed.length?`<p class="meta">Couldn't read: ${r.failed.map(f=>esc(f.ingredient)).join(', ')}. Their last price is kept.</p>`:'');
+}
 function renderAll(){
-  renderWho();renderPlan();renderUseup();renderRecipes();renderIngredients();renderDiscover();renderActivity();
+  renderWho();renderSettings();renderPlan();renderUseup();renderRecipes();renderIngredients();renderDiscover();renderActivity();
   $('#shareList').style.display='none';
   $('#syncNote').innerHTML=`<b>Live:</b> everything you add, plan, tick or cook shows up for the whole household right away, with your name on it.`;
 }
@@ -496,7 +527,11 @@ document.addEventListener('submit',async e=>{
   }
   if(f.dataset.priceform!==undefined){
     const i=f.dataset.priceform; let price=f.price.value.trim(); if(price&&!price.startsWith('$')) price='$'+price;
-    editingPrice=null; await DB.setPrice(i,price,f.item.value.trim()); renderAll();
+    const link=f.link.value.trim(); const fair=/^https:\/\/shop\.fairwaymarket\.com\/store\/fairway\/products\//.test(link);
+    if(link&&!fair) return toast('That link should be a product page on shop.fairwaymarket.com');
+    editingPrice=null; await DB.setPrice(i,price,f.item.value.trim(),link);
+    if(fair){ toast('Getting the price from Fairway…'); const r=await DB.refresh(i); toast(r?.error?r.error:(r?.failed?.length?'Couldn\'t read that page: '+r.failed[0].reason:'Price updated from Fairway')); }
+    renderAll();
   }
 });
 document.addEventListener('click',async e=>{
@@ -505,8 +540,8 @@ document.addEventListener('click',async e=>{
   if(t.id==='backToSignIn') return showSignIn();
   if(t.closest('form')&&!t.dataset.cancelprice&&t.type!=='button') return; // let forms submit
   if(t.dataset.p){document.querySelectorAll('#tabs button').forEach(b=>b.classList.toggle('on',b===t));document.querySelectorAll('.panel').forEach(p=>p.classList.toggle('on',p.id===t.dataset.p));return;}
-  if(t.dataset.editprice!==undefined){ e.preventDefault(); editingPrice=t.dataset.editprice; renderShop(); renderIngredients(); return; }
-  if(t.dataset.cancelprice!==undefined){ editingPrice=null; renderShop(); renderIngredients(); return; }
+  if(t.dataset.editprice!==undefined){ e.preventDefault(); editingPrice=t.dataset.editprice; renderShop(); renderIngredients(); renderSettings(); return; }
+  if(t.dataset.cancelprice!==undefined){ editingPrice=null; renderShop(); renderIngredients(); renderSettings(); return; }
   if(t.dataset.droping){ draft.title=$('#draftTitle').value; draft.servings=$('#draftServings').value; draft.ingredients=draft.ingredients.filter(i=>i!==t.dataset.droping); renderImport(); return; }
   if(t.id==='cancelDraft'){ draft=null; $('#importUrl').value=''; renderImport(); return; }
   if(t.id==='saveDraft'){
@@ -514,6 +549,7 @@ document.addEventListener('click',async e=>{
     draft.status=document.querySelector('input[name=kind]:checked').value;
     if(await DB.saveRecipe(draft)){ toast(draft.status==='past'?'Added as a past recipe':'Added as a new recipe'); draft=null; $('#importUrl').value=''; }
   }
+  else if(t.id==='refreshPrices'){ t.disabled=true; lastRefresh={loading:true}; renderSettings(); lastRefresh=await DB.refresh(); t.disabled=false; if(!lastRefresh.error) toast('Prices refreshed'); }
   else if(t.id==='wkPrev'){ week=addDays(week,-7); }
   else if(t.id==='wkNext'){ week=addDays(week,7); }
   else if(t.id==='wkToday'){ week=mondayOf(TODAY); }

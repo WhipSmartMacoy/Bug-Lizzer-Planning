@@ -16,5 +16,5 @@ Live: https://whipsmartmacoy.github.io/Bug-Lizzer-Planning/ (sign in by email; a
 - Prices are kept per ingredient. They come from https://shop.fairwaymarket.com/store/fairway/storefront or are entered by a household member. The view `ingredients_needing_price` lists what still needs one; Claude fills those in when recipes are added.
 
 ### Setup (Supabase)
-Run in order in the SQL editor: `supabase/setup.sql`, `supabase/002_weekly_plan.sql`, `supabase/003_recipe_box.sql`, `supabase/004_new_vs_past.sql`.
-Edge function: `supabase/functions/import-recipe` (JWT verification off; the function checks membership itself).
+Run in order in the SQL editor: `supabase/setup.sql`, `supabase/002_weekly_plan.sql`, `supabase/003_recipe_box.sql`, `supabase/004_new_vs_past.sql`, `005_servings.sql`, `006_price_refresh.sql`.
+Edge functions: `supabase/functions/import-recipe` and `supabase/functions/refresh-prices` (JWT verification off; the function checks membership itself).
