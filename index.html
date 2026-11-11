@@ -101,6 +101,17 @@ h2{font:700 18px Georgia,serif;margin:6px 0 10px}
 .chip .x{margin-left:6px;opacity:.6}
 .pricecell input{width:90px;font-size:13px;padding:4px 6px}
 .needprice{color:var(--amber);font-weight:600;font-size:12.5px}
+
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:12px;overflow:hidden;margin:0 0 12px;background:#faf7f0}
+.seg label{cursor:pointer}
+.seg input{position:absolute;opacity:0;pointer-events:none}
+.seg span{display:flex;flex-direction:column;padding:8px 16px;min-width:150px}
+.seg small{font-size:11.5px;color:var(--muted)}
+.seg input:checked+span{background:var(--green);color:#fff}
+.seg input:checked+span small{color:#e3ece3}
+.seg input:focus-visible+span{outline:2px solid var(--green);outline-offset:-2px}
+.tag.past{background:var(--green-soft);color:var(--green)}
+.tag.new{background:var(--amber-soft);color:var(--amber)}
 footer{max-width:1080px;margin:auto;padding:0 20px 40px;color:var(--muted);font-size:12.5px}
 a{color:var(--green)}
 </style>
@@ -153,6 +164,10 @@ a{color:var(--green)}
   <section class="panel" id="recipes">
     <div class="addbox">
       <h2 style="margin-top:0">Add a recipe</h2>
+      <div class="seg" role="radiogroup" aria-label="Recipe type">
+        <label><input type="radio" name="kind" value="new" checked><span><b>New recipe</b><small>Haven't cooked it yet</small></span></label>
+        <label><input type="radio" name="kind" value="past"><span><b>Past recipe</b><small>Cooked it before</small></span></label>
+      </div>
       <p class="meta" style="margin:0 0 10px">Paste the link to a recipe from NYT Cooking, Serious Eats or any other site. The box saves the title, photo and ingredient names, and links back to the original.</p>
       <form id="importForm" class="row" style="margin:0"><input type="url" id="importUrl" required placeholder="https://cooking.nytimes.com/recipes/…" style="flex:1 1 320px"><button class="btn primary" id="importBtn">Get recipe</button></form>
       <div id="importPreview"></div>
@@ -161,8 +176,9 @@ a{color:var(--green)}
       <input type="search" id="recSearch" placeholder="Search the recipe box…">
       <select id="recList">
         <option value="">All recipes</option>
-        <option value="made">Planned before</option>
-        <option value="new">Not planned yet</option>
+        <option value="past">Past recipes (cooked before)</option>
+        <option value="new">New recipes (to try)</option>
+        <option value="planned">Planned before</option>
       </select>
       <select id="recSort">
         <option value="new">Newest first</option>
@@ -180,7 +196,7 @@ a{color:var(--green)}
   </section>
 
   <section class="panel" id="discover">
-    <p class="intro">Recipes in the box you haven't planned yet, ranked by how many ingredients they share with what you plan most. They use what you already buy, so less goes to waste.</p>
+    <p class="intro">New recipes in the box you haven't planned yet, ranked by how many ingredients they share with what you plan most. They use what you already buy, so less goes to waste.</p>
     <div id="discGrid" class="grid"></div>
   </section>
 
@@ -204,7 +220,7 @@ a{color:var(--green)}
 <footer>Recipes link to their original sites. Only the title, photo link and ingredient names are kept here. Prices come from <a href="https://shop.fairwaymarket.com/store/fairway/storefront" target="_blank" rel="noopener">shop.fairwaymarket.com</a> or are entered by the household, and may have changed since.</footer>
 <div class="toast" id="toast"></div>
 
-<script src="config.js?v=5"></script>
+<script src="config.js?v=6"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 const CFG = window.BLP_CONFIG || {};
@@ -273,7 +289,8 @@ const DB = {
   },
   setHave:(i,v)=>DB.run(v?sb.from('week_have').insert({week_start:week,ingredient:i}):sb.from('week_have').delete().eq('week_start',week).eq('ingredient',i)),
   setPrice:(ingredient,price,item)=>DB.run(sb.from('prices').upsert({ingredient,price:price||null,item:item||null,source:'Household',link:FAIRWAY(ingredient),updated_by:me.user_id,updated_at:new Date().toISOString()})),
-  saveRecipe:d=>DB.run(sb.from('recipes').insert({url:d.url,title:d.title,image_url:d.image||null,site:d.site||null,ingredients:d.ingredients})),
+  saveRecipe:d=>DB.run(sb.from('recipes').insert({url:d.url,title:d.title,image_url:d.image||null,site:d.site||null,ingredients:d.ingredients,status:d.status})),
+  setStatus:(id,status)=>DB.run(sb.from('recipes').update({status}).eq('id',id)),
   deleteRecipe:id=>DB.run(sb.from('recipes').delete().eq('id',id))
 };
 
@@ -323,12 +340,13 @@ function card(r, extra=''){
     ${r.image_url?`<a href="${esc(r.url)}" target="_blank" rel="noopener"><img class="thumb" src="${esc(r.image_url)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()"></a>`:''}
     <h3><a href="${esc(r.url)}" target="_blank" rel="noopener">${esc(r.title)}</a></h3>
     <div class="meta">${esc(r.site||'')} · added by ${esc(nameOf(r.added_by))}${lc?` · last cooked ${shortDate(lc.cooked_at.slice(0,10))}`:''}</div>
-    ${n?`<div class="tags"><span class="tag cooked">Planned ${n}×</span></div>`:''}
+    <div class="tags">${r.status==='past'?'<span class="tag past">Past · cooked before</span>':'<span class="tag new">New · to try</span>'}${n?`<span class="tag">Planned ${n}×</span>`:''}</div>
     ${extra}
     <div class="ings">${r.ingredients.map(i=>fridge.includes(i)?`<b>${esc(i)}</b>`:esc(i)).join(' · ')||'<i>No ingredients listed</i>'}</div>
     <div class="actions">
       <select class="btn small" data-planfor="${r.id}"><option value="">+ Plan for…</option>${dayOptions()}</select>
       <button class="btn small" data-made="${r.id}">Made it today</button>
+      <button class="btn small" data-status="${r.id}" data-to="${r.status==='past'?'new':'past'}" title="Change whether this counts as cooked before">${r.status==='past'?'Mark as new':'Mark as past'}</button>
       <button class="btn small danger" data-delrecipe="${r.id}">Remove</button>
     </div></div>`;
 }
@@ -385,7 +403,7 @@ function renderImport(){
       ${draft.error?`<p class="needprice" style="margin:0 0 8px">${esc(draft.error)} Fill in the details below to add it anyway.</p>`:''}
       <label class="meta">Title</label>
       <input type="text" id="draftTitle" value="${esc(draft.title||'')}" style="width:100%;margin:2px 0 10px">
-      <div class="meta">From ${esc(draft.site||'')} · <a href="${esc(draft.url)}" target="_blank" rel="noopener">open original ↗</a></div>
+      <div class="meta">From ${esc(draft.site||'')} · <a href="${esc(draft.url)}" target="_blank" rel="noopener">open original ↗</a> · saving as a <b>${document.querySelector('input[name=kind]:checked')?.value==='past'?'past':'new'} recipe</b> (switch above)</div>
       <div class="meta" style="margin:10px 0 4px">Ingredients (names only: tap × to drop one, or add any that were missed)</div>
       <div class="chips" id="draftIngs">${draft.ingredients.map(i=>`<span class="chip on" data-droping="${esc(i)}">${esc(i)}<span class="x">×</span></span>`).join('')||'<span class="meta">None found yet</span>'}</div>
       <form id="addIngForm" class="row" style="margin:8px 0"><input type="text" id="newIng" placeholder="add an ingredient, e.g. leeks" style="flex:1 1 200px"><button class="btn small">Add</button></form>
@@ -396,8 +414,9 @@ function renderRecipes(){
   renderImport();
   const q=$('#recSearch').value.toLowerCase(), f=$('#recList').value, s=$('#recSort').value;
   let list=S.recipes.filter(r=>!q||r.title.toLowerCase().includes(q)||r.ingredients.some(i=>i.includes(q)));
-  if(f==='made') list=list.filter(r=>timesPlanned(r.id));
-  if(f==='new') list=list.filter(r=>!timesPlanned(r.id));
+  if(f==='past') list=list.filter(r=>r.status==='past');
+  if(f==='new') list=list.filter(r=>r.status!=='past');
+  if(f==='planned') list=list.filter(r=>timesPlanned(r.id));
   if(s==='made') list.sort((a,b)=>timesPlanned(b.id)-timesPlanned(a.id)||a.title.localeCompare(b.title));
   if(s==='name') list.sort((a,b)=>a.title.localeCompare(b.title));
   $('#recGrid').innerHTML=list.map(r=>card(r)).join('')||`<div class="empty">${S.recipes.length?'No matches.':'The recipe box is empty. Paste a recipe link above to add the first one.'}</div>`;
@@ -425,7 +444,7 @@ function renderDiscover(){
   const u=usage(); const ranked=Object.keys(u).filter(i=>!STAPLES.has(i)).sort((a,b)=>u[b].p-u[a].p).slice(0,25);
   if(!ranked.length){ $('#discGrid').innerHTML='<div class="empty">Plan a few meals first. Then this shows recipes in the box that reuse what you already buy.</div>'; return; }
   const top=new Set(ranked);
-  const list=S.recipes.filter(r=>!timesPlanned(r.id)).map(r=>{const shared=r.ingredients.filter(i=>top.has(i));const extra=r.ingredients.filter(i=>!u[i]&&!STAPLES.has(i));return{r,shared,extra}})
+  const list=S.recipes.filter(r=>r.status!=='past'&&!timesPlanned(r.id)).map(r=>{const shared=r.ingredients.filter(i=>top.has(i));const extra=r.ingredients.filter(i=>!u[i]&&!STAPLES.has(i));return{r,shared,extra}})
     .filter(x=>x.shared.length).sort((a,b)=>b.shared.length-a.shared.length||a.extra.length-b.extra.length);
   $('#discGrid').innerHTML=list.map(x=>card(x.r,`<div class="meta">Shares <b style="color:var(--green)">${x.shared.length}</b> ingredients with your plans${x.extra.length?' · new to buy: '+x.extra.map(esc).join(', '):''}</div>`)).join('')||'<div class="empty">Every recipe in the box has been planned. Add more!</div>';
 }
@@ -490,7 +509,8 @@ document.addEventListener('click',async e=>{
   if(t.id==='cancelDraft'){ draft=null; $('#importUrl').value=''; renderImport(); return; }
   if(t.id==='saveDraft'){
     draft.title=$('#draftTitle').value.trim(); if(!draft.title) return toast('Give it a title first');
-    if(await DB.saveRecipe(draft)){ toast('Added to the recipe box'); draft=null; $('#importUrl').value=''; }
+    draft.status=document.querySelector('input[name=kind]:checked').value;
+    if(await DB.saveRecipe(draft)){ toast(draft.status==='past'?'Added as a past recipe':'Added as a new recipe'); draft=null; $('#importUrl').value=''; }
   }
   else if(t.id==='wkPrev'){ week=addDays(week,-7); }
   else if(t.id==='wkNext'){ week=addDays(week,7); }
@@ -498,6 +518,7 @@ document.addEventListener('click',async e=>{
   else if(t.dataset.cook){ await DB.setCooked(t.dataset.cook,t.dataset.v==='1'); }
   else if(t.dataset.unplan){ await DB.unplan(t.dataset.unplan); }
   else if(t.dataset.made){ await DB.madeToday(t.dataset.made); toast('Logged as cooked today'); }
+  else if(t.dataset.status){ await DB.setStatus(t.dataset.status,t.dataset.to); toast(t.dataset.to==='past'?'Moved to past recipes':'Moved to new recipes'); }
   else if(t.dataset.delrecipe){ if(!twoTap(t)) return; await DB.deleteRecipe(t.dataset.delrecipe); toast('Removed'); }
   else if(t.dataset.fridge){ const i=t.dataset.fridge; fridge=fridge.includes(i)?fridge.filter(x=>x!==i):[...fridge,i]; LS.set('fridge',fridge); }
   else if(t.dataset.approve){ await DB.run(sb.from('members').update({approved:true}).eq('user_id',t.dataset.approve)); toast('Approved'); }
@@ -517,6 +538,7 @@ document.addEventListener('change',async e=>{
   if(el.id==='hideStaples'||el.id==='hideCooked') renderShop();
   if(el.id==='recList'||el.id==='recSort') renderRecipes();
   if(el.id==='needPriceOnly') renderIngredients();
+  if(el.name==='kind') renderImport();
 });
 ['fridgeSearch','recSearch','ingSearch'].forEach(id=>$('#'+id).addEventListener('input',()=>({fridgeSearch:renderUseup,recSearch:renderRecipes,ingSearch:renderIngredients})[id]()));
 

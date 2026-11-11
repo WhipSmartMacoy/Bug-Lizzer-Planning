@@ -14,6 +14,8 @@ const json = (b: unknown, status = 200) =>
 
 // Longest names first so "chicken broth" wins over "chicken", etc.
 const KW: [string, string][] = ([
+  ["potato gnocchi","gnocchi"],["egg noodle","noodles"],["egg yolk","eggs"],["chicken bouillon","broth"],["bouillon","broth"],
+  ["garlic powder","garlic"],["onion powder","onion"],["coconut cream","coconut milk"],["half-and-half","heavy cream"],
   ["rotisserie chicken","rotisserie chicken"],["chicken breast","chicken breast"],["chicken thigh","chicken"],
   ["ground chicken","ground chicken"],["ground turkey","ground turkey"],["ground beef","ground beef"],["ground pork","ground pork"],
   ["chicken broth","broth"],["chicken stock","broth"],["vegetable broth","broth"],["vegetable stock","broth"],["beef broth","broth"],
