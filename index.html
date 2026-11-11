@@ -13,9 +13,12 @@
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif}
 header{padding:22px 20px 0;max-width:1080px;margin:auto}
+.top{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap}
 .brand{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}
 .brand h1{font:700 26px/1.1 Georgia,"Iowan Old Style",serif;margin:0;letter-spacing:-.01em}
 .brand .sub{color:var(--muted);font-size:13px}
+.who{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--muted)}
+.avatar{display:inline-grid;place-items:center;width:28px;height:28px;border-radius:50%;color:#fff;font-weight:700;font-size:12px;flex:none}
 .areas{display:flex;gap:6px;margin:14px 0 0;font-size:13px}
 .areas span{padding:4px 10px;border-radius:99px;border:1px solid var(--line);color:var(--muted)}
 .areas span.on{background:var(--ink);color:#fff;border-color:var(--ink)}
@@ -26,11 +29,12 @@ main{max-width:1080px;margin:auto;padding:18px 20px 60px}
 .panel{display:none}.panel.on{display:block}
 .intro{color:var(--muted);margin:0 0 14px;max-width:70ch}
 .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:14px}
-input[type=search],select{font:inherit;padding:9px 12px;border:1px solid var(--line);border-radius:10px;background:var(--card);min-width:0}
+input[type=search],input[type=email],input[type=text],select{font:inherit;padding:9px 12px;border:1px solid var(--line);border-radius:10px;background:var(--card);min-width:0}
 input[type=search]{flex:1 1 240px}
-.btn{font:inherit;font-weight:600;padding:9px 14px;border-radius:10px;border:1px solid var(--line);background:var(--card);cursor:pointer}
+.btn{font:inherit;font-weight:600;padding:9px 14px;border-radius:10px;border:1px solid var(--line);background:var(--card);cursor:pointer;color:inherit}
 .btn.primary{background:var(--green);color:#fff;border-color:var(--green)}
 .btn.small{padding:5px 10px;font-size:13px}
+.btn.danger{color:var(--red)}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:12px}
 .card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:14px;box-shadow:var(--shadow);display:flex;flex-direction:column;gap:8px}
 .card h3{margin:0;font-size:16px;line-height:1.3}
@@ -49,26 +53,39 @@ table{width:100%;border-collapse:collapse;background:var(--card);border:1px soli
 th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top;font-size:14px}
 th{font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);background:#faf7f0}
 td.num{text-align:right;font-variant-numeric:tabular-nums}
-tr.have td{color:var(--muted);text-decoration:line-through}
+tr.have td{color:var(--muted)}
+tr.have td.name{text-decoration:line-through}
 .bar{height:8px;border-radius:4px;background:var(--green);min-width:2px}
 .chips{display:flex;flex-wrap:wrap;gap:6px}
 .chip{font-size:13px;padding:5px 10px;border-radius:99px;border:1px solid var(--line);background:var(--card);cursor:pointer;user-select:none}
 .chip.on{background:var(--green);color:#fff;border-color:var(--green)}
-.chip.staple{border-style:dashed}
 .two{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.2fr);gap:18px}
 @media (max-width:820px){.two{grid-template-columns:1fr}}
 h2{font:700 18px Georgia,serif;margin:6px 0 10px}
 .note{font-size:13px;color:var(--muted);background:#efebe1;border-radius:10px;padding:10px 12px;margin:12px 0}
-.toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);background:var(--ink);color:#fff;padding:10px 16px;border-radius:10px;font-size:14px;opacity:0;transition:.2s;pointer-events:none}
+.toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);background:var(--ink);color:#fff;padding:10px 16px;border-radius:10px;font-size:14px;opacity:0;transition:.2s;pointer-events:none;z-index:20}
 .toast.on{opacity:1}
 .empty{color:var(--muted);padding:20px;text-align:center;border:1px dashed var(--line);border-radius:var(--r)}
+.feed{list-style:none;margin:0;padding:0;background:var(--card);border:1px solid var(--line);border-radius:var(--r)}
+.feed li{display:flex;gap:10px;align-items:flex-start;padding:10px 12px;border-bottom:1px solid var(--line)}
+.feed li:last-child{border-bottom:0}
+.gate{position:fixed;inset:0;background:var(--bg);display:none;place-items:center;z-index:10;padding:20px}
+.gate.on{display:grid}
+.gate .box{background:var(--card);border:1px solid var(--line);border-radius:16px;box-shadow:var(--shadow);padding:28px;max-width:400px;width:100%}
+.gate h1{font:700 24px Georgia,serif;margin:0 0 6px}
+.gate form{display:flex;flex-direction:column;gap:10px;margin-top:16px}
 footer{max-width:1080px;margin:auto;padding:0 20px 40px;color:var(--muted);font-size:12.5px}
 a{color:var(--green)}
 </style>
 </head>
 <body>
+<div class="gate" id="gate"><div class="box" id="gateBox"></div></div>
+
 <header>
-  <div class="brand"><h1>Bug-Lizzer Planning</h1><span class="sub">Household hub</span></div>
+  <div class="top">
+    <div class="brand"><h1>Bug-Lizzer Planning</h1><span class="sub">Household hub</span></div>
+    <div class="who" id="who"></div>
+  </div>
   <div class="areas"><span class="on">Kitchen</span><span title="Coming later">Tasks</span><span title="Coming later">Bills</span></div>
   <nav class="tabs" id="tabs">
     <button data-p="plan" class="on">Plan &amp; shop</button>
@@ -76,13 +93,13 @@ a{color:var(--green)}
     <button data-p="recipes">Recipes</button>
     <button data-p="ingredients">What we use most</button>
     <button data-p="discover">Discover</button>
+    <button data-p="activity">Who did what</button>
   </nav>
 </header>
 
 <main>
-  <!-- PLAN & SHOP -->
   <section class="panel on" id="plan">
-    <p class="intro">Pick this week's recipes. The list combines their ingredients, counts how many dishes each one feeds, and shows Fairway prices. Tick anything you already have, then share the list so nobody buys it twice.</p>
+    <p class="intro">Pick this week's recipes. The list combines their ingredients, counts how many dishes each one feeds, and shows Fairway prices. Tick anything you already have so nobody buys it twice.</p>
     <div class="two">
       <div>
         <h2>This week</h2>
@@ -102,7 +119,6 @@ a{color:var(--green)}
     </div>
   </section>
 
-  <!-- USE IT UP -->
   <section class="panel" id="useup">
     <p class="intro">Tap what's in the fridge that needs using. Recipes are ranked by how many of those ingredients they use up, then by how little else you'd need to buy.</p>
     <div class="row"><input type="search" id="fridgeSearch" placeholder="Filter ingredients…"><button class="btn small" id="fridgeClear">Clear</button></div>
@@ -110,7 +126,6 @@ a{color:var(--green)}
     <div id="useupResults" class="grid"></div>
   </section>
 
-  <!-- RECIPES -->
   <section class="panel" id="recipes">
     <div class="row">
       <input type="search" id="recSearch" placeholder="Search recipes or ingredients…">
@@ -129,54 +144,152 @@ a{color:var(--green)}
     <div id="recGrid" class="grid"></div>
   </section>
 
-  <!-- INGREDIENTS -->
   <section class="panel" id="ingredients">
-    <p class="intro">"Times used" counts every time a dish was made: your NYT Cooked list, the "Ham did" folder, and anything logged here. These are the ingredients worth keeping stocked. Anything low on the list that you still buy is likely to go to waste.</p>
+    <p class="intro">"Times used" counts every time a dish was made: the NYT Cooked list, the "Ham did" folder, and everything logged here. These are the ingredients worth keeping stocked. Anything low on the list that you still buy is likely to go to waste.</p>
     <div class="row"><input type="search" id="ingSearch" placeholder="Search ingredients…"></div>
     <div id="ingTable"></div>
   </section>
 
-  <!-- DISCOVER -->
   <section class="panel" id="discover">
     <p class="intro">Recipes you haven't made yet, ranked by how many ingredients they share with what you cook most. They use what you already buy, so less goes to waste. Only recipes from your NYT box and Serious Eats appear here.</p>
     <div id="discGrid" class="grid"></div>
   </section>
 
+  <section class="panel" id="activity">
+    <div class="two">
+      <div>
+        <h2>Recent activity</h2>
+        <ul class="feed" id="feed"></ul>
+      </div>
+      <div>
+        <h2>Household</h2>
+        <div id="people"></div>
+        <h2 style="margin-top:20px">Who cooks what</h2>
+        <div id="cookStats"></div>
+      </div>
+    </div>
+  </section>
+
   <div class="note" id="syncNote"></div>
 </main>
 <footer>
-  Recipes link to their original sites (NYT Cooking needs a subscription). Prices are from Fairway Market, store 4000, as of <span id="priceDate"></span>, and may have changed. Data lives in the <code>data/</code> folder of this repo.
+  Recipes link to their original sites (NYT Cooking needs a subscription). Prices are from Fairway Market, store 4000, as of <span id="priceDate"></span>, and may have changed. Recipe and price data live in the <code>data/</code> folder of this repo; household activity lives in the private database.
 </footer>
 <div class="toast" id="toast"></div>
 
+<script src="config.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
+const CFG = window.BLP_CONFIG || {};
+const ONLINE = !!(CFG.url && CFG.key && window.supabase);
+const sb = ONLINE ? window.supabase.createClient(CFG.url, CFG.key) : null;
 const STAPLES = new Set(["olive oil","garlic","butter","sugar","flour","neutral oil","soy sauce","red pepper flakes","cumin","paprika","cayenne","oregano","thyme","turmeric","cinnamon","rosemary","honey","mustard","rice vinegar","sesame oil","baking soda","baking powder","vanilla","coriander","rice"]);
+const COLORS = ["#3f6b4a","#b9772b","#5a6fa8","#a6463a","#7a5c99","#2f7f86","#8a6d3b"];
 const LS = { get:(k,d)=>{try{return JSON.parse(localStorage.getItem('blp.'+k))??d}catch(e){return d}}, set:(k,v)=>{try{localStorage.setItem('blp.'+k,JSON.stringify(v))}catch(e){}} };
-let R=[], P={}, LOG=[], byId={};
-let state = { plan: LS.get('plan',[]), have: LS.get('have',[]), fridge: LS.get('fridge',[]), mylog: LS.get('mylog',[]) };
-const save = ()=>{ for(const k in state) LS.set(k,state[k]); };
 const $ = s=>document.querySelector(s);
 const esc = s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-const cap = s=>s.charAt(0).toUpperCase()+s.slice(1);
+const cap = s=>s?s.charAt(0).toUpperCase()+s.slice(1):s;
 function toast(t){const e=$('#toast');e.textContent=t;e.classList.add('on');setTimeout(()=>e.classList.remove('on'),2200)}
+function ago(ts){const s=(Date.now()-new Date(ts))/1000;if(s<60)return'just now';if(s<3600)return Math.floor(s/60)+'m ago';if(s<86400)return Math.floor(s/3600)+'h ago';if(s<604800)return Math.floor(s/86400)+'d ago';return new Date(ts).toLocaleDateString()}
 
-// Shared list via link: #list=<base64 json>
-function readShared(){
-  const m = location.hash.match(/list=([^&]+)/); if(!m) return;
-  try{ const s=JSON.parse(decodeURIComponent(escape(atob(m[1]))));
-    state.plan=s.p||[]; state.have=s.h||[]; save(); toast('Loaded the shared list'); history.replaceState(null,'',location.pathname);
-  }catch(e){}
-}
-function shareLink(){
-  const data=btoa(unescape(encodeURIComponent(JSON.stringify({p:state.plan,h:state.have}))));
-  return location.origin+location.pathname+'#list='+data;
-}
+let R=[], P={}, LOG=[], byId={};
+let me=null;          // {user_id,name,approved,is_admin}
+let S = {             // shared state (from database when online, from this device when offline)
+  plan: [],           // [{recipe_id, added_by}]
+  have: [],           // [{ingredient, marked_by}]
+  cooks: [],          // [{recipe_id, cooked_on, user_id}]
+  members: [], activity: []
+};
+let fridge = LS.get('fridge',[]);
 
-function timesMade(id){ return LOG.filter(l=>l.recipe===id).length + state.mylog.filter(l=>l.recipe===id).length; }
-function usage(){ // ingredient -> times used (weighted by cooks)
-  const u={}; for(const r of R){ const n=timesMade(r.id); if(!n) continue; for(const i of r.ingredients) u[i]=(u[i]||0)+n; } return u;
+const nameOf = uid => (S.members.find(m=>m.user_id===uid)||{}).name || 'Someone';
+const colorOf = uid => { const i=S.members.findIndex(m=>m.user_id===uid); return COLORS[(i<0?0:i)%COLORS.length]; };
+const av = uid => `<span class="avatar" style="background:${colorOf(uid)}" title="${esc(nameOf(uid))}">${esc(nameOf(uid).slice(0,1).toUpperCase())}</span>`;
+const recName = id => byId[id]?.name || id;
+
+// ---------------- data layer ----------------
+const DB = {
+  async load(){
+    if(!ONLINE){
+      S.plan=LS.get('plan',[]).map(id=>typeof id==='string'?{recipe_id:id}:id);
+      S.have=LS.get('have',[]).map(i=>typeof i==='string'?{ingredient:i}:i);
+      S.cooks=LS.get('mylog',[]).map(l=>({recipe_id:l.recipe,cooked_on:l.date}));
+      return;
+    }
+    const [plan,have,cooks,members,act]=await Promise.all([
+      sb.from('week_plan').select('*').order('added_at'),
+      sb.from('have_at_home').select('*'),
+      sb.from('cook_log').select('*').order('cooked_on',{ascending:false}),
+      sb.from('members').select('*').order('created_at'),
+      sb.from('activity').select('*').order('created_at',{ascending:false}).limit(150)
+    ]);
+    S.plan=plan.data||[]; S.have=have.data||[]; S.cooks=cooks.data||[]; S.members=members.data||[]; S.activity=act.data||[];
+  },
+  saveLocal(){ LS.set('plan',S.plan.map(p=>p.recipe_id)); LS.set('have',S.have.map(h=>h.ingredient)); LS.set('mylog',S.cooks.map(c=>({recipe:c.recipe_id,date:c.cooked_on}))); },
+  async run(q){ if(!ONLINE){DB.saveLocal();return} const {error}=await q; if(error){toast('Could not save: '+error.message)} await DB.load(); },
+  togglePlan(id){ const on=S.plan.some(p=>p.recipe_id===id);
+    if(!ONLINE){ S.plan=on?S.plan.filter(p=>p.recipe_id!==id):[...S.plan,{recipe_id:id}]; return DB.run(); }
+    return DB.run(on?sb.from('week_plan').delete().eq('recipe_id',id):sb.from('week_plan').insert({recipe_id:id})); },
+  setHave(i,v){
+    if(!ONLINE){ S.have=v?[...S.have,{ingredient:i}]:S.have.filter(h=>h.ingredient!==i); return DB.run(); }
+    return DB.run(v?sb.from('have_at_home').insert({ingredient:i}):sb.from('have_at_home').delete().eq('ingredient',i)); },
+  cooked(id){ const d=new Date().toLocaleDateString('en-CA');
+    if(!ONLINE){ S.cooks=[{recipe_id:id,cooked_on:d},...S.cooks]; return DB.run(); }
+    return DB.run(sb.from('cook_log').insert({recipe_id:id,cooked_on:d})); },
+  async clearWeek(){
+    if(!ONLINE){ S.plan=[];S.have=[]; return DB.run(); }
+    await sb.from('week_plan').delete().neq('recipe_id','');
+    return DB.run(sb.from('have_at_home').delete().neq('ingredient',''));
+  }
+};
+
+// ---------------- auth ----------------
+function gate(html){ $('#gateBox').innerHTML=html; $('#gate').classList.toggle('on',!!html); }
+async function startAuth(){
+  if(!ONLINE){ gate(''); return boot(); }
+  const { data:{ session } } = await sb.auth.getSession();
+  if(!session) return showSignIn();
+  const uid=session.user.id;
+  let { data:m } = await sb.from('members').select('*').eq('user_id',uid).maybeSingle();
+  if(!m) return showNamePrompt(session.user.email);
+  me=m;
+  if(!m.approved) return gate(`<h1>Almost in</h1><p class="meta">Thanks, ${esc(m.name)}. Someone already in the household needs to approve you under <b>Who did what → Household</b>. This page updates on its own once they do.</p><button class="btn small" id="signOut">Sign out</button>`), watchApproval(uid);
+  gate(''); boot();
 }
+function showSignIn(){
+  gate(`<h1>Bug-Lizzer Planning</h1><p class="meta">Sign in with your email. We'll send a one-time link, no password needed.</p>
+  <form id="signInForm"><input type="email" id="email" required placeholder="you@example.com" autocomplete="email"><button class="btn primary">Email me a sign-in link</button></form>`);
+}
+function showNamePrompt(email){
+  gate(`<h1>Welcome!</h1><p class="meta">Signed in as ${esc(email)}. What should the household call you?</p>
+  <form id="nameForm"><input type="text" id="myName" required maxlength="30" placeholder="Your name or nickname"><button class="btn primary">Join the household</button></form>`);
+}
+function watchApproval(uid){
+  sb.channel('me').on('postgres_changes',{event:'UPDATE',schema:'public',table:'members',filter:'user_id=eq.'+uid},()=>startAuth()).subscribe();
+}
+document.addEventListener('submit',async e=>{
+  e.preventDefault();
+  if(e.target.id==='signInForm'){
+    const email=$('#email').value.trim();
+    const {error}=await sb.auth.signInWithOtp({email,options:{emailRedirectTo:location.origin+location.pathname}});
+    gate(error?`<h1>Hmm</h1><p class="meta">${esc(error.message)}</p><button class="btn" id="backToSignIn">Try again</button>`:`<h1>Check your email</h1><p class="meta">A sign-in link is on its way to <b>${esc(email)}</b>. Open it on this device.</p>`);
+  }
+  if(e.target.id==='nameForm'){
+    const { data:{ user } } = await sb.auth.getUser();
+    const {error}=await sb.from('members').insert({user_id:user.id,name:$('#myName').value.trim()});
+    if(error) return toast(error.message);
+    startAuth();
+  }
+});
+
+// ---------------- rendering ----------------
+function timesMade(id){ return LOG.filter(l=>l.recipe===id).length + S.cooks.filter(c=>c.recipe_id===id).length; }
+function lastCook(id){ return S.cooks.find(c=>c.recipe_id===id); }
+function usage(){ const u={}; for(const r of R){ const n=timesMade(r.id); if(!n) continue; for(const i of r.ingredients) u[i]=(u[i]||0)+n; } return u; }
 function reach(){ const c={}; for(const r of R) for(const i of r.ingredients) c[i]=(c[i]||0)+1; return c; }
+const inPlan = id => S.plan.some(p=>p.recipe_id===id);
+const haveIt = i => S.have.find(h=>h.ingredient===i);
+
 function tagsFor(r){
   const t=[]; const n=timesMade(r.id);
   if(n) t.push(`<span class="tag cooked">Made ${n}×</span>`);
@@ -187,17 +300,17 @@ function tagsFor(r){
   return t.join('');
 }
 function card(r, extra=''){
-  const inPlan=state.plan.includes(r.id);
+  const lc=lastCook(r.id);
   return `<div class="card">
     <h3><a href="${esc(r.url)}" target="_blank" rel="noopener">${esc(r.name)}</a></h3>
-    <div class="meta">${esc(r.by)}</div>
+    <div class="meta">${esc(r.by)}${lc&&ONLINE&&lc.user_id?` · last made by ${esc(nameOf(lc.user_id))}, ${esc(lc.cooked_on)}`:''}</div>
     <div class="tags">${tagsFor(r)}</div>
     ${extra}
-    <div class="ings">${r.ingredients.map(i=>state.fridge.includes(i)?`<b>${esc(i)}</b>`:esc(i)).join(' · ')}</div>
+    <div class="ings">${r.ingredients.map(i=>fridge.includes(i)?`<b>${esc(i)}</b>`:esc(i)).join(' · ')}</div>
     <div class="actions">
-      <button class="btn small ${inPlan?'on':''}" data-plan="${r.id}">${inPlan?'✓ In this week':'+ This week'}</button>
+      <button class="btn small ${inPlan(r.id)?'on':''}" data-plan="${r.id}">${inPlan(r.id)?'✓ In this week':'+ This week'}</button>
       <button class="btn small" data-cooked="${r.id}">Made it today</button>
-      <a class="btn small" href="${esc(r.url)}" target="_blank" rel="noopener" style="text-decoration:none;color:inherit">Open recipe ↗</a>
+      <a class="btn small" href="${esc(r.url)}" target="_blank" rel="noopener" style="text-decoration:none">Open recipe ↗</a>
     </div></div>`;
 }
 function priceCell(i){
@@ -205,39 +318,37 @@ function priceCell(i){
   return `<a href="${esc(p.link)}" target="_blank" rel="noopener">${esc(p.price)}</a><div class="meta">${esc(p.item)}</div>`;
 }
 
-// ---------- PLAN ----------
+function renderWho(){
+  if(!ONLINE||!me){ $('#who').innerHTML=''; return; }
+  $('#who').innerHTML=`${av(me.user_id)}<span>${esc(me.name)}</span><button class="btn small" id="signOut">Sign out</button>`;
+}
 function renderPlan(){
   const q=$('#planSearch').value.toLowerCase();
-  const pick=R.filter(r=>!state.plan.includes(r.id)&&(!q||r.name.toLowerCase().includes(q)||r.ingredients.some(i=>i.includes(q))))
+  const pick=R.filter(r=>!inPlan(r.id)&&(!q||r.name.toLowerCase().includes(q)||r.ingredients.some(i=>i.includes(q))))
     .sort((a,b)=>timesMade(b.id)-timesMade(a.id)||a.name.localeCompare(b.name));
   $('#planPick').innerHTML=pick.map(r=>`<span class="chip" data-plan="${r.id}">+ ${esc(r.name)}</span>`).join('');
-  const chosen=state.plan.map(id=>byId[id]).filter(Boolean);
-  $('#planChosen').innerHTML=chosen.length?`<table><tr><th>Recipe</th><th></th></tr>${chosen.map(r=>`<tr><td><a href="${esc(r.url)}" target="_blank" rel="noopener">${esc(r.name)}</a><div class="meta">${esc(r.source)}</div></td><td class="num"><button class="btn small" data-plan="${r.id}">Remove</button></td></tr>`).join('')}</table>`:'<div class="empty">No recipes picked yet. Tap one above.</div>';
-  // shopping list
-  const need={}; for(const r of chosen) for(const i of r.ingredients){ (need[i]=need[i]||[]).push(r.name); }
+  const chosen=S.plan.filter(p=>byId[p.recipe_id]);
+  $('#planChosen').innerHTML=chosen.length?`<table><tr><th>Recipe</th><th></th></tr>${chosen.map(p=>{const r=byId[p.recipe_id];return `<tr><td><a href="${esc(r.url)}" target="_blank" rel="noopener">${esc(r.name)}</a><div class="meta">${esc(r.source)}${ONLINE&&p.added_by?' · added by '+esc(nameOf(p.added_by)):''}</div></td><td class="num"><button class="btn small" data-plan="${r.id}">Remove</button></td></tr>`}).join('')}</table>`:'<div class="empty">No recipes picked yet. Tap one above.</div>';
+  const need={}; for(const p of chosen) for(const i of byId[p.recipe_id].ingredients){ (need[i]=need[i]||[]).push(byId[p.recipe_id].name); }
   const hide=$('#hideStaples').checked;
-  let rows=Object.entries(need).filter(([i])=>!(hide&&STAPLES.has(i))).sort((a,b)=>b[1].length-a[1].length||a[0].localeCompare(b[0]));
+  const rows=Object.entries(need).filter(([i])=>!(hide&&STAPLES.has(i))).sort((a,b)=>b[1].length-a[1].length||a[0].localeCompare(b[0]));
   if(!rows.length){$('#shopList').innerHTML='<div class="empty">Your list fills in when you pick recipes.</div>';return;}
-  const left=rows.filter(([i])=>!state.have.includes(i)).length;
+  const left=rows.filter(([i])=>!haveIt(i)).length;
   $('#shopList').innerHTML=`<div class="meta" style="margin-bottom:8px">${left} to buy · ${rows.length-left} already at home${hide?' · staples hidden':''}</div>
-  <table><tr><th>Have</th><th>Ingredient</th><th>Used in</th><th>Fairway</th></tr>${rows.map(([i,rs])=>`<tr class="${state.have.includes(i)?'have':''}">
-    <td><input type="checkbox" data-have="${esc(i)}" ${state.have.includes(i)?'checked':''}></td>
-    <td>${esc(cap(i))}${rs.length>1?` <span class="tag cooked">${rs.length} dishes</span>`:''}</td>
-    <td class="meta">${rs.map(esc).join('<br>')}</td><td>${priceCell(i)}</td></tr>`).join('')}</table>`;
+  <table><tr><th>Have</th><th>Ingredient</th><th>Used in</th><th>Fairway</th></tr>${rows.map(([i,rs])=>{const h=haveIt(i);return `<tr class="${h?'have':''}">
+    <td><input type="checkbox" data-have="${esc(i)}" ${h?'checked':''}></td>
+    <td><span class="name">${esc(cap(i))}</span>${rs.length>1?` <span class="tag cooked">${rs.length} dishes</span>`:''}${h&&ONLINE&&h.marked_by?`<div class="meta">${esc(nameOf(h.marked_by))} has it</div>`:''}</td>
+    <td class="meta">${rs.map(esc).join('<br>')}</td><td>${priceCell(i)}</td></tr>`}).join('')}</table>`;
 }
-
-// ---------- USE IT UP ----------
 function renderUseup(){
   const q=$('#fridgeSearch').value.toLowerCase(); const rc=reach();
   const ings=Object.keys(rc).filter(i=>!STAPLES.has(i)&&(!q||i.includes(q))).sort((a,b)=>rc[b]-rc[a]||a.localeCompare(b));
-  $('#fridgeChips').innerHTML=ings.map(i=>`<span class="chip ${state.fridge.includes(i)?'on':''}" data-fridge="${esc(i)}">${esc(i)}</span>`).join('');
-  if(!state.fridge.length){$('#useupResults').innerHTML='<div class="empty">Pick a few ingredients to see what to cook.</div>';return;}
-  const scored=R.map(r=>{const hit=r.ingredients.filter(i=>state.fridge.includes(i));const buy=r.ingredients.filter(i=>!state.fridge.includes(i)&&!STAPLES.has(i));return{r,hit,buy}})
+  $('#fridgeChips').innerHTML=ings.map(i=>`<span class="chip ${fridge.includes(i)?'on':''}" data-fridge="${esc(i)}">${esc(i)}</span>`).join('');
+  if(!fridge.length){$('#useupResults').innerHTML='<div class="empty">Pick a few ingredients to see what to cook.</div>';return;}
+  const scored=R.map(r=>{const hit=r.ingredients.filter(i=>fridge.includes(i));const buy=r.ingredients.filter(i=>!fridge.includes(i)&&!STAPLES.has(i));return{r,hit,buy}})
     .filter(x=>x.hit.length).sort((a,b)=>b.hit.length-a.hit.length||a.buy.length-b.buy.length).slice(0,24);
   $('#useupResults').innerHTML=scored.map(x=>card(x.r,`<div class="meta"><b style="color:var(--green)">Uses ${x.hit.length}</b> of yours · ${x.buy.length?'still need: '+x.buy.map(esc).join(', '):'nothing else to buy'}</div>`)).join('');
 }
-
-// ---------- RECIPES ----------
 function renderRecipes(){
   const q=$('#recSearch').value.toLowerCase(), f=$('#recList').value, s=$('#recSort').value;
   let list=R.filter(r=>(!q||r.name.toLowerCase().includes(q)||r.ingredients.some(i=>i.includes(q))));
@@ -247,8 +358,6 @@ function renderRecipes(){
   list.sort(s==='time'?(a,b)=>(a.minutes||999)-(b.minutes||999):s==='name'?(a,b)=>a.name.localeCompare(b.name):(a,b)=>timesMade(b.id)-timesMade(a.id)||a.name.localeCompare(b.name));
   $('#recGrid').innerHTML=list.map(r=>card(r)).join('')||'<div class="empty">No matches.</div>';
 }
-
-// ---------- INGREDIENTS ----------
 function renderIngredients(){
   const q=$('#ingSearch').value.toLowerCase(), u=usage(), rc=reach();
   const max=Math.max(1,...Object.values(u));
@@ -258,43 +367,80 @@ function renderIngredients(){
     <td><div class="bar" style="width:${((u[i]||0)/max*100).toFixed(0)}%;opacity:${u[i]?1:.15}"></div></td>
     <td class="num">${rc[i]}</td><td>${priceCell(i)}</td></tr>`).join('')}</table>`;
 }
-
-// ---------- DISCOVER ----------
 function renderDiscover(){
   const u=usage(); const top=new Set(Object.entries(u).filter(([i])=>!STAPLES.has(i)).sort((a,b)=>b[1]-a[1]).slice(0,25).map(x=>x[0]));
   const list=R.filter(r=>!timesMade(r.id)).map(r=>{const shared=r.ingredients.filter(i=>top.has(i));const extra=r.ingredients.filter(i=>!u[i]&&!STAPLES.has(i));return{r,shared,extra}})
     .sort((a,b)=>b.shared.length-a.shared.length||a.extra.length-b.extra.length);
   $('#discGrid').innerHTML=list.map(x=>card(x.r,`<div class="meta">Shares <b style="color:var(--green)">${x.shared.length}</b> of your regulars${x.extra.length?' · new to buy: '+x.extra.map(esc).join(', '):''}</div>`)).join('');
 }
-
-function renderAll(){renderPlan();renderUseup();renderRecipes();renderIngredients();renderDiscover();
-  const n=state.mylog.length;
-  $('#syncNote').innerHTML=`<b>How sharing works:</b> "Share this list" copies a link that opens this week's plan and the at-home ticks on anyone's phone. Your tabs and checkmarks are saved only on this device.${n?` You've logged ${n} meal${n>1?'s':''} here. <button class="btn small" id="exportLog">Copy my cooking log</button> and send it to Claude to add to the household history.`:''}`;
+function renderActivity(){
+  if(!ONLINE){ $('#feed').innerHTML='<li class="meta">Activity shows up once household sign-in is connected.</li>'; $('#people').innerHTML=''; $('#cookStats').innerHTML=''; return; }
+  $('#feed').innerHTML=S.activity.length?S.activity.map(a=>{
+    const item = (a.action.includes('home')||a.action.includes('buy')) ? cap(a.item) : recName(a.item);
+    return `<li>${av(a.user_id)}<div><b>${esc(nameOf(a.user_id))}</b> ${esc(a.action)} <b>${esc(item)}</b><div class="meta">${ago(a.created_at)}</div></div></li>`}).join('')
+    :'<li class="meta">Nothing yet. Add a recipe to this week or log a meal.</li>';
+  $('#people').innerHTML=`<table>${S.members.map(m=>`<tr><td style="display:flex;gap:8px;align-items:center">${av(m.user_id)}<span>${esc(m.name)}${m.is_admin?' <span class="tag">admin</span>':''}${m.user_id===me.user_id?' <span class="tag">you</span>':''}</span></td>
+    <td class="num">${m.approved?'<span class="meta">member</span>':(me.is_admin?`<button class="btn small primary" data-approve="${m.user_id}">Approve</button> `:'<span class="meta">waiting for approval</span>')}
+    ${me.is_admin&&m.user_id!==me.user_id?` <button class="btn small danger" data-remove="${m.user_id}">Remove</button>`:''}</td></tr>`).join('')}</table>`;
+  const byUser={}; for(const c of S.cooks){ if(!c.user_id) continue; byUser[c.user_id]=(byUser[c.user_id]||0)+1; }
+  const rows=S.members.filter(m=>m.approved).map(m=>[m,byUser[m.user_id]||0]).sort((a,b)=>b[1]-a[1]);
+  $('#cookStats').innerHTML=`<table><tr><th>Person</th><th>Meals logged</th><th>Most recent</th></tr>${rows.map(([m,n])=>{const l=S.cooks.find(c=>c.user_id===m.user_id);return `<tr><td>${esc(m.name)}</td><td class="num">${n}</td><td class="meta">${l?esc(recName(l.recipe_id))+' · '+esc(l.cooked_on):'—'}</td></tr>`}).join('')}</table>
+  <div class="meta" style="margin-top:6px">The 29 meals from before sign-in (NYT Cooked list and the "Ham did" folder) count toward ingredient usage but aren't credited to anyone.</div>`;
+}
+function renderAll(){
+  renderWho();renderPlan();renderUseup();renderRecipes();renderIngredients();renderDiscover();renderActivity();
+  $('#shareList').style.display=ONLINE?'none':'';
+  $('#syncNote').innerHTML=ONLINE
+    ?`<b>Live:</b> everything you add, tick or log shows up for the whole household right away, with your name on it. The "Use it up" picks stay on this device.`
+    :`<b>Not connected yet:</b> changes are saved only on this device. Once household sign-in is set up, everyone's changes will be shared with names on them.`;
 }
 
-document.addEventListener('click',e=>{
-  const t=e.target.closest('[data-plan],[data-cooked],[data-fridge],[data-p],#shareList,#clearPlan,#fridgeClear,#exportLog'); if(!t) return;
+// ---------------- events ----------------
+document.addEventListener('click',async e=>{
+  const t=e.target.closest('button,[data-plan],[data-cooked],[data-fridge],[data-p]'); if(!t) return;
+  if(t.id==='signOut'){ await sb.auth.signOut(); location.reload(); return; }
+  if(t.id==='backToSignIn') return showSignIn();
   if(t.dataset.p){document.querySelectorAll('#tabs button').forEach(b=>b.classList.toggle('on',b===t));document.querySelectorAll('.panel').forEach(p=>p.classList.toggle('on',p.id===t.dataset.p));return;}
-  if(t.dataset.plan){const id=t.dataset.plan;state.plan=state.plan.includes(id)?state.plan.filter(x=>x!==id):[...state.plan,id];}
-  if(t.dataset.cooked){state.mylog.push({recipe:t.dataset.cooked,date:new Date().toISOString().slice(0,10)});toast('Logged, nice!');}
-  if(t.dataset.fridge){const i=t.dataset.fridge;state.fridge=state.fridge.includes(i)?state.fridge.filter(x=>x!==i):[...state.fridge,i];}
-  if(t.id==='fridgeClear') state.fridge=[];
-  if(t.id==='clearPlan'){state.plan=[];state.have=[];}
-  if(t.id==='shareList'){const l=shareLink();(navigator.share?navigator.share({title:'Grocery list',url:l}).catch(()=>{}):navigator.clipboard.writeText(l).then(()=>toast('Link copied. Text it to the household.')));}
-  if(t.id==='exportLog'){navigator.clipboard.writeText(JSON.stringify(state.mylog)).then(()=>toast('Log copied'));}
-  save();renderAll();
+  if(t.dataset.plan){ await DB.togglePlan(t.dataset.plan); }
+  else if(t.dataset.cooked){ await DB.cooked(t.dataset.cooked); toast('Logged, nice!'); }
+  else if(t.dataset.fridge){ const i=t.dataset.fridge; fridge=fridge.includes(i)?fridge.filter(x=>x!==i):[...fridge,i]; LS.set('fridge',fridge); }
+  else if(t.dataset.approve){ await DB.run(sb.from('members').update({approved:true}).eq('user_id',t.dataset.approve)); toast('Approved'); }
+  else if(t.dataset.remove){ if(!confirmRemove(t)) return; await DB.run(sb.from('members').delete().eq('user_id',t.dataset.remove)); }
+  else if(t.id==='fridgeClear'){ fridge=[]; LS.set('fridge',fridge); }
+  else if(t.id==='clearPlan'){ await DB.clearWeek(); }
+  else if(t.id==='shareList'){ const l=shareLink(); navigator.share?navigator.share({title:'Grocery list',url:l}).catch(()=>{}):navigator.clipboard.writeText(l).then(()=>toast('Link copied. Text it to the household.')); return; }
+  else return;
+  renderAll();
 });
-document.addEventListener('change',e=>{
-  if(e.target.dataset.have!==undefined){const i=e.target.dataset.have;state.have=e.target.checked?[...state.have,i]:state.have.filter(x=>x!==i);save();renderPlan();}
+// Two-tap remove, so a misclick doesn't drop someone
+function confirmRemove(t){ if(t.dataset.armed){return true} t.dataset.armed=1; t.textContent='Tap again to remove'; setTimeout(()=>{delete t.dataset.armed;t.textContent='Remove'},3000); return false; }
+document.addEventListener('change',async e=>{
+  if(e.target.dataset.have!==undefined){ await DB.setHave(e.target.dataset.have,e.target.checked); renderPlan(); renderActivity(); }
   if(e.target.id==='hideStaples') renderPlan();
   if(e.target.id==='recList'||e.target.id==='recSort') renderRecipes();
 });
 ['planSearch','fridgeSearch','recSearch','ingSearch'].forEach(id=>$('#'+id).addEventListener('input',()=>({planSearch:renderPlan,fridgeSearch:renderUseup,recSearch:renderRecipes,ingSearch:renderIngredients})[id]()));
 
-Promise.all(['recipes','prices','cook-log'].map(f=>fetch('data/'+f+'.json').then(r=>r.json()))).then(([rec,pr,lg])=>{
-  R=rec.recipes; P=pr.items; LOG=lg.log; byId=Object.fromEntries(R.map(r=>[r.id,r]));
-  $('#priceDate').textContent=pr.checked; readShared(); renderAll();
-}).catch(()=>{document.querySelector('main').innerHTML='<div class="empty">Couldn\'t load the data files. Open this page through its GitHub Pages link rather than as a local file.</div>'});
+// Offline-mode list sharing via link (#list=...)
+function shareLink(){ return location.origin+location.pathname+'#list='+btoa(unescape(encodeURIComponent(JSON.stringify({p:S.plan.map(p=>p.recipe_id),h:S.have.map(h=>h.ingredient)})))); }
+function readShared(){
+  const m=location.hash.match(/list=([^&]+)/); if(!m||ONLINE) return;
+  try{ const s=JSON.parse(decodeURIComponent(escape(atob(m[1])))); S.plan=(s.p||[]).map(id=>({recipe_id:id})); S.have=(s.h||[]).map(i=>({ingredient:i})); DB.saveLocal(); toast('Loaded the shared list'); history.replaceState(null,'',location.pathname); }catch(e){}
+}
+
+// ---------------- start ----------------
+let booted=false;
+async function boot(){
+  if(!booted){
+    booted=true;
+    const [rec,pr,lg]=await Promise.all(['recipes','prices','cook-log'].map(f=>fetch('data/'+f+'.json').then(r=>r.json())));
+    R=rec.recipes; P=pr.items; LOG=lg.log; byId=Object.fromEntries(R.map(r=>[r.id,r])); $('#priceDate').textContent=pr.checked;
+    if(ONLINE){ let t; sb.channel('household').on('postgres_changes',{event:'*',schema:'public'},()=>{clearTimeout(t);t=setTimeout(async()=>{await DB.load();renderAll()},300)}).subscribe(); }
+  }
+  await DB.load(); readShared(); renderAll();
+}
+if(ONLINE) sb.auth.onAuthStateChange((ev)=>{ if(ev==='SIGNED_IN'&&!me) startAuth(); });
+startAuth().catch(err=>{ console.error(err); document.querySelector('main').innerHTML='<div class="empty">Something went wrong loading the page. Try refreshing.</div>'; });
 </script>
 </body>
 </html>
