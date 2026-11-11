@@ -1,6 +1,6 @@
-// Supabase project for household sign-in. These two values are designed to be public.
-// Leave blank to run in "this device only" mode.
+// Supabase project for household sign-in. Both values are designed to be public;
+// the database's row-level security rules are what keep household data private.
 window.BLP_CONFIG = {
-  url: "",
-  key: ""
+  url: "https://ndbanzpiwhaqvtsepszf.supabase.co",
+  key: "sb_publishable_ShdakQ72QP9DFFyTPcg0_g_IBZBdNcc"
 };
