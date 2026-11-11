@@ -15,7 +15,7 @@ const json = (b: unknown, status = 200) =>
 // Longest names first so "chicken broth" wins over "chicken", etc.
 const KW: [string, string][] = ([
   ["peppercorn",""],["black pepper",""],["kosher salt",""],["sea salt",""],["corn tortilla","tortillas"],["flour tortilla","tortillas"],
-  ["bread crumb","breadcrumbs"],["butter lettuce","lettuce"],["paneer","paneer"],["lasagna","lasagna noodles"],["juniper berr","juniper berries"],
+  ["bread crumb","breadcrumbs"],["butter lettuce","lettuce"],["paneer","paneer"],["lasagna noodle","lasagna noodles"],["lasagna","lasagna noodles"],["juniper berr","juniper berries"],
   ["potato gnocchi","gnocchi"],["egg noodle","noodles"],["egg yolk","eggs"],["chicken bouillon","broth"],["bouillon","broth"],
   ["garlic powder","garlic"],["onion powder","onion"],["coconut cream","coconut milk"],["half-and-half","heavy cream"],
   ["rotisserie chicken","rotisserie chicken"],["chicken breast","chicken breast"],["chicken thigh","chicken"],
@@ -121,10 +121,16 @@ Deno.serve(async (req) => {
     if (image && typeof image === "object") image = image.url || image.contentUrl;
     const title = decode(recipe?.name || meta(html, "og:title") || html.match(/<title>([^<]+)/i)?.[1] || "");
     const lines: string[] = Array.isArray(recipe?.recipeIngredient) ? recipe.recipeIngredient.map(String) : [];
+    // Servings exactly as the recipe page lists them (recipeYield can be a string, number or list).
+    const y = recipe?.recipeYield;
+    const yields = (Array.isArray(y) ? y : y != null ? [y] : []).map((v: unknown) => decode(String(v))).filter(Boolean);
+    const servings = yields.find((v: string) => /serv|people|portion/i.test(v)) || yields.find((v: string) => /\D/.test(v)) ||
+      (yields[0] ? `${yields[0]} servings` : null);
     return json({
       title,
       image: image || meta(html, "og:image") || null,
       site: (meta(html, "og:site_name") ? decode(meta(html, "og:site_name")) : u.hostname.replace(/^www\./, "")),
+      servings,
       ingredients: names(lines),
       found_ingredients: lines.length > 0,
     });

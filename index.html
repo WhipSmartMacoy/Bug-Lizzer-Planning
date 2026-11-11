@@ -220,7 +220,7 @@ a{color:var(--green)}
 <footer>Recipes link to their original sites. Only the title, photo link and ingredient names are kept here. Prices come from <a href="https://shop.fairwaymarket.com/store/fairway/storefront" target="_blank" rel="noopener">shop.fairwaymarket.com</a> or are entered by the household, and may have changed since.</footer>
 <div class="toast" id="toast"></div>
 
-<script src="config.js?v=6"></script>
+<script src="config.js?v=7"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 const CFG = window.BLP_CONFIG || {};
@@ -289,7 +289,7 @@ const DB = {
   },
   setHave:(i,v)=>DB.run(v?sb.from('week_have').insert({week_start:week,ingredient:i}):sb.from('week_have').delete().eq('week_start',week).eq('ingredient',i)),
   setPrice:(ingredient,price,item)=>DB.run(sb.from('prices').upsert({ingredient,price:price||null,item:item||null,source:'Household',link:FAIRWAY(ingredient),updated_by:me.user_id,updated_at:new Date().toISOString()})),
-  saveRecipe:d=>DB.run(sb.from('recipes').insert({url:d.url,title:d.title,image_url:d.image||null,site:d.site||null,ingredients:d.ingredients,status:d.status})),
+  saveRecipe:d=>DB.run(sb.from('recipes').insert({url:d.url,title:d.title,image_url:d.image||null,site:d.site||null,servings:d.servings||null,ingredients:d.ingredients,status:d.status})),
   setStatus:(id,status)=>DB.run(sb.from('recipes').update({status}).eq('id',id)),
   deleteRecipe:id=>DB.run(sb.from('recipes').delete().eq('id',id))
 };
@@ -339,7 +339,7 @@ function card(r, extra=''){
   return `<div class="card">
     ${r.image_url?`<a href="${esc(r.url)}" target="_blank" rel="noopener"><img class="thumb" src="${esc(r.image_url)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()"></a>`:''}
     <h3><a href="${esc(r.url)}" target="_blank" rel="noopener">${esc(r.title)}</a></h3>
-    <div class="meta">${esc(r.site||'')} · added by ${esc(nameOf(r.added_by))}${lc?` · last cooked ${shortDate(lc.cooked_at.slice(0,10))}`:''}</div>
+    <div class="meta">${r.servings?`<b>Serves ${esc(r.servings.replace(/^serves\s*/i,''))}</b> · `:''}${esc(r.site||'')} · added by ${esc(nameOf(r.added_by))}${lc?` · last cooked ${shortDate(lc.cooked_at.slice(0,10))}`:''}</div>
     <div class="tags">${r.status==='past'?'<span class="tag past">Past · cooked before</span>':'<span class="tag new">New · to try</span>'}${n?`<span class="tag">Planned ${n}×</span>`:''}</div>
     ${extra}
     <div class="ings">${r.ingredients.map(i=>fridge.includes(i)?`<b>${esc(i)}</b>`:esc(i)).join(' · ')||'<i>No ingredients listed</i>'}</div>
@@ -364,7 +364,7 @@ function renderPlan(){
       <h4><b>${dayName(d)}</b><span>${shortDate(d)}</span></h4>
       ${ms.map(m=>{const r=rec(m.recipe_id); if(!r) return ''; return `<div class="meal ${m.cooked_at?'cooked':''}">
         <a href="${esc(r.url)}" target="_blank" rel="noopener">${esc(r.title)}</a>
-        <div class="meta">added by ${esc(nameOf(m.added_by))}</div>
+        <div class="meta">${r.servings?'Serves '+esc(r.servings.replace(/^serves\s*/i,''))+' · ':''}added by ${esc(nameOf(m.added_by))}</div>
         ${m.cooked_at?`<div class="meta" style="color:var(--green)">✓ Cooked by ${esc(nameOf(m.cooked_by))}</div>`:''}
         <div class="mrow">
           <button data-cook="${m.id}" data-v="${m.cooked_at?0:1}">${m.cooked_at?'Undo cooked':'Cooked ✓'}</button>
@@ -403,6 +403,8 @@ function renderImport(){
       ${draft.error?`<p class="needprice" style="margin:0 0 8px">${esc(draft.error)} Fill in the details below to add it anyway.</p>`:''}
       <label class="meta">Title</label>
       <input type="text" id="draftTitle" value="${esc(draft.title||'')}" style="width:100%;margin:2px 0 10px">
+      <label class="meta">Servings (from the recipe page)</label>
+      <input type="text" id="draftServings" value="${esc(draft.servings||'')}" placeholder="e.g. 4 servings" style="width:100%;margin:2px 0 10px">
       <div class="meta">From ${esc(draft.site||'')} · <a href="${esc(draft.url)}" target="_blank" rel="noopener">open original ↗</a> · saving as a <b>${document.querySelector('input[name=kind]:checked')?.value==='past'?'past':'new'} recipe</b> (switch above)</div>
       <div class="meta" style="margin:10px 0 4px">Ingredients (names only: tap × to drop one, or add any that were missed)</div>
       <div class="chips" id="draftIngs">${draft.ingredients.map(i=>`<span class="chip on" data-droping="${esc(i)}">${esc(i)}<span class="x">×</span></span>`).join('')||'<span class="meta">None found yet</span>'}</div>
@@ -483,14 +485,14 @@ document.addEventListener('submit',async e=>{
     draft={url,loading:true}; renderImport();
     const {data,error}=await sb.functions.invoke('import-recipe',{body:{url}});
     let host=''; try{host=new URL(url).hostname.replace(/^www\./,'')}catch(e){}
-    draft={url,site:data?.site||host,title:data?.title||'',image:data?.image||null,ingredients:data?.ingredients||[],
+    draft={url,site:data?.site||host,title:data?.title||'',image:data?.image||null,servings:data?.servings||'',ingredients:data?.ingredients||[],
       error:error?'Couldn\'t read that page.':data?.error?data.error:(!data?.found_ingredients?'No ingredient list found on that page (it may need a sign-in).':null)};
     renderImport();
   }
   if(f.id==='addIngForm'){
     const v=$('#newIng').value.trim().toLowerCase(); if(!v) return;
     for(const x of v.split(',').map(s=>s.trim()).filter(Boolean)) if(!draft.ingredients.includes(x)) draft.ingredients.push(x);
-    draft.ingredients.sort(); draft.title=$('#draftTitle').value; renderImport(); $('#newIng')?.focus();
+    draft.ingredients.sort(); draft.title=$('#draftTitle').value; draft.servings=$('#draftServings').value; renderImport(); $('#newIng')?.focus();
   }
   if(f.dataset.priceform!==undefined){
     const i=f.dataset.priceform; let price=f.price.value.trim(); if(price&&!price.startsWith('$')) price='$'+price;
@@ -505,10 +507,10 @@ document.addEventListener('click',async e=>{
   if(t.dataset.p){document.querySelectorAll('#tabs button').forEach(b=>b.classList.toggle('on',b===t));document.querySelectorAll('.panel').forEach(p=>p.classList.toggle('on',p.id===t.dataset.p));return;}
   if(t.dataset.editprice!==undefined){ e.preventDefault(); editingPrice=t.dataset.editprice; renderShop(); renderIngredients(); return; }
   if(t.dataset.cancelprice!==undefined){ editingPrice=null; renderShop(); renderIngredients(); return; }
-  if(t.dataset.droping){ draft.title=$('#draftTitle').value; draft.ingredients=draft.ingredients.filter(i=>i!==t.dataset.droping); renderImport(); return; }
+  if(t.dataset.droping){ draft.title=$('#draftTitle').value; draft.servings=$('#draftServings').value; draft.ingredients=draft.ingredients.filter(i=>i!==t.dataset.droping); renderImport(); return; }
   if(t.id==='cancelDraft'){ draft=null; $('#importUrl').value=''; renderImport(); return; }
   if(t.id==='saveDraft'){
-    draft.title=$('#draftTitle').value.trim(); if(!draft.title) return toast('Give it a title first');
+    draft.title=$('#draftTitle').value.trim(); draft.servings=$('#draftServings').value.trim(); if(!draft.title) return toast('Give it a title first');
     draft.status=document.querySelector('input[name=kind]:checked').value;
     if(await DB.saveRecipe(draft)){ toast(draft.status==='past'?'Added as a past recipe':'Added as a new recipe'); draft=null; $('#importUrl').value=''; }
   }
