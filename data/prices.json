@@ -1,0 +1,701 @@
+{
+ "store": "Fairway Market (store 4000)",
+ "checked": "2026-11-11",
+ "items": {
+  "almonds": {
+   "item": "Fairway Sliced Almonds, 10 oz",
+   "price": "$7.99",
+   "link": "https://www.fairwaymarket.com/sm/planning/rsid/4000/results?q=sliced+almonds"
+  },
+  "anchovies": {
+   "item": "Cento Flat Fillet Anchovies, 2 oz",
+   "price": "$2.79",
+   "link": "https://www.fairwaymarket.com/sm/planning/rsid/4000/results?q=anchovy+fillets"
+  },
+  "arugula": {
+   "item": "B&W Baby Arugula, 4 oz",
+   "price": "$3.99",
+   "link": "https://www.fairwaymarket.com/sm/planning/rsid/4000/results?q=baby+arugula"
+  },
+  "asparagus": {
+   "item": "Fresh Green Asparagus",
+   "price": "$4.99 avg/ea",
+   "link": "https://www.fairwaymarket.com/sm/planning/rsid/4000/results?q=asparagus"
+  },
+  "avocados": {
+   "item": "Fresh Hass Avocado, each",
+   "price": "$1.79",
+   "link": "https://www.fairwaymarket.com/sm/planning/rsid/4000/results?q=avocado"
+  },
+  "baking powder": {
+   "item": null,
+   "price": null,
+   "link": "https://www.fairwaymarket.com/sm/planning/rsid/4000/results?q=baking+powder"
+  },
+  "baking soda": {
+   "item": null,
+   "price": null,
+   "link": "https://www.fairwaymarket.com/sm/planning/rsid/4000/results?q=baking+soda"
+  },
+  "balsamic vinegar": {
+   "item": "Due Vittorie Balsamic of Modena, 8.45 fl oz",
+   "price": "$22.99",
+   "link": "https://www.fairwaymarket.com/sm/planning/rsid/4000/results?q=balsamic+vinegar"
+  },
+  "basil": {
+   "item": "Fresh Hydroponic Basil, bunch",
+   "price": "$3.99",
+   "link": "https://www.fairwaymarket.com/sm/planning/rsid/4000/results?q=fresh+basil"
+  },
+  "bell peppers": {
+   "item": "Fresh Hot House Red Pepper, each",
+   "price": "$2.49",
+   "link": "https://www.fairwaymarket.com/sm/planning/rsid/4000/results?q=red+pepper"
+  },
+  "black beans": {
+   "item": "Bowl & Basket Black Beans, 15 oz",
+   "price": "$0.99",
+   "link": "https://www.fairwaymarket.com/sm/planning/rsid/4000/results?q=black+beans"
+  },
+  "bread": {
+   "item": "The Rustik Oven Pane Italiano, 1 lb",
+   "price": "$3.99",
+   "link": "https://www.fairwaymarket.com/sm/planning/rsid/4000/results?q=italian+bread"
+  },
+  "broccoli": {
+   "item": "Fresh Broccoli Crowns",
+   "price": "$2.43 avg/ea",
+   "link": "https://www.fairwaymarket.com/sm/planning/rsid/4000/results?q=broccoli"
+  },
+  "broccoli rabe": {
+   "item": "Fresh Broccoli Rabe",
+   "price": "$4.99 avg/ea",
+   "link": "https://www.fairwaymarket.com/sm/planning/rsid/4000/results?q=broccoli+rabe"
+  },
+  "broth": {
+   "item": "Wholesome Pantry Organic Low Sodium Chicken Broth, 32 oz",
+   "price": "$3.49",
+   "link": "https://www.fairwaymarket.com/sm/planning/rsid/4000/results?q=chicken+broth"
+  },
+  "brussels sprouts": {
+   "item": "Fresh Brussels Sprouts",
+   "price": "$4.29/lb",
+   "link": "https://www.fairwaymarket.com/sm/planning/rsid/4000/results?q=brussels+sprouts"
+  },
+  "butter": {
+   "item": "Plugra Unsalted Butter, 8 oz",
+   "price": "$5.49",
+   "link": "https://www.fairwaymarket.com/sm/planning/rsid/4000/results?q=unsalted+butter"
+  },
+  "cabbage": {
+   "item": "Fresh Green Cabbage",
+   "price": "$4.64 avg/ea",
+   "link": "https://www.fairwaymarket.com/sm/planning/rsid/4000/results?q=green+cabbage"
+  },
+  "canned tomatoes": {
+   "item": "Colavita Whole Peeled Tomatoes, 28 oz",
+   "price": "$3.29",
+   "link": "https://www.fairwaymarket.com/sm/planning/rsid/4000/results?q=whole+peeled+tomatoes"
+  },
+  "capers": {
+   "item": "Cento Capote Capers, 3 oz",
+   "price": "$2.49",
+   "link": "https://www.fairwaymarket.com/sm/planning/rsid/4000/results?q=capers"
+  },
+  "carrots": {
+   "item": "Fresh Carrots, 1 lb bag",
+   "price": "$1.99",
+   "link": "https://www.fairwaymarket.com/sm/planning/rsid/4000/results?q=carrots"
+  },
+  "cashews": {
+   "item": "Cashews Roasted Unsalted",
+   "price": "$13.99/lb",
+   "link": "https://www.fairwaymarket.com/sm/planning/rsid/4000/results?q=cashews"
+  },
+  "cauliflower": {
+   "item": "Fresh Cauliflower, each",
+   "price": "$3.99",
+   "link": "https://www.fairwaymarket.com/sm/planning/rsid/4000/results?q=cauliflower"
+  },
+  "cayenne": {
+   "item": "Badia Organic Cayenne, 1.75 oz",
+   "price": "$4.49",
+   "link": "https://www.fairwaymarket.com/sm/planning/rsid/4000/results?q=cayenne"
+  },
+  "celery": {
+   "item": "Fresh Celery, each",
+   "price": "$2.79",
+   "link": "https://www.fairwaymarket.com/sm/planning/rsid/4000/results?q=celery"
+  },
+  "cheddar": {
+   "item": "Rumiano Organic Sharp Cheddar, 8 oz",
+   "price": "$7.99",
+   "link": "https://www.fairwaymarket.com/sm/planning/rsid/4000/results?q=sharp+cheddar"
+  },
+  "cherry tomatoes": {
+   "item": "NatureSweet Cherubs Grape Tomatoes, 9 oz",
+   "price": "$4.79",
+   "link": "https://www.fairwaymarket.com/sm/planning/rsid/4000/results?q=cherry+tomatoes"
+  },
+  "chicken": {
+   "item": "Bell & Evans Boneless Skinless Chicken Thighs",
+   "price": "$7.99/lb",
+   "link": "https://www.fairwaymarket.com/sm/planning/rsid/4000/results?q=chicken+thighs"
+  },
+  "chicken breast": {
+   "item": "Bell & Evans Boneless Skinless Chicken Breasts",
+   "price": "$7.99/lb",
+   "link": "https://www.fairwaymarket.com/sm/planning/rsid/4000/results?q=chicken+breast"
+  },
+  "chickpeas": {
+   "item": "Bowl & Basket Chick Peas, 15 oz",
+   "price": "$0.99",
+   "link": "https://www.fairwaymarket.com/sm/planning/rsid/4000/results?q=chickpeas"
+  },
+  "chile crisp": {
+   "item": "Mr Bing Spicy Chili Crisp, 7 oz",
+   "price": "$7.99",
+   "link": "https://www.fairwaymarket.com/sm/planning/rsid/4000/results?q=chili+crisp"
+  },
+  "chipotle": {
+   "item": "Goya Chipotle Peppers in Adobo, 7 oz",
+   "price": "$2.69",
+   "link": "https://www.fairwaymarket.com/sm/planning/rsid/4000/results?q=chipotle+in+adobo"
+  },
+  "chives": {
+   "item": null,
+   "price": null,
+   "link": "https://www.fairwaymarket.com/sm/planning/rsid/4000/results?q=chives"
+  },
+  "cilantro": {
+   "item": "Fresh Organic Cilantro, bunch",
+   "price": "$2.49",
+   "link": "https://www.fairwaymarket.com/sm/planning/rsid/4000/results?q=cilantro"
+  },
+  "cinnamon": {
+   "item": "McCormick Ground Cinnamon, 2.37 oz",
+   "price": "$3.99",
+   "link": "https://www.fairwaymarket.com/sm/planning/rsid/4000/results?q=ground+cinnamon"
+  },
+  "coconut milk": {
+   "item": "Wholesome Pantry Organic Light Coconut Milk, 13.5 fl oz",
+   "price": "$2.69",
+   "link": "https://www.fairwaymarket.com/sm/planning/rsid/4000/results?q=coconut+milk"
+  },
+  "coriander": {
+   "item": null,
+   "price": null,
+   "link": "https://www.fairwaymarket.com/sm/planning/rsid/4000/results?q=coriander"
+  },
+  "cottage cheese": {
+   "item": "Lactaid Cottage Cheese, 16 oz",
+   "price": "$4.99",
+   "link": "https://www.fairwaymarket.com/sm/planning/rsid/4000/results?q=cottage+cheese"
+  },
+  "couscous": {
+   "item": "RiceSelect Pearl Couscous, 24.5 oz",
+   "price": "$5.99",
+   "link": "https://www.fairwaymarket.com/sm/planning/rsid/4000/results?q=pearl+couscous"
+  },
+  "crab": {
+   "item": "Ocean Legacy Lump Crab Meat, 8 oz",
+   "price": "$11.99",
+   "link": "https://www.fairwaymarket.com/sm/planning/rsid/4000/results?q=lump+crab"
+  },
+  "cream cheese": {
+   "item": "Philadelphia Cream Cheese, 8 oz",
+   "price": "$3.49",
+   "link": "https://www.fairwaymarket.com/sm/planning/rsid/4000/results?q=philadelphia+cream+cheese"
+  },
+  "cucumber": {
+   "item": "Fresh Seedless Cucumber, each",
+   "price": "$2.99",
+   "link": "https://www.fairwaymarket.com/sm/planning/rsid/4000/results?q=cucumber"
+  },
+  "cumin": {
+   "item": "McCormick Ground Cumin, 1.5 oz",
+   "price": "$3.99",
+   "link": "https://www.fairwaymarket.com/sm/planning/rsid/4000/results?q=ground+cumin"
+  },
+  "dill": {
+   "item": "Fresh Organic Dill, bunch",
+   "price": "$3.99",
+   "link": "https://www.fairwaymarket.com/sm/planning/rsid/4000/results?q=fresh+dill"
+  },
+  "dumplings": {
+   "item": "Laoban Dumplings, 8 oz",
+   "price": "$7.49",
+   "link": "https://www.fairwaymarket.com/sm/planning/rsid/4000/results?q=frozen+dumplings"
+  },
+  "eggs": {
+   "item": "Noah's Pride Large Brown Eggs, 12 ct",
+   "price": "$2.49",
+   "link": "https://www.fairwaymarket.com/sm/planning/rsid/4000/results?q=large+eggs"
+  },
+  "farro": {
+   "item": "Pereg Farro, 16 oz",
+   "price": "$5.79",
+   "link": "https://www.fairwaymarket.com/sm/planning/rsid/4000/results?q=farro"
+  },
+  "feta": {
+   "item": "Alouette Feta Crumbles, 4 oz",
+   "price": "$3.49",
+   "link": "https://www.fairwaymarket.com/sm/planning/rsid/4000/results?q=feta+cheese"
+  },
+  "flank steak": {
+   "item": "Beef Flank Steak",
+   "price": "$12.50 avg/ea",
+   "link": "https://www.fairwaymarket.com/sm/planning/rsid/4000/results?q=flank+steak"
+  },
+  "flour": {
+   "item": "Gold Medal All Purpose Flour, 32 oz",
+   "price": "$4.49",
+   "link": "https://www.fairwaymarket.com/sm/planning/rsid/4000/results?q=all+purpose+flour"
+  },
+  "fresh chiles": {
+   "item": "Fresh Jalapeño Pepper",
+   "price": "$1.00 avg/ea",
+   "link": "https://www.fairwaymarket.com/sm/planning/rsid/4000/results?q=fresh+chiles"
+  },
+  "garam masala": {
+   "item": "Simply Organic Garam Masala, 3 oz",
+   "price": "$9.99",
+   "link": "https://www.fairwaymarket.com/sm/planning/rsid/4000/results?q=garam+masala"
+  },
+  "garlic": {
+   "item": "Fresh Garlic",
+   "price": "$1.12 avg/ea",
+   "link": "https://www.fairwaymarket.com/sm/planning/rsid/4000/results?q=fresh+garlic"
+  },
+  "ginger": {
+   "item": "Fresh Ginger",
+   "price": "$1.56 avg/ea",
+   "link": "https://www.fairwaymarket.com/sm/planning/rsid/4000/results?q=fresh+ginger"
+  },
+  "gnocchi": {
+   "item": "Bowl & Basket Classic Potato Gnocchi, 16 oz",
+   "price": "$2.99",
+   "link": "https://www.fairwaymarket.com/sm/planning/rsid/4000/results?q=potato+gnocchi"
+  },
+  "green beans": {
+   "item": "Fresh Green Beans",
+   "price": "$3.99/lb",
+   "link": "https://www.fairwaymarket.com/sm/planning/rsid/4000/results?q=green+beans"
+  },
+  "ground chicken": {
+   "item": "Wholesome Pantry Ground Chicken, 16 oz",
+   "price": "$3.99",
+   "link": "https://www.fairwaymarket.com/sm/planning/rsid/4000/results?q=ground+chicken"
+  },
+  "ground turkey": {
+   "item": "Shady Brook Farms 93% Ground Turkey, 16 oz",
+   "price": "$6.49",
+   "link": "https://www.fairwaymarket.com/sm/planning/rsid/4000/results?q=ground+turkey"
+  },
+  "gruyere": {
+   "item": "Emmi Le Gruyere",
+   "price": "$29.99/lb",
+   "link": "https://www.fairwaymarket.com/sm/planning/rsid/4000/results?q=gruyere"
+  },
+  "halloumi": {
+   "item": "Dodoni Halloumi, 7.9 oz",
+   "price": "$9.99",
+   "link": "https://www.fairwaymarket.com/sm/planning/rsid/4000/results?q=halloumi"
+  },
+  "heavy cream": {
+   "item": "Cream-O-Land Heavy Cream, 1 pint",
+   "price": "$4.49",
+   "link": "https://www.fairwaymarket.com/sm/planning/rsid/4000/results?q=heavy+cream"
+  },
+  "hoisin": {
+   "item": "Kikkoman Hoisin Sauce, 9.4 oz",
+   "price": "$3.99",
+   "link": "https://www.fairwaymarket.com/sm/planning/rsid/4000/results?q=hoisin"
+  },
+  "honey": {
+   "item": "Honey In The Raw Organic Honey, 14 oz",
+   "price": "$8.99",
+   "link": "https://www.fairwaymarket.com/sm/planning/rsid/4000/results?q=honey"
+  },
+  "hot sauce": {
+   "item": "Frank's RedHot Original, 12 fl oz",
+   "price": "$5.49",
+   "link": "https://www.fairwaymarket.com/sm/planning/rsid/4000/results?q=franks+red+hot"
+  },
+  "jalapeño": {
+   "item": "Fresh Jalapeño Pepper",
+   "price": "$1.00 avg/ea",
+   "link": "https://www.fairwaymarket.com/sm/planning/rsid/4000/results?q=jalapeno"
+  },
+  "kale": {
+   "item": "Cal-Organic Chopped Lacinato Kale, 10 oz",
+   "price": "$5.99",
+   "link": "https://www.fairwaymarket.com/sm/planning/rsid/4000/results?q=kale"
+  },
+  "lemons": {
+   "item": "Fresh Lemon, each",
+   "price": "$0.75",
+   "link": "https://www.fairwaymarket.com/sm/planning/rsid/4000/results?q=lemons"
+  },
+  "lettuce": {
+   "item": null,
+   "price": null,
+   "link": "https://www.fairwaymarket.com/sm/planning/rsid/4000/results?q=lettuce"
+  },
+  "limes": {
+   "item": "Fresh Limes, 2 lb bag",
+   "price": "$6.99",
+   "link": "https://www.fairwaymarket.com/sm/planning/rsid/4000/results?q=limes"
+  },
+  "maple syrup": {
+   "item": "Maple Joe Organic Maple Syrup, 12 fl oz",
+   "price": "$9.29",
+   "link": "https://www.fairwaymarket.com/sm/planning/rsid/4000/results?q=maple+syrup"
+  },
+  "mayonnaise": {
+   "item": "Hellmann's Dijo-Mayo, 11.5 fl oz",
+   "price": "$3.69",
+   "link": "https://www.fairwaymarket.com/sm/planning/rsid/4000/results?q=mayonnaise"
+  },
+  "melon": {
+   "item": "Fresh Cantaloupe, each",
+   "price": "$4.99",
+   "link": "https://www.fairwaymarket.com/sm/planning/rsid/4000/results?q=cantaloupe"
+  },
+  "milk": {
+   "item": "Cream-O-Land Whole Milk, 32 fl oz",
+   "price": "$2.19",
+   "link": "https://www.fairwaymarket.com/sm/planning/rsid/4000/results?q=whole+milk"
+  },
+  "mint": {
+   "item": "Fresh Mint, bunch",
+   "price": "$2.99",
+   "link": "https://www.fairwaymarket.com/sm/planning/rsid/4000/results?q=fresh+mint"
+  },
+  "miso": {
+   "item": "Miso Master Mellow White Miso, 8 oz",
+   "price": "$9.49",
+   "link": "https://www.fairwaymarket.com/sm/planning/rsid/4000/results?q=miso"
+  },
+  "monterey": {
+   "item": null,
+   "price": null,
+   "link": "https://www.fairwaymarket.com/sm/planning/rsid/4000/results?q=monterey"
+  },
+  "mozzarella": {
+   "item": "Fairway Fresh Mozzarella",
+   "price": "$9.99/lb",
+   "link": "https://www.fairwaymarket.com/sm/planning/rsid/4000/results?q=fresh+mozzarella"
+  },
+  "mushrooms": {
+   "item": "Bowl & Basket Crimini Mushrooms, 6 oz",
+   "price": "$3.19",
+   "link": "https://www.fairwaymarket.com/sm/planning/rsid/4000/results?q=crimini+mushrooms"
+  },
+  "mustard": {
+   "item": "French's Dijon Mustard, 12 oz",
+   "price": "$3.99",
+   "link": "https://www.fairwaymarket.com/sm/planning/rsid/4000/results?q=dijon+mustard"
+  },
+  "neutral oil": {
+   "item": "Mazola Canola Oil, 40 fl oz",
+   "price": "$10.29",
+   "link": "https://www.fairwaymarket.com/sm/planning/rsid/4000/results?q=canola+oil"
+  },
+  "noodles": {
+   "item": "Roland Organic Lo Mein Noodles, 12.8 oz",
+   "price": "$4.19",
+   "link": "https://www.fairwaymarket.com/sm/planning/rsid/4000/results?q=noodles"
+  },
+  "nori": {
+   "item": "Gimme Sushi Nori, 0.81 oz",
+   "price": "$5.59",
+   "link": "https://www.fairwaymarket.com/sm/planning/rsid/4000/results?q=nori"
+  },
+  "old bay": {
+   "item": "Old Bay Seasoning, 2.62 oz",
+   "price": "$3.79",
+   "link": "https://www.fairwaymarket.com/sm/planning/rsid/4000/results?q=old+bay"
+  },
+  "olive oil": {
+   "item": "Fairway Organic Extra Virgin Olive Oil",
+   "price": "$15.99",
+   "link": "https://www.fairwaymarket.com/sm/planning/rsid/4000/results?q=extra+virgin+olive+oil"
+  },
+  "olives": {
+   "item": "Roland Kalamata Olives, 6.7 oz",
+   "price": "$6.49",
+   "link": "https://www.fairwaymarket.com/sm/planning/rsid/4000/results?q=kalamata+olives"
+  },
+  "onion": {
+   "item": "Bowl & Basket Yellow Onions, 3 lb bag",
+   "price": "$4.49",
+   "link": "https://www.fairwaymarket.com/sm/planning/rsid/4000/results?q=yellow+onion"
+  },
+  "oregano": {
+   "item": "McCormick Oregano Leaves, 0.75 oz",
+   "price": "$3.49",
+   "link": "https://www.fairwaymarket.com/sm/planning/rsid/4000/results?q=oregano"
+  },
+  "orzo": {
+   "item": "Barilla Orzo, 1 lb",
+   "price": "$1.78",
+   "link": "https://www.fairwaymarket.com/sm/planning/rsid/4000/results?q=orzo"
+  },
+  "oyster sauce": {
+   "item": "Ka-Me Oyster Sauce, 7.1 fl oz",
+   "price": "$3.99",
+   "link": "https://www.fairwaymarket.com/sm/planning/rsid/4000/results?q=oyster+sauce"
+  },
+  "panko": {
+   "item": "Kikkoman Panko, 8 oz",
+   "price": "$4.99",
+   "link": "https://www.fairwaymarket.com/sm/planning/rsid/4000/results?q=panko"
+  },
+  "paprika": {
+   "item": "Wholesome Pantry Organic Smoked Paprika, 2.4 oz",
+   "price": "$5.49",
+   "link": "https://www.fairwaymarket.com/sm/planning/rsid/4000/results?q=smoked+paprika"
+  },
+  "parmesan": {
+   "item": "White Gold Grated Parmigiano Reggiano, 2.82 oz",
+   "price": "$8.29",
+   "link": "https://www.fairwaymarket.com/sm/planning/rsid/4000/results?q=parmigiano+reggiano"
+  },
+  "parsley": {
+   "item": "Fairway Organic Parsley, 0.25 oz (dried)",
+   "price": "$5.29",
+   "link": "https://www.fairwaymarket.com/sm/planning/rsid/4000/results?q=parsley"
+  },
+  "pastina": {
+   "item": "Barilla Pastina, 12 oz",
+   "price": "$1.78",
+   "link": "https://www.fairwaymarket.com/sm/planning/rsid/4000/results?q=pastina"
+  },
+  "peanut butter": {
+   "item": "Jif Creamy Peanut Butter, 28 oz",
+   "price": "$5.79",
+   "link": "https://www.fairwaymarket.com/sm/planning/rsid/4000/results?q=peanut+butter"
+  },
+  "peanuts": {
+   "item": "Bowl & Basket Salted Roasted Peanuts, 9 oz",
+   "price": "$3.49",
+   "link": "https://www.fairwaymarket.com/sm/planning/rsid/4000/results?q=roasted+peanuts"
+  },
+  "peas": {
+   "item": "Birds Eye Steamfresh Sweet Peas, 10 oz",
+   "price": "$2.99",
+   "link": "https://www.fairwaymarket.com/sm/planning/rsid/4000/results?q=frozen+peas"
+  },
+  "pecorino": {
+   "item": "Ambriola Pecorino Romano",
+   "price": "$19.99/lb",
+   "link": "https://www.fairwaymarket.com/sm/planning/rsid/4000/results?q=pecorino+romano"
+  },
+  "pine nuts": {
+   "item": "Bowl & Basket Pine Nuts, 4 oz",
+   "price": "$8.99",
+   "link": "https://www.fairwaymarket.com/sm/planning/rsid/4000/results?q=pine+nuts"
+  },
+  "potatoes": {
+   "item": "Fresh Yellow Potato",
+   "price": "$0.75 avg/ea",
+   "link": "https://www.fairwaymarket.com/sm/planning/rsid/4000/results?q=potatoes"
+  },
+  "prosciutto": {
+   "item": "Veroni Prosciutto, 4 oz",
+   "price": "$9.99",
+   "link": "https://www.fairwaymarket.com/sm/planning/rsid/4000/results?q=prosciutto"
+  },
+  "puff pastry": {
+   "item": "Mazor's Puff Pastry Sheet, 15 oz",
+   "price": "$5.99",
+   "link": "https://www.fairwaymarket.com/sm/planning/rsid/4000/results?q=puff+pastry"
+  },
+  "red pepper flakes": {
+   "item": "McCormick Crushed Red Pepper, 2.62 oz",
+   "price": "$4.49",
+   "link": "https://www.fairwaymarket.com/sm/planning/rsid/4000/results?q=crushed+red+pepper"
+  },
+  "red wine vinegar": {
+   "item": "Fairway Red Wine Vinegar, 33.8 fl oz",
+   "price": "$3.49",
+   "link": "https://www.fairwaymarket.com/sm/planning/rsid/4000/results?q=red+wine+vinegar"
+  },
+  "rice": {
+   "item": "Dynasty Jasmine Rice, 5 lb",
+   "price": "$11.99",
+   "link": "https://www.fairwaymarket.com/sm/planning/rsid/4000/results?q=jasmine+rice"
+  },
+  "rice vinegar": {
+   "item": "Kikkoman Rice Vinegar, 10 fl oz",
+   "price": "$2.99",
+   "link": "https://www.fairwaymarket.com/sm/planning/rsid/4000/results?q=rice+vinegar"
+  },
+  "rosemary": {
+   "item": "Badia Rosemary, 0.5 oz",
+   "price": "$1.99",
+   "link": "https://www.fairwaymarket.com/sm/planning/rsid/4000/results?q=rosemary"
+  },
+  "rotisserie chicken": {
+   "item": "Herb Rotisserie Chicken",
+   "price": "$9.99",
+   "link": "https://www.fairwaymarket.com/sm/planning/rsid/4000/results?q=rotisserie+chicken"
+  },
+  "salmon": {
+   "item": "Tray Wrapped Atlantic Salmon Fillet",
+   "price": "$12.99/lb",
+   "link": "https://www.fairwaymarket.com/sm/planning/rsid/4000/results?q=atlantic+salmon"
+  },
+  "scallions": {
+   "item": "Fresh Green Onions, bunch",
+   "price": "$1.99",
+   "link": "https://www.fairwaymarket.com/sm/planning/rsid/4000/results?q=green+onions"
+  },
+  "serrano peppers": {
+   "item": "Fresh Serrano Pepper",
+   "price": "$0.62 avg/ea",
+   "link": "https://www.fairwaymarket.com/sm/planning/rsid/4000/results?q=serrano+pepper"
+  },
+  "sesame oil": {
+   "item": "International Collection Toasted Sesame Oil, 8.45 fl oz",
+   "price": "$8.49",
+   "link": "https://www.fairwaymarket.com/sm/planning/rsid/4000/results?q=toasted+sesame+oil"
+  },
+  "sesame seeds": {
+   "item": "Simply Organic Sesame Seed, 2.82 oz",
+   "price": "$4.49",
+   "link": "https://www.fairwaymarket.com/sm/planning/rsid/4000/results?q=sesame+seeds"
+  },
+  "shallots": {
+   "item": "Fresh Shallot",
+   "price": "$1.00 avg/ea",
+   "link": "https://www.fairwaymarket.com/sm/planning/rsid/4000/results?q=shallots"
+  },
+  "shaoxing wine": {
+   "item": null,
+   "price": null,
+   "link": "https://www.fairwaymarket.com/sm/planning/rsid/4000/results?q=shaoxing+wine"
+  },
+  "shiitake mushrooms": {
+   "item": "Woodstock Organic Shiitake, 10 oz",
+   "price": "$4.99",
+   "link": "https://www.fairwaymarket.com/sm/planning/rsid/4000/results?q=shiitake"
+  },
+  "short pasta": {
+   "item": "Barilla Rigatoni, 1 lb",
+   "price": "$1.78",
+   "link": "https://www.fairwaymarket.com/sm/planning/rsid/4000/results?q=rigatoni"
+  },
+  "shrimp": {
+   "item": "Bowl & Basket Large Raw Shrimp, 16 oz",
+   "price": "$12.99",
+   "link": "https://www.fairwaymarket.com/sm/planning/rsid/4000/results?q=raw+shrimp"
+  },
+  "sour cream": {
+   "item": "Fage Sour Cream, 16 oz",
+   "price": "$5.49",
+   "link": "https://www.fairwaymarket.com/sm/planning/rsid/4000/results?q=sour+cream"
+  },
+  "soy sauce": {
+   "item": "Kikkoman Less Sodium Soy Sauce, 20 fl oz",
+   "price": "$6.59",
+   "link": "https://www.fairwaymarket.com/sm/planning/rsid/4000/results?q=soy+sauce"
+  },
+  "spaghetti": {
+   "item": "Di Martino Spaghetti, 16 oz",
+   "price": "$4.49",
+   "link": "https://www.fairwaymarket.com/sm/planning/rsid/4000/results?q=spaghetti"
+  },
+  "spinach": {
+   "item": "Organicgirl Baby Spinach, 10 oz",
+   "price": "$7.99",
+   "link": "https://www.fairwaymarket.com/sm/planning/rsid/4000/results?q=baby+spinach"
+  },
+  "sugar": {
+   "item": "Domino Granulated Sugar, 32 oz",
+   "price": "$4.49",
+   "link": "https://www.fairwaymarket.com/sm/planning/rsid/4000/results?q=granulated+sugar"
+  },
+  "sugar snap peas": {
+   "item": "Fresh Sugar Snap Peas",
+   "price": "$5.99/lb",
+   "link": "https://www.fairwaymarket.com/sm/planning/rsid/4000/results?q=sugar+snap+peas"
+  },
+  "tahini": {
+   "item": "Soom Premium Tahini, 11 oz",
+   "price": "$7.29",
+   "link": "https://www.fairwaymarket.com/sm/planning/rsid/4000/results?q=tahini"
+  },
+  "thyme": {
+   "item": "McCormick Organic Thyme, 0.65 oz (dried)",
+   "price": "$4.99",
+   "link": "https://www.fairwaymarket.com/sm/planning/rsid/4000/results?q=thyme"
+  },
+  "tofu": {
+   "item": "House Foods Extra Firm Tofu, 16 oz",
+   "price": "$2.99",
+   "link": "https://www.fairwaymarket.com/sm/planning/rsid/4000/results?q=extra+firm+tofu"
+  },
+  "tomato paste": {
+   "item": "Amore Double Concentrated Tomato Paste, 4.5 oz",
+   "price": "$4.99",
+   "link": "https://www.fairwaymarket.com/sm/planning/rsid/4000/results?q=tomato+paste"
+  },
+  "tomatoes": {
+   "item": "Fresh Tomatoes on the Vine",
+   "price": "$1.50 avg/ea",
+   "link": "https://www.fairwaymarket.com/sm/planning/rsid/4000/results?q=tomatoes+on+the+vine"
+  },
+  "tortillas": {
+   "item": "Guerrero Corn Tortillas, 30 ct",
+   "price": "$2.79",
+   "link": "https://www.fairwaymarket.com/sm/planning/rsid/4000/results?q=corn+tortillas"
+  },
+  "tuna": {
+   "item": "Genova Albacore Tuna in Olive Oil, 5 oz",
+   "price": "$3.49",
+   "link": "https://www.fairwaymarket.com/sm/planning/rsid/4000/results?q=tuna+in+olive+oil"
+  },
+  "turmeric": {
+   "item": "McCormick Ground Turmeric, 0.95 oz",
+   "price": "$4.29",
+   "link": "https://www.fairwaymarket.com/sm/planning/rsid/4000/results?q=turmeric"
+  },
+  "vanilla": {
+   "item": "McCormick Pure Vanilla Extract, 1 fl oz",
+   "price": "$6.82",
+   "link": "https://www.fairwaymarket.com/sm/planning/rsid/4000/results?q=vanilla+extract"
+  },
+  "white beans": {
+   "item": "Bowl & Basket Cannellini Beans, 15 oz",
+   "price": "$0.99",
+   "link": "https://www.fairwaymarket.com/sm/planning/rsid/4000/results?q=cannellini+beans"
+  },
+  "white wine": {
+   "item": "Holland House White Cooking Wine, 16 fl oz",
+   "price": "$4.99",
+   "link": "https://www.fairwaymarket.com/sm/planning/rsid/4000/results?q=white+cooking+wine"
+  },
+  "white wine vinegar": {
+   "item": null,
+   "price": null,
+   "link": "https://www.fairwaymarket.com/sm/planning/rsid/4000/results?q=white+wine+vinegar"
+  },
+  "worcestershire": {
+   "item": "Bowl & Basket Worcestershire, 10 fl oz",
+   "price": "$2.49",
+   "link": "https://www.fairwaymarket.com/sm/planning/rsid/4000/results?q=worcestershire"
+  },
+  "yogurt": {
+   "item": "Chobani Plain Greek Yogurt, 32 oz",
+   "price": "$6.49",
+   "link": "https://www.fairwaymarket.com/sm/planning/rsid/4000/results?q=plain+greek+yogurt"
+  },
+  "zucchini": {
+   "item": "Fresh Green Squash (zucchini)",
+   "price": "$1.40 avg/ea",
+   "link": "https://www.fairwaymarket.com/sm/planning/rsid/4000/results?q=zucchini"
+  }
+ }
+}
