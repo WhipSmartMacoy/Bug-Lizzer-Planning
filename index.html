@@ -102,6 +102,8 @@ h2{font:700 18px Georgia,serif;margin:6px 0 10px}
 .lrow.cooked .lwhat{color:var(--green)}
 .scanbox{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);width:min(440px,94vw);max-height:92vh;overflow:auto;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;box-shadow:0 20px 60px rgba(0,0,0,.25);z-index:30}
 #scanSheet::before{content:'';position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:29}
+.snacks{display:flex;flex-direction:column;gap:3px}.snacks>b{font-size:12.5px}
+.snacks .lrow{padding-left:8px}
 .lrow .outnote{flex:1;min-width:0;font-size:12px;padding:3px 6px;margin:0}
 .lrow select{font-size:11.5px;padding:2px 4px;flex:1;min-width:0;margin:0}
 .lrow button{font:inherit;font-size:11px;padding:1px 6px;border-radius:6px;border:1px solid var(--line);background:var(--card);cursor:pointer}
@@ -602,7 +604,9 @@ const timesPlanned = id => S.meals.filter(m=>String(m.recipe_id)===String(id)&&!
 const EAT=2, KEEP_DAYS=4;   // leftovers are offered for up to 4 days after cooking
 const PEOPLE=['Amy','Parker'];   // who lunch is planned for (1 serving each)
 const isScan = m => m.meal==='scan';
-const isLunch = m => m.meal==='lunch'||m.meal==='breakfast';   // one person's own meal (1 serving)
+const isLunch = m => m.meal==='lunch'||m.meal==='breakfast'||m.meal==='snack';
+const isSnack = m => m.meal==='snack'||(m.meal==='scan'&&m.slot==='snack');
+const SLOT_LABEL={breakfast:'Breakfast',lunch:'Lunch',snack:'Snackies',dinner:'Dinner'};   // one person's own meal (1 serving)
 const eaten = m => isLunch(m)?1:EAT;
 const servingsNum = r => { const m=String(r?.servings||'').match(/\d+/); return m?+m[0]:null; };   // "4 to 6" -> 4 (the safe end)
 const servingsRange = r => { const n=String(r?.servings||'').match(/\d+/g)?.map(Number)||[]; return n.length?[n[0],Math.max(n[0],n[1]&&n[1]<=24?n[1]:n[0])]:null; };
@@ -657,11 +661,12 @@ function renderPlan(){
   const opts=[...S.recipes].sort((a,b)=>timesPlanned(b.id)-timesPlanned(a.id)||a.title.localeCompare(b.title)).map(r=>`<option value="${r.id}">${esc(r.title)}</option>`).join('');
   $('#week').innerHTML=days.map(d=>{
     const ms=S.meals.filter(m=>m.planned_for===d&&!isLunch(m)&&!isScan(m));
-    const sc=S.meals.filter(m=>m.planned_for===d&&isScan(m));
+    const sc=S.meals.filter(m=>m.planned_for===d&&isScan(m)&&m.slot!=='snack');
     return `<div class="day ${d===TODAY?'today':''} ${d<TODAY?'past':''}">
       <h4><b>${dayName(d)}</b><span>${shortDate(d)}</span></h4>
       <div class="lunch"><div class="lh">Breakfast</div>${PEOPLE.map(p=>lunchRow(d,p,opts,'breakfast')).join('')}</div>
       <div class="lunch"><div class="lh">Lunch</div>${PEOPLE.map(p=>lunchRow(d,p,opts,'lunch')).join('')}</div>
+      <div class="lunch"><div class="lh">Snackies</div>${PEOPLE.map(p=>snackRows(d,p,opts)).join('')}</div>
       <div class="lh">Dinner</div>
       ${ms.map(m=>{const r=rec(m.recipe_id); if(!r) return ''; const n=servingsNum(r), left=leftoversOf(m); return `<div class="meal ${m.cooked_at?'cooked':''}">
         ${m.leftover_of?'<div class="meta">🍱 Leftovers</div>':''}<a href="${esc(r.url)}" target="_blank" rel="noopener">${esc(r.title)}</a>
@@ -722,9 +727,9 @@ document.addEventListener('focusout',e=>{ if(e.target.dataset?.outnote&&e.target
 // ---- Scan a meal: barcode → Open Food Facts → nutrition, logged for one person ----
 let scan=null, zxReader=null, zxControls=null;
 const slotNow=()=>{ const h=new Date().getHours(); return h<11?'breakfast':h<15?'lunch':h<17?'snack':'dinner'; };
-function openScan(day){
+function openScan(day,person,slot){
   const mine=S.members.find(x=>x.user_id===me.user_id)?.name;
-  scan={day,person:PEOPLE.includes(mine)?mine:PEOPLE[0],slot:slotNow(),product:null,servings:1,status:'Point the camera at the barcode'};
+  scan={day,person:person||(PEOPLE.includes(mine)?mine:PEOPLE[0]),slot:slot||slotNow(),product:null,servings:1,status:'Point the camera at the barcode'};
   renderScan(); startCamera();
 }
 function closeScan(){ try{zxControls?.stop()}catch(e){} zxControls=null; scan=null; renderScan(); }
@@ -796,7 +801,7 @@ function renderScan(){
   el.innerHTML=`<div class="scanbox">
     <div class="row" style="justify-content:space-between;align-items:center"><b>📷 Scan a meal · ${dayName(scan.day,'long')}</b><button class="btn small" data-scan="close" type="button">Close</button></div>
     <div class="row" style="gap:6px;margin:8px 0">${PEOPLE.map(x=>`<button type="button" class="chip ${scan.person===x?'on':''}" data-scan="person" data-v="${x}">${x}</button>`).join('')}
-      <select data-scan="slot" style="margin-left:auto">${['breakfast','lunch','snack','dinner'].map(x=>`<option value="${x}" ${scan.slot===x?'selected':''}>${cap(x)}</option>`).join('')}</select></div>
+      <select data-scan="slot" style="margin-left:auto">${['breakfast','lunch','snack','dinner'].map(x=>`<option value="${x}" ${scan.slot===x?'selected':''}>${SLOT_LABEL[x]}</option>`).join('')}</select></div>
     ${p?`<div class="card" style="margin:6px 0">${p.label?`<input id="scanName" placeholder="What is it? (e.g. Kind bar)" value="${esc(p.name)}">`:`<b>${esc(p.name)}</b>`}<div class="meta">Per serving (${esc(p.serving)}): ${p.n.calories!=null?Math.round(p.n.calories)+' cal':'calories n/a'}${p.n.protein!=null?' · '+Math.round(p.n.protein)+' g protein':''}${p.n.carbs!=null?' · '+Math.round(p.n.carbs)+' g carbs':''}${p.n.fat!=null?' · '+Math.round(p.n.fat)+' g fat':''}</div>
         <div class="row" style="align-items:center;gap:6px">Servings <button class="btn small" data-scan="less" type="button">−</button><b>${scan.servings}</b><button class="btn small" data-scan="more" type="button">+</button></div>
         <div class="row"><button class="btn primary" data-scan="save" type="button">Log it</button><button class="btn" data-scan="again" type="button">Scan something else</button></div></div>`
@@ -807,7 +812,7 @@ function renderScan(){
     <p class="meta" style="margin:6px 0 0">Product data from Open Food Facts and USDA FoodData Central (US nutrition labels).</p></div>`;
 }
 document.addEventListener('click',e=>{
-  const sd=e.target.closest('[data-scanday]'); if(sd){ openScan(sd.dataset.scanday); return; }
+  const sd=e.target.closest('[data-scanday]'); if(sd){ openScan(sd.dataset.scanday,sd.dataset.person,sd.dataset.slot); return; }
   const t=e.target.closest('[data-scan]'); if(!t||!scan) return; const a=t.dataset.scan;
   if(a==='close') closeScan();
   else if(a==='person'){ scan.person=t.dataset.v; renderScan(); if(!scan.product) startCamera(); }
@@ -818,6 +823,19 @@ document.addEventListener('click',e=>{
 });
 document.addEventListener('change',e=>{ if(e.target.dataset?.scan==='slot'&&scan) scan.slot=e.target.value; if(e.target.dataset?.scan==='label'&&scan&&e.target.files[0]){ try{zxControls?.stop()}catch(x){} readLabel(e.target.files[0]); } });
 document.addEventListener('submit',e=>{ if(e.target.dataset?.scan==='codeform'){ e.preventDefault(); e.stopImmediatePropagation(); try{zxControls?.stop()}catch(x){} lookupCode(e.target.code.value); } },true);
+function snackRows(d,p,opts){
+  const items=S.meals.filter(m=>m.planned_for===d&&m.person===p&&isSnack(m));
+  const lo=leftoverMeals(d,1).filter(x=>!(isLunch(x)&&x.planned_for===d));
+  const label=m=>{ if(isScan(m)) return `📷 ${esc(m.note||'')}`; if(!m.recipe_id) return m.note?`🥡 ${esc(m.note)}`:null; const r=rec(m.recipe_id); return m.leftover_of?`🍱 ${esc(r?.title||'')}`:esc(r?.title||''); };
+  return `<div class="snacks"><b>${p}</b>${items.map(m=>{ const l=label(m);
+      return l==null?`<div class="lrow"><input class="outnote" data-outnote="${m.id}" placeholder="🥡 What did you have?" enterkeyhint="done"><button data-unplan="${m.id}" title="Remove">✕</button></div>`
+        :`<div class="lrow"><span class="lwhat">${l}${m.nutrition?.calories!=null&&isScan(m)?` <span class="meta">· ${Math.round(m.nutrition.calories)} cal</span>`:''}</span><button data-unplan="${m.id}" title="Remove">✕</button></div>`;}).join('')}
+    <div class="lrow"><select data-lunchset="${d}|${p}|snack"><option value="">${items.length?'Add another…':'Add…'}</option>
+      ${lo.length?`<optgroup label="Leftovers">${lo.map(x=>`<option value="lo:${x.id}">🍱 ${esc(rec(x.recipe_id).title)} (${leftoversOf(x)} left)</option>`).join('')}</optgroup>`:''}
+      <optgroup label="Out"><option value="out">🥡 Out / picked up / delivered</option></optgroup>
+      <optgroup label="Make a recipe">${opts}</optgroup></select>
+      <button data-scanday="${d}" data-person="${p}" data-slot="snack" title="Scan a snack">📷</button></div></div>`;
+}
 function lunchRow(d,p,opts,meal='lunch'){
   const m=S.meals.find(x=>x.meal===meal&&x.planned_for===d&&x.person===p);
   if(m){ const r=rec(m.recipe_id);
@@ -836,23 +854,23 @@ async function setLunch(d,p,v,meal='lunch'){
   if(v==='out') return DB.run(sb.from('meal_plan').insert({...base,recipe_id:null}));
   if(v.startsWith('lo:')){ const src=S.meals.find(x=>String(x.id)===v.slice(3)); return DB.run(sb.from('meal_plan').insert({...base,recipe_id:src.recipe_id,leftover_of:src.id})); }
   // Both of us having the same new recipe that day: cook it once (the second lunch shares it).
-  const same=S.meals.find(x=>x.meal===meal&&x.planned_for===d&&String(x.recipe_id)===v&&!x.leftover_of);
+  const same=meal!=='snack'&&S.meals.find(x=>x.meal===meal&&x.planned_for===d&&String(x.recipe_id)===v&&!x.leftover_of);
   return DB.run(sb.from('meal_plan').insert({...base,recipe_id:+v,leftover_of:same?same.id:null}));
 }
 document.addEventListener('change',async e=>{ const el=e.target; if(el.dataset.lunchset===undefined||!el.value) return;
   const [d,p,meal='lunch']=el.dataset.lunchset.split('|'); const v=el.value; await setLunch(d,p,v,meal); renderAll();
-  if(v==='out'){ const m=S.meals.find(x=>x.meal===meal&&x.planned_for===d&&x.person===p); document.querySelector(`[data-outnote="${m?.id}"]`)?.focus(); } else toast(`${p}'s ${meal} set for ${dayName(d,'long')}`); });
+  if(v==='out'){ const m=S.meals.filter(x=>x.meal===meal&&x.planned_for===d&&x.person===p&&!x.recipe_id&&!x.note).pop(); document.querySelector(`[data-outnote="${m?.id}"]`)?.focus(); } else toast(`${p}'s ${meal==='snack'?'snackie':meal} added for ${dayName(d,'long')}`); });
 // ---- Nutrition: per person, per day ----
 const MAC=[['calories','Calories',''],['protein','Protein','g'],['carbs','Carbs','g'],['fat','Fat','g'],['fiber','Fiber','g'],['sugar','Sugar','g'],['sodium','Sodium','mg']];
 function personMeals(p,d){   // [{label, r}] eaten by p on day d
   const out=[];
   for(const m of S.meals.filter(x=>x.planned_for===d)){
     const r=rec(m.recipe_id);
-    if(isLunch(m)){ if(m.person!==p) continue; out.push({when:m.meal==='breakfast'?'Breakfast':'Lunch',r,out:!m.recipe_id,note:m.note,n:m.recipe_id?r?.nutrition:m.nutrition,left:!!m.leftover_of}); }
-    else if(isScan(m)){ if(m.person!==p) continue; out.push({when:cap(m.slot||'snack'),scan:true,note:m.note,n:m.nutrition}); }
+    if(isLunch(m)){ if(m.person!==p) continue; out.push({when:SLOT_LABEL[m.meal],r,out:!m.recipe_id,note:m.note,n:m.recipe_id?r?.nutrition:m.nutrition,left:!!m.leftover_of}); }
+    else if(isScan(m)){ if(m.person!==p) continue; out.push({when:SLOT_LABEL[m.slot||'snack'],scan:true,note:m.note,n:m.nutrition}); }
     else if(r) out.push({when:'Dinner',r,n:r.nutrition,left:!!m.leftover_of});
   }
-  const ORD={Breakfast:0,Lunch:1,Snack:1.5,Dinner:2}; return out.sort((a,b)=>ORD[a.when]-ORD[b.when]);
+  const ORD={Breakfast:0,Lunch:1,Snackies:1.5,Dinner:2}; return out.sort((a,b)=>ORD[a.when]-ORD[b.when]);
 }
 // Daily targets from body stats (Mifflin-St Jeor). Losing: ~1 lb/week (500 kcal/day under maintenance).
 const ACT={sedentary:[1.2,'Mostly sitting'],light:[1.375,'Lightly active (walks, 1–3 workouts a week)'],moderate:[1.55,'Moderately active (3–5 workouts)'],active:[1.725,'Very active (6–7 workouts)']};
