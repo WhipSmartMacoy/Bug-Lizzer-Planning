@@ -498,7 +498,7 @@ const DB = {
     byId=Object.fromEntries(S.recipes.map(x=>[String(x.id),x]));
   },
   async run(q){ const {error}=await q; if(error) toast('Could not save: '+error.message); await DB.load(); return !error; },
-  plan:(recipe_id,day)=>DB.run(sb.from('meal_plan').insert({recipe_id,planned_for:day})),
+  plan:(recipe_id,day)=>hasDinner(day)?(toast(`${dayName(day,'long')} already has a dinner`),false):DB.run(sb.from('meal_plan').insert({recipe_id,planned_for:day})),
   async unplan(id){
     const m=S.meals.find(x=>String(x.id)===String(id)), r=m&&rec(m.recipe_id);
     const ok=await DB.run(sb.from('meal_plan').delete().eq('id',id));
@@ -544,7 +544,7 @@ const DB = {
     if(error) return toast(error.message);
     return DB.setCooked(data.id,true);
   },
-  planLeftovers:(m,day)=>DB.run(sb.from('meal_plan').insert({recipe_id:m.recipe_id,planned_for:day,leftover_of:m.id})),
+  planLeftovers:(m,day)=>hasDinner(day)?(toast(`${dayName(day,'long')} already has a dinner`),false):DB.run(sb.from('meal_plan').insert({recipe_id:m.recipe_id,planned_for:day,leftover_of:m.id})),
   lunch:(m,d)=>DB.run(sb.from('meal_plan').update({lunches:Math.max(0,(+m.lunches||0)+d)}).eq('id',m.id)),
   setHave:(i,v)=>DB.run(v?sb.from('week_have').insert({week_start:week,ingredient:i}):sb.from('week_have').delete().eq('week_start',week).eq('ingredient',i)),
   setPrice:(ingredient,price,item,link)=>DB.run(sb.from('prices').upsert({ingredient,price:price||null,item:item||null,source:'Household',link:link||FAIRWAY(ingredient),updated_by:me.user_id,updated_at:new Date().toISOString()})),
@@ -610,7 +610,8 @@ function priceCell(i){
   if(!p||!p.price) return `<span class="needprice">Needs price</span> · ${search} · <a href="#" data-editprice="${esc(i)}">Set price</a>`;
   return `<a href="${esc(p.link||FAIRWAY(i))}" target="_blank" rel="noopener">${esc(p.price)}</a>${p.available===false?' <span class="needprice">out of stock</span>':''} <a href="#" class="meta" data-editprice="${esc(i)}">edit</a><div class="meta">${esc([p.item,p.size].filter(Boolean).join(', '))}${p.source==='Household'&&p.updated_by?((p.item||p.size)?' · ':'')+'set by '+esc(nameOf(p.updated_by)):''}</div>`;
 }
-function dayOptions(){ return weekDays().map(d=>`<option value="${d}">${dayName(d)} ${shortDate(d)}</option>`).join(''); }
+const hasDinner = d => S.meals.some(m=>m.planned_for===d&&!isLunch(m)&&rec(m.recipe_id));
+function dayOptions(){ return weekDays().map(d=>`<option value="${d}" ${hasDinner(d)?'disabled':''}>${dayName(d)} ${shortDate(d)}${hasDinner(d)?' · dinner set':''}</option>`).join(''); }
 function card(r, extra=''){
   const n=timesPlanned(r.id), lc=lastCooked(r.id);
   return `<div class="card">
@@ -649,7 +650,7 @@ function renderPlan(){
         <div class="mrow">
           <button data-cook="${m.id}" data-v="${m.cooked_at?0:1}">${m.cooked_at?'Undo cooked':m.leftover_of?'Eaten ✓':'Cooked ✓'}</button>
           ${+m.lunches?`<button data-lunch="${m.id}" data-d="-1" title="Undo an earlier lunch">↶ lunch</button>`:''}
-          <select data-move="${m.id}" style="font-size:11.5px;padding:2px 4px;width:auto;margin:0"><option value="">Move…</option>${days.filter(x=>x!==d).map(x=>`<option value="${x}">${dayName(x)}</option>`).join('')}</select>
+          <select data-move="${m.id}" style="font-size:11.5px;padding:2px 4px;width:auto;margin:0"><option value="">Move…</option>${days.filter(x=>x!==d&&!hasDinner(x)).map(x=>`<option value="${x}">${dayName(x)}</option>`).join('')}</select>
           <button data-unplan="${m.id}" title="Remove">✕</button>
         </div></div>`}).join('')}
       ${S.recipes.length&&!ms.some(m=>rec(m.recipe_id))?`<select data-addday="${d}"><option value="">+ Add dinner</option>${opts}</select>`:''}
@@ -779,6 +780,7 @@ function renderUseup(){
 }
 // A recipe found online goes on the plan as "new"; it joins the recipe box once it's cooked.
 async function planFromWeb(url,day){
+  if(hasDinner(day)) return toast(`${dayName(day,'long')} already has a dinner`);
   let r=S.recipes.find(x=>x.url===url);
   if(!r){
     toast('Reading the recipe page…',8000);
