@@ -11,6 +11,7 @@ Live: https://whipsmartmacoy.github.io/Bug-Lizzer-Planning/ (sign in by email; a
 - **Plan & shop:** plan one week at a time by putting recipes on days. The shopping list covers just that week, grouped by the day each ingredient is first needed, with Fairway prices.
 - **What we use most:** ingredients counted only from meals that were planned or cooked.
 - **Make it now:** recipes (from the box and NYT Cooking) whose main ingredients are all At Home. **Discover:** recipes that reuse what you already buy.
+- **Nutrition:** per-person macros for Amy and Parker each week, from each recipe page's per-serving nutrition (dinner = one serving each, lunch = one serving for that person).
 - **Who did what:** activity feed and members.
 
 ### Rules
@@ -18,5 +19,5 @@ Live: https://whipsmartmacoy.github.io/Bug-Lizzer-Planning/ (sign in by email; a
 - Prices are kept per ingredient. They come from https://shop.fairwaymarket.com/store/fairway/storefront or are entered by a household member. The view `ingredients_needing_price` lists what still needs one; Claude fills those in when recipes are added.
 
 ### Setup (Supabase)
-Run in order in the SQL editor: `supabase/setup.sql`, `supabase/002_weekly_plan.sql`, `supabase/003_recipe_box.sql`, `supabase/004_new_vs_past.sql`, `005_servings.sql`, `006_price_refresh.sql`, `007_amounts_pantry.sql`, `008_storage_location.sql`, `009_fairway_usuals.sql`, `010_leftovers.sql`, `011_lunch.sql`, `012_left_after.sql`.
+Run in order in the SQL editor: `supabase/setup.sql`, `supabase/002_weekly_plan.sql`, `supabase/003_recipe_box.sql`, `supabase/004_new_vs_past.sql`, `005_servings.sql`, `006_price_refresh.sql`, `007_amounts_pantry.sql`, `008_storage_location.sql`, `009_fairway_usuals.sql`, `010_leftovers.sql`, `011_lunch.sql`, `012_left_after.sql`, `013_nutrition.sql`.
 Edge functions: `supabase/functions/import-recipe` and `supabase/functions/refresh-prices` (JWT verification off; the function checks membership itself).
