@@ -100,6 +100,8 @@ h2{font:700 18px Georgia,serif;margin:6px 0 10px}
 .lrow b{min-width:44px}
 .lrow .lwhat{flex:1;min-width:0}.lrow .lwhat a{color:inherit}
 .lrow.cooked .lwhat{color:var(--green)}
+.scanbox{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);width:min(440px,94vw);max-height:92vh;overflow:auto;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;box-shadow:0 20px 60px rgba(0,0,0,.25);z-index:30}
+#scanSheet::before{content:'';position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:29}
 .lrow .outnote{flex:1;min-width:0;font-size:12px;padding:3px 6px;margin:0}
 .lrow select{font-size:11.5px;padding:2px 4px;flex:1;min-width:0;margin:0}
 .lrow button{font:inherit;font-size:11px;padding:1px 6px;border-radius:6px;border:1px solid var(--line);background:var(--card);cursor:pointer}
@@ -599,6 +601,7 @@ const timesPlanned = id => S.meals.filter(m=>String(m.recipe_id)===String(id)&&!
 // ---- leftovers: we eat 2 servings a dinner; lunches take 2 each ----
 const EAT=2, KEEP_DAYS=4;   // leftovers are offered for up to 4 days after cooking
 const PEOPLE=['Amy','Parker'];   // who lunch is planned for (1 serving each)
+const isScan = m => m.meal==='scan';
 const isLunch = m => m.meal==='lunch'||m.meal==='breakfast';   // one person's own meal (1 serving)
 const eaten = m => isLunch(m)?1:EAT;
 const servingsNum = r => { const m=String(r?.servings||'').match(/\d+/); return m?+m[0]:null; };   // "4 to 6" -> 4 (the safe end)
@@ -653,7 +656,8 @@ function renderPlan(){
   $('#wkLabel').textContent=`${shortDate(days[0])} – ${shortDate(days[6])}`;
   const opts=[...S.recipes].sort((a,b)=>timesPlanned(b.id)-timesPlanned(a.id)||a.title.localeCompare(b.title)).map(r=>`<option value="${r.id}">${esc(r.title)}</option>`).join('');
   $('#week').innerHTML=days.map(d=>{
-    const ms=S.meals.filter(m=>m.planned_for===d&&!isLunch(m));
+    const ms=S.meals.filter(m=>m.planned_for===d&&!isLunch(m)&&!isScan(m));
+    const sc=S.meals.filter(m=>m.planned_for===d&&isScan(m));
     return `<div class="day ${d===TODAY?'today':''} ${d<TODAY?'past':''}">
       <h4><b>${dayName(d)}</b><span>${shortDate(d)}</span></h4>
       <div class="lunch"><div class="lh">Breakfast</div>${PEOPLE.map(p=>lunchRow(d,p,opts,'breakfast')).join('')}</div>
@@ -672,6 +676,8 @@ function renderPlan(){
           <button data-unplan="${m.id}" title="Remove">✕</button>
         </div></div>`}).join('')}
       ${S.recipes.length&&!ms.some(m=>rec(m.recipe_id))?`<select data-addday="${d}"><option value="">+ Add dinner</option>${opts}</select>`:''}
+      ${sc.length?`<div class="lunch" style="border-bottom:0;border-top:1px dashed var(--line);padding-top:6px"><div class="lh">Scanned</div>${sc.map(m=>`<div class="lrow"><b>${esc(m.person)}</b><span class="lwhat">${esc(m.note||'')}${m.nutrition?.calories!=null?` <span class="meta">· ${Math.round(m.nutrition.calories)} cal</span>`:''}</span><button data-unplan="${m.id}" title="Remove">✕</button></div>`).join('')}</div>`:''}
+      <button class="btn small" data-scanday="${d}" type="button" style="margin-top:4px">📷 Scan a meal</button>
 
     </div>`}).join('');
   if(!S.recipes.length) $('#week').insertAdjacentHTML('afterend','');
@@ -713,6 +719,105 @@ async function saveOutNote(id,note){
 }
 document.addEventListener('keydown',e=>{ if(e.key==='Enter'&&e.target.dataset.outnote){ e.preventDefault(); saveOutNote(e.target.dataset.outnote,e.target.value); } });
 document.addEventListener('focusout',e=>{ if(e.target.dataset?.outnote&&e.target.value.trim()) saveOutNote(e.target.dataset.outnote,e.target.value); });
+// ---- Scan a meal: barcode → Open Food Facts → nutrition, logged for one person ----
+let scan=null, zxReader=null, zxControls=null;
+const slotNow=()=>{ const h=new Date().getHours(); return h<11?'breakfast':h<15?'lunch':h<17?'snack':'dinner'; };
+function openScan(day){
+  const mine=S.members.find(x=>x.user_id===me.user_id)?.name;
+  scan={day,person:PEOPLE.includes(mine)?mine:PEOPLE[0],slot:slotNow(),product:null,servings:1,status:'Point the camera at the barcode'};
+  renderScan(); startCamera();
+}
+function closeScan(){ try{zxControls?.stop()}catch(e){} zxControls=null; scan=null; renderScan(); }
+const loadZX=async()=>{ if(window.ZXingBrowser) return; await loadScript('https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/umd/index.min.js'); await loadScript('https://cdn.jsdelivr.net/npm/@zxing/browser@0.1.5/umd/zxing-browser.min.js'); };
+async function startCamera(){
+  try{ await loadZX(); if(!scan) return; zxReader=zxReader||new ZXingBrowser.BrowserMultiFormatReader();
+    zxControls=await zxReader.decodeFromVideoDevice(undefined,$('#scanVideo'),(res)=>{ if(res&&scan&&!scan.product&&!scan.looking){ zxControls?.stop(); lookupCode(res.getText()); } });
+  }catch(e){ if(scan){ scan.status="The camera isn't available here. Type the barcode numbers below instead."; renderScan(); } }
+}
+async function lookupCode(code){
+  code=String(code).replace(/\D/g,''); if(!code||!scan) return;
+  scan.looking=true; scan.status=`Looking up ${code}…`; renderScan();
+  try{
+    const j=await fetch(`https://world.openfoodfacts.org/api/v2/product/${code}.json?fields=product_name,brands,serving_size,serving_quantity,nutriments`).then(r=>r.json()).catch(()=>({}));
+    const p=j.product, n=p?.nutriments||{};
+    if(!p||!p.product_name||n['energy-kcal_serving']==null&&n['energy-kcal_100g']==null){
+      const u=await usdaByUpc(code);   // US nutrition labels by UPC (USDA FoodData Central, Branded Foods)
+      if(u){ scan.product=u; scan.status=''; scan.looking=false; renderScan(); return; }
+      scan.looking=false; scan.status=`No product found for ${code}. Try again, type the numbers, or photograph the nutrition label.`; renderScan(); startCamera(); return; }
+    const sq=+p.serving_quantity||null;
+    const per=(k,mult=1)=>{ const sv=n[k+'_serving']; if(sv!=null) return +sv*mult; const h=n[k+'_100g']; return h!=null&&sq?+h*sq/100*mult:null; };
+    scan.product={code,name:[p.brands?.split(',')[0],p.product_name].filter(Boolean).join(' '),serving:p.serving_size||(sq?sq+' g':'1 serving'),
+      n:{calories:per('energy-kcal'),protein:per('proteins'),carbs:per('carbohydrates'),fat:per('fat'),fiber:per('fiber'),sugar:per('sugars'),sodium:per('sodium',1000)}};
+    scan.status='';
+  }catch(e){ scan.status="Couldn't reach the food database. Try again in a moment."; }
+  scan.looking=false; renderScan();
+}
+async function usdaByUpc(code){
+  const tries=[...new Set([code,code.replace(/^0+/,''),code.padStart(12,'0'),code.padStart(13,'0'),code.padStart(14,'0')])];
+  for(const c of tries){
+    try{
+      const j=await fetch('https://api.nal.usda.gov/fdc/v1/foods/search?api_key=DEMO_KEY',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({query:c,dataType:['Branded'],pageSize:5})}).then(r=>r.json());
+      const f=(j.foods||[]).find(x=>String(x.gtinUpc||'').replace(/^0+/,'')===c.replace(/^0+/,'')); if(!f) continue;
+      const g=/^(g|grm|ml|mlt)$/i.test(f.servingSizeUnit||'')?+f.servingSize:100, v=id=>{const x=f.foodNutrients?.find(n=>n.nutrientId===id)?.value; return x==null?null:x*g/100;};
+      return {code,name:[f.brandName||f.brandOwner,f.description].filter(Boolean).map(x=>x.toLowerCase().replace(/\b\w/g,m=>m.toUpperCase())).join(' '),
+        serving:f.householdServingFullText?`${f.householdServingFullText}, ${f.servingSize}${(f.servingSizeUnit||'').toLowerCase()}`:`${g} g`,
+        n:{calories:v(1008),protein:v(1003),carbs:v(1005),fat:v(1004),fiber:v(1079),sugar:v(2000),sodium:v(1093)}};
+    }catch(e){}
+  }
+  return null;
+}
+// Nutrition Facts label photo: read it on the phone and pull the per-serving numbers.
+async function readLabel(file){
+  scan.status='Reading the label…'; renderScan();
+  try{
+    await loadScript('https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js');
+    const {data}=await Tesseract.recognize(file,'eng');
+    const t=data.text.replace(/\s+/g,' ');
+    const num=re=>{const m=t.match(re); return m?parseFloat(m[1].replace(/o/gi,'0')):null;};
+    const n={calories:num(/calories\s*([\do]+)/i),fat:num(/total\s*fat\s*([\d.o]+)\s*g/i),carbs:num(/total\s*carb\w*\s*([\d.o]+)\s*g/i),
+      protein:num(/protein\s*([\d.o]+)\s*g/i),fiber:num(/fib(?:er|re)\s*([\d.o]+)\s*g/i),sugar:num(/total\s*sugars?\s*([\d.o]+)\s*g/i)??num(/sugars?\s*([\d.o]+)\s*g/i),sodium:num(/sodium\s*([\d.o]+)\s*mg/i)};
+    const serving=(t.match(/serving size\s*([^.]{1,40}?\))/i)||t.match(/serving size\s*(\S+\s*\S+)/i)||[])[1]||'1 serving';
+    if(n.calories==null&&n.protein==null){ scan.status="Couldn't read that label. Try a closer, flatter photo."; renderScan(); return; }
+    scan.product={code:null,name:'',label:true,serving,n}; scan.status='';
+  }catch(e){ scan.status="Couldn't read that label."; }
+  renderScan();
+}
+async function saveScan(){
+  if(scan.product.label){ const nm=$('#scanName')?.value.trim(); scan.product.name=nm||'Labelled food'; }
+  const p=scan.product, k=scan.servings, nut={};
+  for(const [x,v] of Object.entries(p.n)) if(v!=null) nut[x]=Math.round(v*k*10)/10;
+  const ok=await DB.run(sb.from('meal_plan').insert({planned_for:scan.day,meal:'scan',slot:scan.slot,person:scan.person,recipe_id:null,note:`${p.name}${k!==1?` ×${k}`:''}`,nutrition:Object.keys(nut).length?nut:null}));
+  if(ok){ toast(`Logged for ${scan.person}: ${p.name}`); closeScan(); renderAll(); }
+}
+function renderScan(){
+  let el=$('#scanSheet'); if(!scan){ el?.remove(); return; }
+  if(!el){ el=document.createElement('div'); el.id='scanSheet'; document.body.appendChild(el); }
+  const p=scan.product;
+  el.innerHTML=`<div class="scanbox">
+    <div class="row" style="justify-content:space-between;align-items:center"><b>📷 Scan a meal · ${dayName(scan.day,'long')}</b><button class="btn small" data-scan="close" type="button">Close</button></div>
+    <div class="row" style="gap:6px;margin:8px 0">${PEOPLE.map(x=>`<button type="button" class="chip ${scan.person===x?'on':''}" data-scan="person" data-v="${x}">${x}</button>`).join('')}
+      <select data-scan="slot" style="margin-left:auto">${['breakfast','lunch','snack','dinner'].map(x=>`<option value="${x}" ${scan.slot===x?'selected':''}>${cap(x)}</option>`).join('')}</select></div>
+    ${p?`<div class="card" style="margin:6px 0">${p.label?`<input id="scanName" placeholder="What is it? (e.g. Kind bar)" value="${esc(p.name)}">`:`<b>${esc(p.name)}</b>`}<div class="meta">Per serving (${esc(p.serving)}): ${p.n.calories!=null?Math.round(p.n.calories)+' cal':'calories n/a'}${p.n.protein!=null?' · '+Math.round(p.n.protein)+' g protein':''}${p.n.carbs!=null?' · '+Math.round(p.n.carbs)+' g carbs':''}${p.n.fat!=null?' · '+Math.round(p.n.fat)+' g fat':''}</div>
+        <div class="row" style="align-items:center;gap:6px">Servings <button class="btn small" data-scan="less" type="button">−</button><b>${scan.servings}</b><button class="btn small" data-scan="more" type="button">+</button></div>
+        <div class="row"><button class="btn primary" data-scan="save" type="button">Log it</button><button class="btn" data-scan="again" type="button">Scan something else</button></div></div>`
+      :`<video id="scanVideo" playsinline muted style="width:100%;max-height:300px;background:#000;border-radius:10px"></video>
+        <p class="meta">${esc(scan.status||'')}</p>
+        <form class="row" data-scan="codeform" style="margin:0"><input name="code" inputmode="numeric" placeholder="or type the barcode numbers" style="flex:1"><button class="btn small">Look up</button></form>
+        <label class="btn small" style="margin-top:8px;display:inline-block">📄 Photograph the nutrition label<input type="file" accept="image/*" capture="environment" data-scan="label" hidden></label>`}
+    <p class="meta" style="margin:6px 0 0">Product data from Open Food Facts and USDA FoodData Central (US nutrition labels).</p></div>`;
+}
+document.addEventListener('click',e=>{
+  const sd=e.target.closest('[data-scanday]'); if(sd){ openScan(sd.dataset.scanday); return; }
+  const t=e.target.closest('[data-scan]'); if(!t||!scan) return; const a=t.dataset.scan;
+  if(a==='close') closeScan();
+  else if(a==='person'){ scan.person=t.dataset.v; renderScan(); if(!scan.product) startCamera(); }
+  else if(a==='less'){ scan.servings=Math.max(0.5,scan.servings-0.5); renderScan(); }
+  else if(a==='more'){ scan.servings+=0.5; renderScan(); }
+  else if(a==='save') saveScan();
+  else if(a==='again'){ scan.product=null; scan.status='Point the camera at the barcode'; renderScan(); startCamera(); }
+});
+document.addEventListener('change',e=>{ if(e.target.dataset?.scan==='slot'&&scan) scan.slot=e.target.value; if(e.target.dataset?.scan==='label'&&scan&&e.target.files[0]){ try{zxControls?.stop()}catch(x){} readLabel(e.target.files[0]); } });
+document.addEventListener('submit',e=>{ if(e.target.dataset?.scan==='codeform'){ e.preventDefault(); e.stopImmediatePropagation(); try{zxControls?.stop()}catch(x){} lookupCode(e.target.code.value); } },true);
 function lunchRow(d,p,opts,meal='lunch'){
   const m=S.meals.find(x=>x.meal===meal&&x.planned_for===d&&x.person===p);
   if(m){ const r=rec(m.recipe_id);
@@ -744,9 +849,10 @@ function personMeals(p,d){   // [{label, r}] eaten by p on day d
   for(const m of S.meals.filter(x=>x.planned_for===d)){
     const r=rec(m.recipe_id);
     if(isLunch(m)){ if(m.person!==p) continue; out.push({when:m.meal==='breakfast'?'Breakfast':'Lunch',r,out:!m.recipe_id,note:m.note,n:m.recipe_id?r?.nutrition:m.nutrition,left:!!m.leftover_of}); }
+    else if(isScan(m)){ if(m.person!==p) continue; out.push({when:cap(m.slot||'snack'),scan:true,note:m.note,n:m.nutrition}); }
     else if(r) out.push({when:'Dinner',r,n:r.nutrition,left:!!m.leftover_of});
   }
-  const ORD={Breakfast:0,Lunch:1,Dinner:2}; return out.sort((a,b)=>ORD[a.when]-ORD[b.when]);
+  const ORD={Breakfast:0,Lunch:1,Snack:1.5,Dinner:2}; return out.sort((a,b)=>ORD[a.when]-ORD[b.when]);
 }
 // Daily targets from body stats (Mifflin-St Jeor). Losing: ~1 lb/week (500 kcal/day under maintenance).
 const ACT={sedentary:[1.2,'Mostly sitting'],light:[1.375,'Lightly active (walks, 1–3 workouts a week)'],moderate:[1.55,'Moderately active (3–5 workouts)'],active:[1.725,'Very active (6–7 workouts)']};
@@ -789,7 +895,7 @@ function renderNutrition(){
 
       <div style="overflow:auto"><table><tr><th>Day</th><th>Meals</th>${MAC.map(([k,l])=>`<th class="num">${l}</th>`).join('')}</tr>
       ${perDay.map(x=>`<tr class="${x.d>TODAY?'have':''}"><td><b>${dayName(x.d)}</b> <span class="meta">${shortDate(x.d)}${x.d>TODAY?' · planned':''}</span></td>
-        <td>${x.ms.length?x.ms.map(m=>`<div class="meta"><b>${m.when}:</b> ${m.out?`🥡 ${esc(m.note||'out')}${m.n?' <span class="meta">(est.)</span>':''}`:(m.left?'🍱 ':'')+esc(m.r?.title||'')+(m.r&&!m.r.nutrition?' <span class="needprice">· no info</span>':'')}</div>`).join(''):'<span class="meta">—</span>'}</td>
+        <td>${x.ms.length?x.ms.map(m=>`<div class="meta"><b>${m.when}:</b> ${m.scan?`📷 ${esc(m.note||'')}`:m.out?`🥡 ${esc(m.note||'out')}${m.n?' <span class="meta">(est.)</span>':''}`:(m.left?'🍱 ':'')+esc(m.r?.title||'')+(m.r&&!m.r.nutrition?' <span class="needprice">· no info</span>':'')}</div>`).join(''):'<span class="meta">—</span>'}</td>
         ${MAC.map(([k,,u])=>{ const st=T&&T[k]&&x.t[k]!=null&&x.d<=TODAY?status(x.t[k],T[k],k):'';
           return `<td class="num"><span class="dot ${st}">${x.t[k]!=null?fmtN(x.t[k],u):'<span class="meta">—</span>'}</span></td>`}).join('')}</tr>`).join('')}
       <tr><td><b>Week</b></td><td></td>${MAC.map(([k,,u])=>`<td class="num"><b class="dot ${T&&T[k]?status(tot[k]||0,T[k]*soFar,k):''}">${fmtN(tot[k],u)}</b></td>`).join('')}</tr>
