@@ -102,6 +102,9 @@ h2{font:700 18px Georgia,serif;margin:6px 0 10px}
 .lrow.cooked .lwhat{color:var(--green)}
 .scanbox{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);width:min(440px,94vw);max-height:92vh;overflow:auto;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;box-shadow:0 20px 60px rgba(0,0,0,.25);z-index:30}
 #scanSheet::before{content:'';position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:29}
+.lrow.scanned{padding-left:12px}
+.snacks .lrow.scanned{padding-left:8px}
+.lunch.snackbox{border-bottom:0;border-top:1px dashed var(--line);padding-top:6px;margin-top:4px}
 .snacks{display:flex;flex-direction:column;gap:3px}.snacks>b{font-size:12.5px}
 .snacks .lrow{padding-left:8px}
 .lrow .outnote{flex:1;min-width:0;font-size:12px;padding:3px 6px;margin:0}
@@ -661,12 +664,10 @@ function renderPlan(){
   const opts=[...S.recipes].sort((a,b)=>timesPlanned(b.id)-timesPlanned(a.id)||a.title.localeCompare(b.title)).map(r=>`<option value="${r.id}">${esc(r.title)}</option>`).join('');
   $('#week').innerHTML=days.map(d=>{
     const ms=S.meals.filter(m=>m.planned_for===d&&!isLunch(m)&&!isScan(m));
-    const sc=S.meals.filter(m=>m.planned_for===d&&isScan(m)&&m.slot!=='snack');
     return `<div class="day ${d===TODAY?'today':''} ${d<TODAY?'past':''}">
       <h4><b>${dayName(d)}</b><span>${shortDate(d)}</span></h4>
       <div class="lunch"><div class="lh">Breakfast</div>${PEOPLE.map(p=>lunchRow(d,p,opts,'breakfast')).join('')}</div>
       <div class="lunch"><div class="lh">Lunch</div>${PEOPLE.map(p=>lunchRow(d,p,opts,'lunch')).join('')}</div>
-      <div class="lunch"><div class="lh">Snackies</div>${PEOPLE.map(p=>snackRows(d,p,opts)).join('')}</div>
       <div class="lh">Dinner</div>
       ${ms.map(m=>{const r=rec(m.recipe_id); if(!r) return ''; const n=servingsNum(r), left=leftoversOf(m); return `<div class="meal ${m.cooked_at?'cooked':''}">
         ${m.leftover_of?'<div class="meta">🍱 Leftovers</div>':''}<a href="${esc(r.url)}" target="_blank" rel="noopener">${esc(r.title)}</a>
@@ -681,8 +682,9 @@ function renderPlan(){
           <button data-unplan="${m.id}" title="Remove">✕</button>
         </div></div>`}).join('')}
       ${S.recipes.length&&!ms.some(m=>rec(m.recipe_id))?`<select data-addday="${d}"><option value="">+ Add dinner</option>${opts}</select>`:''}
-      ${sc.length?`<div class="lunch" style="border-bottom:0;border-top:1px dashed var(--line);padding-top:6px"><div class="lh">Scanned</div>${sc.map(m=>`<div class="lrow"><b>${esc(m.person)}</b><span class="lwhat">${esc(m.note||'')}${m.nutrition?.calories!=null?` <span class="meta">· ${Math.round(m.nutrition.calories)} cal</span>`:''}</span><button data-unplan="${m.id}" title="Remove">✕</button></div>`).join('')}</div>`:''}
-      <button class="btn small" data-scanday="${d}" type="button" style="margin-top:4px">📷 Scan a meal</button>
+      ${scansFor(d,null,'dinner').map(m=>scanLine(m).replace('lrow scanned','lrow').replace('<span class="lwhat">',`<b>${esc(m.person)}</b> <span class="lwhat">`)).join('')}
+      <div class="lrow" style="gap:4px"><span class="meta">📷 dinner:</span>${PEOPLE.map(p=>`<button data-scanday="${d}" data-person="${p}" data-slot="dinner" title="Scan ${p}'s dinner">${p}</button>`).join('')}</div>
+      <div class="lunch snackbox"><div class="lh">Snackies</div>${PEOPLE.map(p=>snackRows(d,p,opts)).join('')}</div>
 
     </div>`}).join('');
   if(!S.recipes.length) $('#week').insertAdjacentHTML('afterend','');
@@ -836,18 +838,24 @@ function snackRows(d,p,opts){
       <optgroup label="Make a recipe">${opts}</optgroup></select>
       <button data-scanday="${d}" data-person="${p}" data-slot="snack" title="Scan a snack">📷</button></div></div>`;
 }
+const scanLine=m=>`<div class="lrow scanned"><span class="lwhat">📷 ${esc(m.note||'')}${m.nutrition?.calories!=null?` <span class="meta">· ${Math.round(m.nutrition.calories)} cal</span>`:''}</span><button data-unplan="${m.id}" title="Remove">✕</button></div>`;
+const scansFor=(d,p,slot)=>S.meals.filter(m=>isScan(m)&&m.planned_for===d&&m.slot===slot&&(!p||m.person===p));
+const scanBtn=(d,p,slot)=>`<button data-scanday="${d}" data-person="${p}" data-slot="${slot}" title="Scan ${p}'s ${SLOT_LABEL[slot].toLowerCase()}">📷</button>`;
 function lunchRow(d,p,opts,meal='lunch'){
+  return lunchRow1(d,p,opts,meal)+scansFor(d,p,meal).map(scanLine).join('');
+}
+function lunchRow1(d,p,opts,meal='lunch'){
   const m=S.meals.find(x=>x.meal===meal&&x.planned_for===d&&x.person===p);
   if(m){ const r=rec(m.recipe_id);
     if(!m.recipe_id&&!m.note) return `<div class="lrow"><b>${p}</b> <input class="outnote" data-outnote="${m.id}" placeholder="🥡 What did you have?" enterkeyhint="done"><button data-unplan="${m.id}" title="Clear">✕</button></div>`;
     const what=!m.recipe_id?`🥡 ${esc(m.note)}`:m.leftover_of?`🍱 ${esc(r?.title||'Leftovers')}`:`<a href="${esc(r?.url)}" target="_blank" rel="noopener">${esc(r?.title||'')}</a>`;
     return `<div class="lrow ${m.cooked_at?'cooked':''}"><b>${p}</b> <span class="lwhat">${what}</span>
-      ${m.recipe_id&&!m.leftover_of?`<button data-cook="${m.id}" data-v="${m.cooked_at?0:1}" title="${m.cooked_at?'Undo cooked':'Mark cooked'}">${m.cooked_at?'↶':'✓'}</button>`:''}<button data-unplan="${m.id}" title="Clear">✕</button></div>`; }
+      ${m.recipe_id&&!m.leftover_of?`<button data-cook="${m.id}" data-v="${m.cooked_at?0:1}" title="${m.cooked_at?'Undo cooked':'Mark cooked'}">${m.cooked_at?'↶':'✓'}</button>`:''}${scanBtn(d,p,meal)}<button data-unplan="${m.id}" title="Clear">✕</button></div>`; }
   const lo=leftoverMeals(d,1).filter(x=>!(isLunch(x)&&x.planned_for===d));
   return `<div class="lrow"><b>${p}</b> <select data-lunchset="${d}|${p}|${meal}"><option value="">Add…</option>
     ${lo.length?`<optgroup label="Leftovers">${lo.map(x=>`<option value="lo:${x.id}">🍱 ${esc(rec(x.recipe_id).title)} (${leftoversOf(x)} left)</option>`).join('')}</optgroup>`:''}
     <optgroup label="Out"><option value="out">🥡 Out / picked up / delivered</option></optgroup>
-    <optgroup label="Make a recipe">${opts}</optgroup></select></div>`;
+    <optgroup label="Make a recipe">${opts}</optgroup></select>${scanBtn(d,p,meal)}</div>`;
 }
 async function setLunch(d,p,v,meal='lunch'){
   const base={planned_for:d,meal,person:p};
