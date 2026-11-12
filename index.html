@@ -165,6 +165,13 @@ a{color:var(--green)}
       <select id="panLoc"><option value="">Where? (auto)</option><option value="fridge">🧊 Fridge</option><option value="freezer">❄️ Freezer</option><option value="pantry">🥫 Pantry</option></select>
       <button class="btn primary">Add / update</button>
     </form>
+    <div class="row" style="margin:6px 0 4px">
+      <label class="btn" for="receiptFile">📷 Scan a receipt</label>
+      <input type="file" id="receiptFile" accept="image/*" capture="environment" hidden>
+      <button class="btn" id="usualsToggle" type="button">⭐ Add from our usual Fairway items</button>
+    </div>
+    <div id="usualsPanel"></div>
+    <div id="receiptReview"></div>
     <div id="pantryList"></div>
   </section>
 
@@ -262,7 +269,7 @@ const LS = { get:(k,d)=>{try{return JSON.parse(localStorage.getItem('blp.'+k))??
 const $ = s=>document.querySelector(s);
 const esc = s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const cap = s=>s?s.charAt(0).toUpperCase()+s.slice(1):s;
-function toast(t){const e=$('#toast');e.textContent=t;e.classList.add('on');setTimeout(()=>e.classList.remove('on'),2400)}
+let toastT; function toast(t,ms=2400){const e=$('#toast');e.textContent=t;e.classList.add('on');clearTimeout(toastT);toastT=setTimeout(()=>e.classList.remove('on'),ms)}
 function ago(ts){const s=(Date.now()-new Date(ts))/1000;if(s<60)return'just now';if(s<3600)return Math.floor(s/60)+'m ago';if(s<86400)return Math.floor(s/3600)+'h ago';if(s<604800)return Math.floor(s/86400)+'d ago';return new Date(ts).toLocaleDateString()}
 
 // ---- dates (local, weeks start Monday) ----
@@ -277,7 +284,7 @@ let week = mondayOf(TODAY);
 const weekDays = () => [...Array(7)].map((_,i)=>addDays(week,i));
 
 let me=null;
-let S = { recipes:[], prices:{}, meals:[], have:[], members:[], activity:[], pantry:[] };
+let S = { recipes:[], prices:{}, meals:[], have:[], members:[], activity:[], pantry:[], usuals:[] };
 let byId = {};
 let fridge = LS.get('fridge',[]);
 let draft = null;        // recipe being imported
@@ -356,6 +363,97 @@ const STORE_LABEL = {fridge:'the fridge',freezer:'the freezer',pantry:'the pantr
 const STORE_ICON = {fridge:'🧊',freezer:'❄️',pantry:'🥫'};
 function haveIn(i,u,pk){ const p=pantryOf(i); return p?conv(+p.q,p.u,u,i,pk):0; }
 
+// ---------------- receipts & Fairway usuals ----------------
+// Words on a product name or receipt line → the ingredient name recipes use. Longest phrase wins.
+const ING_SYN = {'chicken stock':'broth','vegetable stock':'broth','beef stock':'broth','bone broth':'broth','stock':'broth','broth':'broth',
+  'garbanzo':'chickpeas','chick peas':'chickpeas','chickpeas':'chickpeas','cannellini':'white beans','black beans':'black beans',
+  'green onions':'scallions','scallions':'scallions','spanish onion':'onion','white onion':'onion','sweet onion':'onion','yellow onion':'onion','red onion':'red onion','onion':'onion',
+  'italian parsley':'parsley','baby spinach':'spinach','greek yogurt':'yogurt','skyr':'yogurt','labneh':'yogurt','plum tomato':'tomatoes','roma tomatoes':'tomatoes','cherry tomatoes':'cherry tomatoes',
+  'whole peeled tomatoes':'canned tomatoes','puree tomatoes':'canned tomatoes','san marzano':'canned tomatoes','tomato paste':'tomato paste','tomato':'tomatoes',
+  'parmigiano':'parmesan','parmiggano':'parmesan','parmesan':'parmesan','gruyre':'gruyere','gruyere':'gruyere','heavy whipping cream':'heavy cream','heavy cream':'heavy cream',
+  'sour cream':'sour cream','cottage cheese':'cottage cheese','ricotta':'ricotta','mozzarella':'mozzarella','feta':'feta','cheddar':'cheddar','monterey jack':'monterey jack','cotija':'cotija','provolone':'provolone',
+  'shallot':'shallots','lemon':'lemons','lime':'limes','avocado':'avocados','jalapeo':'jalapeño','jalapeno':'jalapeño','serrano':'serrano peppers','bell pepper':'bell peppers','red pepper':'bell peppers',
+  'ground turkey':'ground turkey','ground chicken':'ground chicken','ground beef':'ground beef','chicken thighs':'chicken','chicken breast':'chicken breast','rotisserie chicken':'rotisserie chicken',
+  'shiitake':'shiitake mushrooms','crimini':'mushrooms','mushrooms':'mushrooms','coconut milk':'coconut milk','tofu':'tofu','salmon':'salmon','tuna':'tuna steak','bacon':'bacon',
+  'dill':'dill','mint':'mint','cilantro':'cilantro','basil':'basil','ginger':'ginger','carrots':'carrots','celery':'celery','cucumber':'cucumber','zucchini':'zucchini','asparagus':'asparagus',
+  'sweet potato':'sweet potatoes','potatoes':'potatoes','eggs':'eggs','butter':'butter','flour':'flour','brown sugar':'brown sugar','sugar':'sugar','olive oil':'olive oil','avocado oil':'neutral oil',
+  'soy sauce':'soy sauce','chipotle':'chipotle','miso':'miso','capers':'capers','panko':'panko','lasagne':'lasagna noodles','lasagna':'lasagna noodles','rigatoni':'short pasta','paccheri':'short pasta',
+  'orzo':'orzo','spaghetti':'pasta','angel hair':'pasta','pasta':'pasta','gnocchi':'gnocchi','rice':'rice','couscous':'couscous','lentils':'lentils','tortillas':'tortillas','pita':'pita',
+  'milk':'milk','almondmilk':'almond milk','almond milk':'almond milk','mayonnaise':'mayonnaise','dijon':'mustard','mustard':'mustard','oyster sauce':'oyster sauce','curry paste':'curry paste',
+  'chili crisp':'chile crisp','chili garlic sauce':'chili garlic sauce','walnuts':'walnuts','sesame seed':'sesame seeds','turmeric':'turmeric','vanilla':'vanilla','yeast':'yeast','vinegar':'vinegar',
+  'white wine vinegar':'white wine vinegar','spinach':'spinach','kale':'kale','lettuce':'lettuce','romaine':'lettuce','butter leaf':'lettuce','broccoli':'broccoli','snap peas':'sugar snap peas',
+  'edamame':'edamame','corn':'corn','squash':'zucchini','butternut':'butternut squash','eggplant':'eggplant','garlic':'garlic','blueberries':'berries','apples':'apples','bread':'bread',
+  'clam juice':'clam juice','almond butter':'almond butter','peanut butter':'peanut butter','garlic aioli':'mayonnaise','lupini':'lupini','nutritional yeast':'nutritional yeast','green chiles':'green chiles','salsa':'salsa','guacamole':'guacamole','hummus':'hummus'};
+// Things on a usual / receipt that are never recipe ingredients, so they're never suggested.
+const NOT_FOOD = /\b(shopping bag|hair|roller|filters?|supplement|ipa|beer|seltzer|sparkling|water|soda|kombucha|energy drink|juice(?! company)|gummy|candy|chips|crackers|pretzel|bar|coffee|tea bags|oats|shake|dumplings?|burek|cutlets|dip|jello|gelatin|cheezit|sunpopped|snacks?|seaweed|noodle soup|cookie|brownie|baking soda)\b/i;
+const SYN_KEYS = Object.keys(ING_SYN).sort((a,b)=>b.length-a.length);
+function ingFrom(text){
+  const t=' '+String(text).toLowerCase().replace(/[^a-z0-9 ]+/g,' ').replace(/\s+/g,' ')+' ';
+  // Recipe ingredient names and the phrases above, longest first, so "almond butter" beats "butter".
+  const keys=[...allIngredients().map(k=>[k,k]),...SYN_KEYS.map(k=>[k,ING_SYN[k]])].sort((a,b)=>b[0].length-a[0].length);
+  for(const [k,v] of keys){ const s=k.replace(/s$/,''); if(t.includes(' '+k+' ')||t.includes(' '+s+' ')||t.includes(' '+s+'s ')||t.includes(' '+s+'es ')) return v; }
+  return null;
+}
+// Package size from a product name ("Kitchen Basics chicken stock 32 oz", "lemons 2 lb bag", "eggs 12 count").
+function sizeFrom(text,i){
+  const s=String(text).toLowerCase();
+  let m=s.match(/([\d.]+)\s*(fl oz|oz|lbs?|count|ct|pint|quart|half gallon|gallon)\b/);
+  if(/half gallon/.test(s)) return {q:1893,u:'ml',label:'half gallon'};
+  if(m){ const n=+m[1], u=m[2];
+    if(u==='count'||u==='ct') return {q:n,u:'each',label:`${n} ct`};
+    if(u==='fl oz'||(u==='oz'&&S.recipes.some(r=>r.amounts?.[i]?.u==='ml'))) return {q:n*29.57,u:'ml',label:`${n} ${u}`};
+    if(u==='oz') return {q:n*28.35,u:'g',label:`${n} oz`};
+    if(/lb/.test(u)) return {q:n*453.6,u:'g',label:`${n} lb`};
+    if(u==='pint') return {q:473,u:'ml',label:'1 pint'};
+    if(u==='quart') return {q:946,u:'ml',label:'1 quart'};
+  }
+  if(/bunch/.test(s)) return {q:1,u:'each',label:'1 bunch'};
+  return {q:1,u:'each',label:'1'};
+}
+// Receipt shorthand ("KTCHN BSC CHKN STK") against a full name: every receipt word must be the start of,
+// or squeeze into (same first letter, letters in order), a word of the name.
+const squeeze=(t,w)=>{ if(w[0]!==t[0]) return false; let j=0; for(const c of w){ if(c===t[j]) j++; if(j===t.length) return true; } return false; };
+function shorthandScore(line,name){
+  const tw=line.toLowerCase().replace(/[^a-z ]+/g,' ').split(/\s+/).filter(w=>w.length>1), nw=name.toLowerCase().split(/\s+/);
+  if(!tw.length) return 0; let hit=0;
+  for(const t of tw) if(nw.some(w=>w.startsWith(t)||(w.length>=4&&t.startsWith(w))||(t.length>=3&&squeeze(t,w)))) hit++;
+  return hit/tw.length;
+}
+function bestUsual(line){
+  let best=null, sc=0;
+  for(const u of S.usuals){ const s=shorthandScore(line,u.name); if(s>sc||(s===sc&&best&&u.rank<best.rank)){ sc=s; best=u; } }
+  return sc>=0.67?best:null;
+}
+const SKIP_LINE=/(sub ?total|total|tax|change|visa|master|amex|debit|credit|balance|saving|coupon|cash|tender|points|reward|member|approved|auth|card|store|thank|receipt|items? sold|^\s*bag)/i;
+// Turn OCR text into receipt rows: name, price, and a weight line ("1.52 lb @ 2.99/lb") folded into the item above it.
+function parseReceipt(text){
+  // "2 @ 2.29" and "1.52 lb @ 1.15/lb" can sit above or below their item: attach to whichever one's price matches.
+  const rows=[]; let pending=null;
+  const fits=(r,x)=>r&&Math.abs(+r.price.slice(1)-x.total)<0.03;
+  const attach=(r,x)=>{ if(x.lb) r.lb=x.lb; else r.count=x.count; };
+  for(const raw of text.split('\n')){
+    const line=raw.replace(/[|_]/g,' ').replace(/\s+/g,' ').trim(); if(line.length<3) continue;
+    const w=line.match(/([\d.]+)\s*lbs?\s*@\s*\$?([\d.]+)/i), q=!w&&line.match(/^(\d+)\s*@\s*\$?([\d.]+)/);
+    if(w||q){ const x=w?{lb:+w[1],total:+w[1]*+w[2]}:{count:+q[1],total:+q[1]*+q[2]}; const prev=rows[rows.length-1];
+      if(fits(prev,x)&&!prev.lb&&!prev.count) attach(prev,x); else pending=x; continue; }
+    const m=line.match(/^(.*?[a-z].*?)\s+\$?(\d+\.\d{2})\s*-?\s*[a-z]{0,2}$/i); if(!m) continue;
+    if(SKIP_LINE.test(m[1])) continue;
+    const r={line:m[1].trim(),price:'$'+m[2]};
+    if(pending){ if(fits(r,pending)) attach(r,pending); pending=null; }
+    rows.push(r);
+  }
+  return rows;
+}
+// One review row per item: what it is, how much it adds to At Home, where it goes.
+function toReviewRow(src){
+  const u=src.usual||bestUsual(src.line||''); const name=u?u.name:src.line;
+  const i=NOT_FOOD.test(name)?null:ingFrom(name);
+  let size=sizeFrom(name,i); if(src.lb) size={q:src.lb*453.6,u:'g',label:`${src.lb} lb`};
+  return {line:src.line||u?.name, product:u?.name||null, ingredient:i||'', count:src.count||1, size, price:src.price||u?.price||'', where:i?storeOf(i):'pantry', on:!!i};
+}
+let review=null;   // {source:'receipt'|'usuals', rows:[...], status}
+let usualsOpen=false, usualsPick=new Set();
+
 // Walk every uncooked meal up to the end of the shown week, in date order, using up what's in the
 // pantry first and buying whole packages only when it runs out. Leftovers carry to the next meal.
 function shopPlan(){
@@ -386,17 +484,18 @@ function shopPlan(){
 // ---------------- data ----------------
 const DB = {
   async load(){
-    const [r,p,m,h,mem,act,pan]=await Promise.all([
+    const [r,p,m,h,mem,act,pan,us]=await Promise.all([
       sb.from('recipes').select('*').order('added_at',{ascending:false}),
       sb.from('prices').select('*'),
       sb.from('meal_plan').select('*').order('planned_for').order('added_at'),
       sb.from('week_have').select('*'),
       sb.from('members').select('*').order('created_at'),
       sb.from('activity').select('*').order('created_at',{ascending:false}).limit(150),
-      sb.from('pantry').select('*').order('ingredient')
+      sb.from('pantry').select('*').order('ingredient'),
+      sb.from('fairway_usuals').select('*').order('rank')
     ]);
     for(const x of [r,p,m,h,mem,act,pan]) if(x.error) console.warn(x.error.message);
-    S.pantry=pan.data||[];
+    S.pantry=pan.data||[]; S.usuals=us.error?[]:(us.data||[]);
     S.recipes=r.data||[]; S.prices=Object.fromEntries((p.data||[]).map(x=>[x.ingredient,x]));
     S.meals=m.data||[]; S.have=h.data||[]; S.members=mem.data||[]; S.activity=act.data||[];
     byId=Object.fromEntries(S.recipes.map(x=>[String(x.id),x]));
@@ -408,7 +507,10 @@ const DB = {
   async setCooked(id,v){
     const m=S.meals.find(x=>String(x.id)===String(id)); const r=m&&rec(m.recipe_id);
     const ok=await DB.run(sb.from('meal_plan').update(v?{cooked_at:new Date().toISOString(),cooked_by:me.user_id}:{cooked_at:null,cooked_by:null}).eq('id',id));
-    if(ok&&r) await DB.usePantry(r, v?-1:1);   // cooking uses ingredients up; undo puts them back
+    if(ok&&r){ const used=await DB.usePantry(r, v?-1:1);   // cooking uses ingredients up; undo puts them back
+      const names=used.map(x=>x.ingredient), skipped=Object.keys(r.amounts||{}).filter(i=>!names.includes(i)&&pantryOf(i));
+      toast(!names.length?(v?'Cooked ✓ (none of its ingredients are tracked in At Home)':'Un-cooked'):
+        (v?'Cooked ✓ · used from At Home: ':'Put back in At Home: ')+names.slice(0,6).join(', ')+(names.length>6?` +${names.length-6} more`:'')+(skipped.length?` · couldn't measure ${skipped.join(', ')}`:''),5000); }
     return ok;
   },
   // Add (sign=1) or remove (sign=-1) a recipe's amounts from the pantry, for items the pantry tracks.
@@ -420,6 +522,7 @@ const DB = {
       rows.push({ingredient:i,q:Math.max(0,+p.q+sign*d),u:p.u,location:p.location||null,updated_by:me.user_id,updated_at:new Date().toISOString()});
     }
     if(rows.length) await DB.run(sb.from('pantry').upsert(rows));
+    return rows;
   },
   setPantry:(ingredient,q,u,location)=>DB.run(sb.from('pantry').upsert({ingredient,q:Math.max(0,q),u,location:location||null,updated_by:me.user_id,updated_at:new Date().toISOString()})),
   moveTo:(ingredient,location)=>DB.run(sb.from('pantry').update({location,updated_by:me.user_id,updated_at:new Date().toISOString()}).eq('ingredient',ingredient)),
@@ -729,7 +832,7 @@ document.addEventListener('click',async e=>{
   else if(t.id==='wkToday'){ week=mondayOf(TODAY); }
   else if(t.dataset.cook){ await DB.setCooked(t.dataset.cook,t.dataset.v==='1'); }
   else if(t.dataset.unplan){ await DB.unplan(t.dataset.unplan); }
-  else if(t.dataset.made){ await DB.madeToday(t.dataset.made); toast('Logged as cooked today'); }
+  else if(t.dataset.made){ await DB.madeToday(t.dataset.made); }
   else if(t.dataset.status){ await DB.setStatus(t.dataset.status,t.dataset.to); toast(t.dataset.to==='past'?'Moved to past recipes':'Moved to new recipes'); }
   else if(t.dataset.delrecipe){ if(!twoTap(t)) return; await DB.deleteRecipe(t.dataset.delrecipe); toast('Removed'); }
   else if(t.dataset.fridge){ const i=t.dataset.fridge; fridge=fridge.includes(i)?fridge.filter(x=>x!==i):[...fridge,i]; LS.set('fridge',fridge); }
@@ -754,6 +857,81 @@ document.addEventListener('change',async e=>{
   if(el.name==='kind') renderImport();
 });
 ['fridgeSearch','recSearch','ingSearch'].forEach(id=>$('#'+id).addEventListener('input',()=>({fridgeSearch:renderUseup,recSearch:renderRecipes,ingSearch:renderIngredients})[id]()));
+
+// ---------------- scan a receipt / add from usuals ----------------
+function renderUsuals(){
+  const el=$('#usualsPanel'); if(!usualsOpen){ el.innerHTML=''; return; }
+  if(!S.usuals.length){ el.innerHTML='<div class="empty">No Fairway usuals loaded yet.</div>'; return; }
+  const q=($('#usualsSearch')?.value||'').toLowerCase();
+  const food=S.usuals.map(u=>({u,i:NOT_FOOD.test(u.name)?null:ingFrom(u.name)})).filter(x=>x.i);
+  const shown=food.filter(x=>!q||x.u.name.toLowerCase().includes(q)||x.i.includes(q));
+  const keep=$('#usualsSearch')===document.activeElement;
+  el.innerHTML=`<div class="card" style="margin:8px 0">
+    <div class="row" style="justify-content:space-between"><b>Our usual Fairway items</b><span class="meta">most-bought first · tap what you just bought</span></div>
+    <input type="search" id="usualsSearch" placeholder="Search (e.g. onion, stock, feta)" value="${esc(q)}">
+    <div class="chips" style="max-height:260px;overflow:auto">${shown.map(x=>`<span class="chip ${usualsPick.has(x.u.name)?'on':''}" data-usual="${esc(x.u.name)}" title="${esc(x.u.name)} · ${esc(x.u.price||'')}">${esc(cap(x.i))} <span style="opacity:.7">· ${esc(x.u.name.length>34?x.u.name.slice(0,34)+'…':x.u.name)}</span></span>`).join('')||'<span class="meta">Nothing matches.</span>'}</div>
+    <div class="row"><button class="btn primary" id="usualsReview" type="button" ${usualsPick.size?'':'disabled'}>Review ${usualsPick.size||''} item${usualsPick.size===1?'':'s'}</button><button class="btn" id="usualsClose" type="button">Close</button></div></div>`;
+  if(keep){ const s=$('#usualsSearch'); s.focus(); s.setSelectionRange(s.value.length,s.value.length); }
+}
+function renderReview(){
+  const el=$('#receiptReview'); if(!review){ el.innerHTML=''; return; }
+  if(review.status){ el.innerHTML=`<div class="card" style="margin:8px 0"><b>Reading the receipt…</b><span class="meta">${esc(review.status)}</span></div>`; return; }
+  const ings=allIngredients();
+  el.innerHTML=`<div class="card" style="margin:8px 0">
+    <div class="row" style="justify-content:space-between"><b>${review.source==='receipt'?'From your receipt':'Add to At Home'}</b><span class="meta">${review.rows.filter(r=>r.on).length} of ${review.rows.length} will be added · check and fix anything off</span></div>
+    ${review.rows.length?`<div style="overflow:auto"><table><tr><th></th><th>${review.source==='receipt'?'Receipt line':'Item'}</th><th>Ingredient</th><th>How many</th><th>Adds</th><th>Kept in</th></tr>
+    ${review.rows.map((r,k)=>`<tr class="${r.on?'':'have'}"><td><input type="checkbox" data-rv="${k}" data-f="on" ${r.on?'checked':''}></td>
+      <td><span class="${r.on?'':'name'}">${esc(r.line)}</span>${r.product&&r.product!==r.line?`<div class="meta">${esc(r.product)}</div>`:''}${r.price?` <span class="meta">${esc(r.price)}</span>`:''}</td>
+      <td><input list="ingList" data-rv="${k}" data-f="ingredient" value="${esc(r.ingredient)}" placeholder="not food / skip" style="width:150px;padding:6px 8px"></td>
+      <td><input type="number" min="0" step="any" data-rv="${k}" data-f="count" value="${r.count}" style="width:64px"> × ${esc(r.size.label)}</td>
+      <td class="meta">${r.ingredient?esc(fmtAmt(r.count*r.size.q,r.size.u)):'—'}</td>
+      <td><select data-rv="${k}" data-f="where" style="font-size:12.5px;padding:4px 6px">${['fridge','freezer','pantry'].map(l=>`<option value="${l}" ${l===r.where?'selected':''}>${STORE_ICON[l]} ${cap(l)}</option>`).join('')}</select></td></tr>`).join('')}</table></div>`
+    :'<p class="meta">No item lines could be read. Try a flatter, brighter photo, or add items from your usuals.</p>'}
+    ${review.text?`<details><summary class="meta">What the scanner read</summary><pre style="white-space:pre-wrap;font-size:12px">${esc(review.text)}</pre></details>`:''}
+    <div class="row"><button class="btn primary" id="reviewSave" type="button" ${review.rows.some(r=>r.on&&r.ingredient)?'':'disabled'}>Add to At Home</button><button class="btn" id="reviewCancel" type="button">Cancel</button></div></div>`;
+}
+const loadScript=src=>new Promise((res,rej)=>{ if([...document.scripts].some(s=>s.src===src)) return res(); const s=document.createElement('script'); s.src=src; s.onload=res; s.onerror=()=>rej(new Error('Could not load the scanner')); document.head.appendChild(s); });
+async function scanReceipt(file){
+  review={source:'receipt',rows:[],status:'Loading the scanner (first time takes a few seconds)…'}; renderReview();
+  try{
+    await loadScript('https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js');
+    const {data}=await Tesseract.recognize(file,'eng',{logger:m=>{ if(m.status==='recognizing text'&&review?.status){ review.status=`Reading… ${Math.round(m.progress*100)}%`; renderReview(); } }});
+    review={source:'receipt',text:data.text,rows:parseReceipt(data.text).map(toReviewRow)};
+  }catch(err){ review=null; toast(err.message||'Could not read that photo'); }
+  renderReview();
+}
+async function saveReview(){
+  const add={};
+  for(const r of review.rows){ const i=r.ingredient.trim().toLowerCase(); if(!r.on||!i||!(r.count>0)) continue;
+    const a=add[i]||(add[i]={q:0,u:r.size.u,where:r.where}); const d=conv(r.count*r.size.q,r.size.u,a.u,i,pkgOf(i)); a.q+=d??r.count*r.size.q; a.where=r.where; }
+  const now=new Date().toISOString(), rows=[];
+  for(const [i,a] of Object.entries(add)){
+    const p=pantryOf(i); let q=a.q,u=a.u;
+    if(p&&+p.q>0){ const d=conv(a.q,a.u,p.u,i,pkgOf(i)); if(d!=null){ q=+p.q+d; u=p.u; } }
+    rows.push({ingredient:i,q,u,location:a.where===defaultStore(i)?null:a.where,updated_by:me.user_id,updated_at:now});
+  }
+  if(!rows.length) return toast('Nothing ticked to add');
+  if(await DB.run(sb.from('pantry').upsert(rows))){ toast(`Added to At Home: ${rows.map(r=>r.ingredient).join(', ')}`,4000); review=null; usualsPick.clear(); usualsOpen=false; }
+  renderAll(); renderReview(); renderUsuals();
+}
+document.addEventListener('change',e=>{
+  const el=e.target;
+  if(el.id==='receiptFile'&&el.files[0]){ scanReceipt(el.files[0]); el.value=''; return; }
+  if(el.dataset.rv!==undefined&&review){ const r=review.rows[+el.dataset.rv], f=el.dataset.f;
+    if(f==='on') r.on=el.checked; else if(f==='count') r.count=parseFloat(el.value)||0; else if(f==='where') r.where=el.value;
+    else if(f==='ingredient'){ r.ingredient=el.value.trim().toLowerCase(); r.on=!!r.ingredient; if(r.ingredient) r.where=storeOf(r.ingredient); }
+    renderReview(); }
+});
+document.addEventListener('input',e=>{ if(e.target.id==='usualsSearch') renderUsuals(); });
+document.addEventListener('click',e=>{
+  const t=e.target.closest('#usualsToggle,#usualsClose,#usualsReview,#reviewSave,#reviewCancel,[data-usual]'); if(!t) return;
+  if(t.id==='usualsToggle'){ usualsOpen=!usualsOpen; renderUsuals(); }
+  else if(t.id==='usualsClose'){ usualsOpen=false; renderUsuals(); }
+  else if(t.dataset.usual){ const n=t.dataset.usual; usualsPick.has(n)?usualsPick.delete(n):usualsPick.add(n); renderUsuals(); }
+  else if(t.id==='usualsReview'){ review={source:'usuals',rows:S.usuals.filter(u=>usualsPick.has(u.name)).map(u=>toReviewRow({usual:u,line:u.name}))}; usualsOpen=false; renderUsuals(); renderReview(); }
+  else if(t.id==='reviewCancel'){ review=null; renderReview(); }
+  else if(t.id==='reviewSave'){ t.disabled=true; saveReview(); }
+});
 
 // ---------------- start ----------------
 let booted=false;
