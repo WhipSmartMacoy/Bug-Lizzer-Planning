@@ -151,6 +151,7 @@ h2{font:700 18px Georgia,serif;margin:6px 0 10px}
 #scanSheet::before{content:'';position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:29}
 .lrow.scanned{padding-left:12px}
 .snacks .lrow.scanned{padding-left:8px}
+.day .lunch{align-self:stretch;text-align:left}
 .lunch.snackbox{border-bottom:0;border-top:1px dashed var(--line);padding-top:6px;margin-top:4px}
 .snacks{display:flex;flex-direction:column;gap:3px}.snacks>b{font-size:12.5px}
 .snacks .lrow{padding-left:8px}
@@ -312,6 +313,19 @@ body.shopping{overflow:hidden}
 .today .okline{color:var(--green);font-size:13.5px}.today .needprice{font-size:13.5px}
 .trow{display:flex;gap:10px;align-items:baseline;padding:2px 0}.trow>b{min-width:52px;font-size:13.5px}
 .tchip{display:inline-block;font-size:13px;margin:0 8px 2px 0}
+/* Each person has their own color so Amy's and Parker's meals never blur together */
+[data-who="Amy"]{--pc:#b0457f;--pbg:#fcf1f7;--pline:#f1d3e3}
+[data-who="Parker"]{--pc:#2b6aa3;--pbg:#eff5fb;--pline:#d3e3f2}
+.lrow[data-who],.snacks[data-who]{background:var(--pbg);border:1px solid var(--pline);border-left:4px solid var(--pc);border-radius:10px;padding:6px 8px;margin:5px 0}
+b.who{color:var(--pc);font-weight:700;display:inline-flex;align-items:center;gap:5px}
+h2 b.who{font:inherit;color:var(--pc)}
+.pcard[data-who]{border-top:4px solid var(--pc)}
+b.who::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--pc);flex:none}
+.trow[data-who]{display:block;background:var(--pbg);border-left:4px solid var(--pc);border-radius:10px;padding:8px 10px;margin:6px 0}
+.trow[data-who]>b.who{display:flex;margin-bottom:3px;font-size:14px}
+.trow[data-who]>span{display:flex;flex-wrap:wrap;gap:4px 6px}
+.trow[data-who] .tchip{margin:0;background:#fff;border:1px solid var(--pline);border-radius:99px;padding:3px 9px}
+
 @media (max-width:900px){.today{grid-template-columns:1fr;gap:12px}}
 details.info{margin:0 0 10px}details.info summary{cursor:pointer;color:var(--muted);font-size:13px;list-style:none}
 details.info summary::-webkit-details-marker{display:none}details.info[open] summary{margin-bottom:6px}
@@ -1067,7 +1081,7 @@ function renderToday(){
   const tonight=S.meals.find(m=>m.planned_for===TODAY&&isDin(m));
   let missing=[]; try{ const w=week; week=mondayOf(TODAY); missing=shopPlan().filter(o=>o.buy>0&&!STAPLES.has(o.i)&&o.uses.some(m=>m.planned_for===TODAY)).map(o=>o.i); week=w; }catch(e){}
   const line=p=>{ const ms=personMeals(p,TODAY).filter(m=>m.when!=='Dinner');
-    return `<div class="trow"><b>${p}</b><span>${ms.length?ms.map(m=>`<span class="tchip">${m.when==='Snackies'?'🍪':m.when==='Breakfast'?'☀️':'🥪'} ${esc(m.scan||m.out?(m.note||'out'):m.r?.title||'')}</span>`).join(''):'<span class="meta">nothing logged yet</span>'}</span></div>`; };
+    return `<div class="trow" data-who="${p}"><b class="who">${p}</b><span>${ms.length?ms.map(m=>`<span class="tchip">${m.when==='Snackies'?'🍪':m.when==='Breakfast'?'☀️':'🥪'} ${esc(m.scan||m.out?(m.note||'out'):m.r?.title||'')}</span>`).join(''):'<span class="meta">nothing logged yet</span>'}</span></div>`; };
   el.innerHTML=`<div class="today">
     <div class="tdin"><span class="meta">Tonight</span>${tonight?`<b>${tonight.leftover_of?'🍱 ':isScr(tonight)?'🫙 ':isOutDin(tonight)?'🍽️ ':''}${esc(dTitle(tonight))}</b>
         <span class="${missing.length&&rec(tonight.recipe_id)?'needprice':'okline'}">${isOutDin(tonight)?(isRest(tonight)?`<a href="${mapsUrl(restName(tonight))}" target="_blank" rel="noopener">Eating out · map</a>`:'Eating out'):isScr(tonight)?'Whatever’s at home':tonight.leftover_of?'Leftovers, nothing to buy':missing.length?`Still need ${missing.slice(0,4).map(esc).join(', ')}${missing.length>4?'…':''}`:'Everything is at home ✓'}</span>`
@@ -1196,7 +1210,7 @@ function renderPlan(){
         </div></div>`}).join('')}
       ${!hasDinner(d)?`<button class="addbtn big" data-add="${d}||dinner" type="button">＋ Add dinner</button>`:''}
       ${scansFor(d,null,'dinner').map(m=>scanLine(m).replace('lrow scanned','lrow').replace('<span class="lwhat">',`<b>${esc(m.person)}</b> <span class="lwhat">`)).join('')}
-      <div class="lrow" style="gap:4px"><span class="meta">📷 dinner:</span>${PEOPLE.map(p=>`<button data-scanday="${d}" data-person="${p}" data-slot="dinner" title="Scan ${p}'s dinner">${p}</button>`).join('')}</div>
+      <div class="lrow" style="gap:4px"><span class="meta">📷 dinner:</span>${PEOPLE.map(p=>`<button data-scanday="${d}" data-person="${p}" data-slot="dinner" data-who="${p}" style="color:var(--pc);border-color:var(--pline)" title="Scan ${p}'s dinner">${p}</button>`).join('')}</div>
       <div class="lunch snackbox"><div class="lh">Snackies</div>${PEOPLE.map(p=>snackRows(d,p,opts)).join('')}</div>
 
     </div>`}).join('');
@@ -1343,7 +1357,7 @@ function snackRows(d,p,opts){
   const items=S.meals.filter(m=>m.planned_for===d&&m.person===p&&isSnack(m));
   const lo=leftoverMeals(d,1).filter(x=>!(isLunch(x)&&x.planned_for===d));
   const label=m=>{ if(isScan(m)) return `📷 ${esc(m.note||'')}`; if(!m.recipe_id) return m.note?outLabel(m):null; const r=rec(m.recipe_id); return m.leftover_of?`🍱 ${esc(r?.title||'')}`:esc(r?.title||''); };
-  return `<div class="snacks"><b>${p}</b>${items.map(m=>{ const l=label(m);
+  return `<div class="snacks" data-who="${p}"><b class="who">${p}</b>${items.map(m=>{ const l=label(m);
       return l==null?`<div class="lrow"><input class="outnote" data-outnote="${m.id}" placeholder="🥡 What did you have?" enterkeyhint="done"><button data-unplan="${m.id}" title="Remove">✕</button></div>`
         :`<div class="lrow"><span class="lwhat">${l}${m.nutrition?.calories!=null&&isScan(m)?` <span class="meta">· ${Math.round(m.nutrition.calories)} cal</span>`:''}</span><button data-unplan="${m.id}" title="Remove">✕</button></div>`;}).join('')}
     <div class="lrow"><button class="addbtn" data-add="${d}|${p}|snack" type="button">＋ ${items.length?'Add another':'Add a snackie'}</button>
@@ -1358,13 +1372,13 @@ function lunchRow(d,p,opts,meal='lunch'){
 function lunchRow1(d,p,opts,meal='lunch'){
   const m=S.meals.find(x=>x.meal===meal&&x.planned_for===d&&x.person===p);
   if(m){ const r=rec(m.recipe_id);
-    if(!m.recipe_id&&!m.note) return `<div class="lrow"><b>${p}</b> <input class="outnote" data-outnote="${m.id}" placeholder="🥡 What did you have?" enterkeyhint="done"><button data-unplan="${m.id}" title="Clear">✕</button></div>`;
-    if(isRest(m)&&!restDish(m)) return `<div class="lrow"><b>${p}</b> <span class="lwhat">${outLabel(m)}</span><input class="outnote dish" data-dish="${m.id}" placeholder="What did you get?" enterkeyhint="done">${scanBtn(d,p,meal)}<button data-unplan="${m.id}" title="Clear">✕</button></div>`;
+    if(!m.recipe_id&&!m.note) return `<div class="lrow" data-who="${p}"><b class="who">${p}</b> <input class="outnote" data-outnote="${m.id}" placeholder="🥡 What did you have?" enterkeyhint="done"><button data-unplan="${m.id}" title="Clear">✕</button></div>`;
+    if(isRest(m)&&!restDish(m)) return `<div class="lrow" data-who="${p}"><b class="who">${p}</b> <span class="lwhat">${outLabel(m)}</span><input class="outnote dish" data-dish="${m.id}" placeholder="What did you get?" enterkeyhint="done">${scanBtn(d,p,meal)}<button data-unplan="${m.id}" title="Clear">✕</button></div>`;
     const what=!m.recipe_id?outLabel(m):m.leftover_of?`🍱 ${esc(r?.title||'Leftovers')}`:`<a href="${esc(r?.url)}" target="_blank" rel="noopener">${esc(r?.title||'')}</a>`;
-    return `<div class="lrow ${m.cooked_at?'cooked':''}"><b>${p}</b> <span class="lwhat">${what}</span>
+    return `<div class="lrow ${m.cooked_at?'cooked':''}" data-who="${p}"><b class="who">${p}</b> <span class="lwhat">${what}</span>
       ${m.recipe_id&&!m.leftover_of?`<button data-cook="${m.id}" data-v="${m.cooked_at?0:1}" title="${m.cooked_at?'Undo cooked':'Mark cooked'}">${m.cooked_at?'↶':'✓'}</button>`:''}${scanBtn(d,p,meal)}<button data-unplan="${m.id}" title="Clear">✕</button></div>`; }
   const lo=leftoverMeals(d,1).filter(x=>!(isLunch(x)&&x.planned_for===d));
-  return `<div class="lrow"><b>${p}</b> <button class="addbtn" data-add="${d}|${p}|${meal}" type="button">＋ Add${lo.length?` <span class="meta">· ${lo.length} leftover${lo.length>1?'s':''}</span>`:''}</button>${scanBtn(d,p,meal)}</div>`;
+  return `<div class="lrow" data-who="${p}"><b class="who">${p}</b> <button class="addbtn" data-add="${d}|${p}|${meal}" type="button">＋ Add${lo.length?` <span class="meta">· ${lo.length} leftover${lo.length>1?'s':''}</span>`:''}</button>${scanBtn(d,p,meal)}</div>`;
 }
 // ---- Add sheet: one place to add any meal (leftovers · out · a recipe · scan) ----
 let addS=null;
@@ -1529,8 +1543,8 @@ function renderNutrition(){
     const wkT=k=>T&&T[k]!=null?T[k]*7:null;
     const soFar=Math.max(1,days.filter(d=>d<=TODAY).length);
     const miss=perDay.reduce((a,x)=>a+x.missing,0);
-    return `<div class="card" style="margin-bottom:16px">
-      <div class="row" style="justify-content:space-between;align-items:baseline"><h2 style="margin:0">${p}</h2><span class="meta">${counted} day${counted===1?'':'s'} with meals this week${miss?` · ${miss} meal${miss>1?'s':''} without nutrition info`:''}</span></div>
+    return `<div class="card pcard" data-who="${p}" style="margin-bottom:16px">
+      <div class="row" style="justify-content:space-between;align-items:baseline"><h2 style="margin:0"><b class="who">${p}</b></h2><span class="meta">${counted} day${counted===1?'':'s'} with meals this week${miss?` · ${miss} meal${miss>1?'s':''} without nutrition info`:''}</span></div>
       <div class="macros">${MAC.slice(0,4).map(([k,l,u])=>{const t=wkT(k), st=t?status(tot[k]||0,T[k]*soFar,k):'';
         return `<div class="${st}"><b>${fmtN(tot[k],u)}</b><span>${l} this week</span><small>${counted?fmtN((tot[k]||0)/counted,u)+' a day':''}</small></div>`}).join('')}</div>
 
