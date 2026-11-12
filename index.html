@@ -240,7 +240,6 @@ a{color:var(--green)}
 
   <section class="panel" id="settings">
     <div class="card" style="max-width:760px;margin-bottom:16px"><h2 style="margin-top:0">Household</h2><div id="people"></div></div>
-    <div class="card" style="max-width:760px;margin-bottom:16px"><h2 style="margin-top:0">Nutrition goals</h2><div id="goals"></div></div>
     <div class="card" style="max-width:760px">
       <h2 style="margin:0">Prices</h2>
       <p class="meta" style="margin:0">Each ingredient is linked to one product on <a href="https://shop.fairwaymarket.com/store/fairway/storefront" target="_blank" rel="noopener">shop.fairwaymarket.com</a>. Refreshing re-checks every linked product page for today's price and flags anything out of stock.</p>
@@ -752,7 +751,7 @@ function renderNutrition(){
     const miss=perDay.reduce((a,x)=>a+x.missing,0);
     return `<div class="card" style="margin-bottom:16px">
       <div class="row" style="justify-content:space-between;align-items:baseline"><h2 style="margin:0">${p}</h2><span class="meta">${counted} day${counted===1?'':'s'} with meals this week${miss?` · ${miss} meal${miss>1?'s':''} without nutrition info`:''}</span></div>
-      ${T?`<p class="meta" style="margin:4px 0 0">${T.p.height_in>=12?Math.floor(T.p.height_in/12)+'′'+Math.round(T.p.height_in%12)+'″':''} · ${T.p.weight_lb} lb · BMI ${T.bmi.toFixed(1)} · goal ${T.p.goal_lb||T.p.weight_lb} lb · daily target <b>${T.calories.toLocaleString()} cal, ${T.protein} g protein, ${T.carbs} g carbs, ${T.fat} g fat</b> <a href="#" data-goto="settings">edit</a></p>`:'<p class="meta">No goals set. Add them in Settings.</p>'}
+      ${T?`<p class="meta" style="margin:4px 0 0">${T.p.height_in>=12?Math.floor(T.p.height_in/12)+'′'+Math.round(T.p.height_in%12)+'″':''} · ${T.p.weight_lb} lb · BMI ${T.bmi.toFixed(1)} · goal ${T.p.goal_lb||T.p.weight_lb} lb · daily target <b>${T.calories.toLocaleString()} cal, ${T.protein} g protein, ${T.carbs} g carbs, ${T.fat} g fat</b></p>`:''}
       <div class="macros">${MAC.slice(0,4).map(([k,l,u])=>{const t=wkT(k), st=t?status(tot[k]||0,T[k]*soFar,k):'';
         return `<div class="${st}"><b>${fmtN(tot[k],u)}</b><span>${l} this week${t?` · of ${fmtN(t,u)}`:''}</span><small>${T?fmtN(T[k],u)+' a day target':''}</small></div>`}).join('')}</div>
 
@@ -929,24 +928,7 @@ function renderActivity(){
 }
 const isFair = l => /^https:\/\/shop\.fairwaymarket\.com\/store\/fairway\/products\//.test(l||'');
 let lastRefresh=null;
-function renderGoals(){
-  const el=$('#goals'); if(!el) return;
-  el.innerHTML=S.people.length?`<p class="meta" style="margin:0 0 8px">Used for the daily targets on the Nutrition tab. Change anything and it saves.</p><div style="overflow:auto"><table><tr><th>Person</th><th>Height (in)</th><th>Weight (lb)</th><th>Born</th><th>Activity</th><th>Goal</th><th>Goal weight</th><th>Daily target</th></tr>
-    ${S.people.sort((a,b)=>a.name.localeCompare(b.name)).map(p=>{const T=targetsOf(p.name);return `<tr><td><b>${esc(p.name)}</b></td>
-      <td><input data-person="${esc(p.name)}" data-k="height_in" type="number" value="${p.height_in}" style="width:64px"></td>
-      <td><input data-person="${esc(p.name)}" data-k="weight_lb" type="number" value="${p.weight_lb}" style="width:70px"></td>
-      <td><input data-person="${esc(p.name)}" data-k="born" type="month" value="${p.born?p.born.slice(0,7):''}" style="width:140px"> <span class="meta">${T.age}</span></td>
-      <td><select data-person="${esc(p.name)}" data-k="activity">${Object.entries(ACT).map(([k,[,l]])=>`<option value="${k}" ${k===p.activity?'selected':''}>${l}</option>`).join('')}</select></td>
-      <td><select data-person="${esc(p.name)}" data-k="goal">${['maintain','lose','gain'].map(g=>`<option value="${g}" ${g===p.goal?'selected':''}>${{maintain:'Stay the same',lose:'Lose weight',gain:'Gain weight'}[g]}</option>`).join('')}</select></td>
-      <td><input data-person="${esc(p.name)}" data-k="goal_lb" type="number" value="${p.goal_lb??''}" style="width:70px"></td>
-      <td class="meta">${T.calories.toLocaleString()} cal · ${T.protein} g P<br>BMI ${T.bmi.toFixed(1)}</td></tr>`}).join('')}</table></div>`:'<p class="meta">Goals table not set up yet.</p>';
-}
-document.addEventListener('change',async e=>{ const el=e.target; if(el.dataset.person===undefined) return;
-  const v=el.dataset.k==='born'?(el.value?el.value+'-01':null):['activity','goal'].includes(el.dataset.k)?el.value:(el.value===''?null:+el.value);
-  await DB.run(sb.from('people').update({[el.dataset.k]:v,updated_at:new Date().toISOString()}).eq('name',el.dataset.person)); toast('Saved'); renderAll(); });
-document.addEventListener('click',e=>{ const t=e.target.closest('[data-goto]'); if(!t) return; e.preventDefault(); document.querySelector(`[data-p="${t.dataset.goto}"]`).click(); });
 function renderSettings(){
-  renderGoals();
   const all=allIngredients(); const linked=all.filter(i=>isFair(S.prices[i]?.link)); const need=all.filter(i=>!isFair(S.prices[i]?.link));
   const times=Object.values(S.prices).map(p=>p.checked_at).filter(Boolean).sort(); const last=times[times.length-1];
   const oos=all.filter(i=>S.prices[i]?.available===false);
