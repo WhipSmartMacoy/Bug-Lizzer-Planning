@@ -64,6 +64,7 @@ tr.have td.name{text-decoration:line-through}
 h2{font:700 18px Georgia,serif;margin:6px 0 10px}
 .note{font-size:13px;color:var(--muted);background:#efebe1;border-radius:10px;padding:10px 12px;margin:12px 0}
 .toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);background:var(--ink);color:#fff;padding:10px 16px;border-radius:10px;font-size:14px;opacity:0;transition:.2s;pointer-events:none;z-index:20}
+.toast.on{pointer-events:auto}
 .toast.on{opacity:1}
 .empty{color:var(--muted);padding:20px;text-align:center;border:1px dashed var(--line);border-radius:var(--r)}
 .feed{list-style:none;margin:0;padding:0;background:var(--card);border:1px solid var(--line);border-radius:var(--r)}
@@ -272,7 +273,9 @@ const LS = { get:(k,d)=>{try{return JSON.parse(localStorage.getItem('blp.'+k))??
 const $ = s=>document.querySelector(s);
 const esc = s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const cap = s=>s?s.charAt(0).toUpperCase()+s.slice(1):s;
-let toastT; function toast(t,ms=2400){const e=$('#toast');e.textContent=t;e.classList.add('on');clearTimeout(toastT);toastT=setTimeout(()=>e.classList.remove('on'),ms)}
+let toastT, toastFn=null;
+function toast(t,ms=2400,action){const e=$('#toast');e.innerHTML=esc(t)+(action?` <button type="button" id="toastAct" style="margin-left:10px;font:inherit;font-weight:700;background:none;border:0;color:inherit;text-decoration:underline;cursor:pointer">${esc(action.label)}</button>`:'');toastFn=action?.fn||null;e.classList.add('on');clearTimeout(toastT);toastT=setTimeout(()=>e.classList.remove('on'),action?Math.max(ms,6000):ms)}
+document.addEventListener('click',async e=>{ if(e.target.id!=='toastAct'||!toastFn) return; const f=toastFn; toastFn=null; $('#toast').classList.remove('on'); await f(); });
 function ago(ts){const s=(Date.now()-new Date(ts))/1000;if(s<60)return'just now';if(s<3600)return Math.floor(s/60)+'m ago';if(s<86400)return Math.floor(s/3600)+'h ago';if(s<604800)return Math.floor(s/86400)+'d ago';return new Date(ts).toLocaleDateString()}
 
 // ---- dates (local, weeks start Monday) ----
@@ -786,7 +789,8 @@ let editingPantry=null;
 function renderPantry(){
   if(!$('#panU').options.length) $('#panU').innerHTML=unitOpts();
   $('#ingList').innerHTML=allIngredients().map(i=>`<option value="${esc(i)}">`).join('');
-  const groups=['fridge','freezer','pantry'].map(loc=>[loc,S.pantry.filter(p=>storeOf(p.ingredient)===loc).sort((a,b)=>(b.q>0)-(a.q>0)||a.ingredient.localeCompare(b.ingredient))]);
+  const onHand=S.pantry.filter(p=>+p.q>0);
+  const groups=['fridge','freezer','pantry'].map(loc=>[loc,onHand.filter(p=>storeOf(p.ingredient)===loc).sort((a,b)=>(b.q>0)-(a.q>0)||a.ingredient.localeCompare(b.ingredient))]);
   const rowHtml=p=>{const pk=pkgOf(p.ingredient), loc=storeOf(p.ingredient);
     return `<tr class="${+p.q>0?'':'have'}"><td><span class="${+p.q>0?'':'name'}">${esc(cap(p.ingredient))}</span></td>
     <td>${editingPantry===p.ingredient?`<form class="row" data-panedit="${esc(p.ingredient)}" style="margin:0;gap:6px"><input name="q" type="number" step="any" min="0" value="${round(+p.q,100)}" style="width:90px"><select name="u">${Object.keys(UNITS).map(u=>`<option ${UNITS[u][0]===p.u&&UNITS[u][1]===1?'selected':''}>${u}</option>`).join('')}</select><button class="btn small primary">Save</button></form>`
@@ -794,7 +798,7 @@ function renderPantry(){
     <td><select data-moveto="${esc(p.ingredient)}" style="font-size:12.5px;padding:4px 6px">${['fridge','freezer','pantry'].map(l=>`<option value="${l}" ${l===loc?'selected':''}>${STORE_ICON[l]} ${cap(l)}</option>`).join('')}</select></td>
     <td class="meta">${p.updated_by?esc(nameOf(p.updated_by))+', ':''}${ago(p.updated_at)}</td>
     <td class="num"><a href="#" data-panedit-open="${esc(p.ingredient)}">edit</a> · <a href="#" data-panzero="${esc(p.ingredient)}">used up</a></td></tr>`};
-  $('#pantryList').innerHTML=S.pantry.length?groups.map(([loc,rows])=>`<h2 style="margin-top:18px">${STORE_ICON[loc]} ${cap(loc)} <span class="meta" style="font:inherit;font-size:13px">${rows.filter(r=>+r.q>0).length} item${rows.filter(r=>+r.q>0).length===1?'':'s'}</span></h2>`+
+  $('#pantryList').innerHTML=onHand.length?groups.map(([loc,rows])=>`<h2 style="margin-top:18px">${STORE_ICON[loc]} ${cap(loc)} <span class="meta" style="font:inherit;font-size:13px">${rows.filter(r=>+r.q>0).length} item${rows.filter(r=>+r.q>0).length===1?'':'s'}</span></h2>`+
     (rows.length?`<table><tr><th>Item</th><th>On hand</th><th>Kept in</th><th>Updated</th><th></th></tr>${rows.map(rowHtml).join('')}</table>`:`<p class="meta">Nothing in ${STORE_LABEL[loc]} yet.</p>`)).join('')
     :'<div class="empty">Nothing tracked yet. Tap <b>Got it ✓</b> on the shopping list after shopping, or add what you already have above.</div>';
 }
@@ -868,7 +872,10 @@ document.addEventListener('click',async e=>{
   }
   else if(t.dataset.bought){ const o=window._shop?.[t.dataset.bought]; if(o){ await DB.bought(o,true); toast(`Added to At Home: ${o.buy} × ${o.pk.label}`);} }
   else if(t.dataset.unbuy){ e.preventDefault(); const o=window._shop?.[t.dataset.unbuy]; const pk=pkgOf(t.dataset.unbuy); await DB.bought(o||{i:t.dataset.unbuy,buy:1,pk,D:pk.u},false); }
-  else if(t.dataset.panzero){ e.preventDefault(); const p=pantryOf(t.dataset.panzero); await DB.setPantry(p.ingredient,0,p.u); toast('Marked as used up'); }
+  else if(t.dataset.panzero){ e.preventDefault(); const p={...pantryOf(t.dataset.panzero)}, where=STORE_LABEL[storeOf(p.ingredient)];
+    const row=t.closest('tr'); if(row){ row.style.transition='opacity .3s'; row.style.opacity='.2'; }
+    await DB.removePantry(p.ingredient);
+    toast(`${cap(p.ingredient)} is used up and removed from ${where}`,6000,{label:'Undo',fn:async()=>{ await DB.run(sb.from('pantry').upsert({ingredient:p.ingredient,q:p.q,u:p.u,location:p.location||null,updated_by:me.user_id,updated_at:new Date().toISOString()})); toast(`${cap(p.ingredient)} is back in At Home`); renderAll(); }}); }
   else if(t.dataset.paneditOpen){ e.preventDefault(); editingPantry=t.dataset.paneditOpen; renderPantry(); return; }
   else if(t.id==='refreshPrices'){ t.disabled=true; lastRefresh={loading:true}; renderSettings(); lastRefresh=await DB.refresh(); t.disabled=false; if(!lastRefresh.error) toast('Prices refreshed'); }
   else if(t.id==='wkPrev'){ week=addDays(week,-7); }
