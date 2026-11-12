@@ -250,6 +250,42 @@ table{border-radius:14px}
 .week .lrow select{flex:1;font-size:14px;padding:6px 8px}
 .week .meal{font-size:14px;padding:10px 12px}
 
+/* add sheet, shopping mode, today, info */
+.addbtn{font:inherit;font-size:13.5px;font-weight:600;flex:1;text-align:left;padding:7px 12px;border-radius:12px;border:1px dashed #c8cfc6;background:transparent;color:var(--green);cursor:pointer}
+.addbtn:hover{background:var(--green-soft);border-style:solid;border-color:var(--green-soft)}
+.addbtn.big{flex:none;width:100%;padding:12px;text-align:center}
+.addbtn .meta{font-weight:500}
+.sheetwrap{position:fixed;inset:0;z-index:40;background:rgba(23,33,28,.35);display:flex;align-items:flex-end;justify-content:center}
+.sheet{background:var(--card);width:min(560px,100%);max-height:88vh;overflow:auto;border-radius:22px 22px 0 0;padding:16px 16px calc(18px + var(--safe-bot));box-shadow:0 -12px 40px rgba(23,33,28,.2)}
+@media (min-width:641px){.sheetwrap{align-items:center}.sheet{border-radius:22px}}
+.sheethead{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}.sheethead b{font:700 18px var(--display)}
+.sheet h3{font:700 15px var(--display);margin:16px 0 8px}
+.picks{display:flex;flex-direction:column;gap:6px;margin-top:8px}
+.pick{display:flex;gap:12px;align-items:center;text-align:left;font:inherit;padding:10px 12px;border-radius:14px;border:1px solid var(--line);background:#fbfcfa;cursor:pointer;color:inherit}
+.pick:hover{border-color:var(--green)}
+.pick img{width:48px;height:48px;border-radius:10px;object-fit:cover;flex:none}
+.pick b{display:block;font-size:15px}.pick .meta{font-size:12.5px}
+#addQ{width:100%}
+.sheet input{font:inherit;padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:#fff;min-width:0}
+body.shopping{overflow:hidden}
+#shopModeEl{position:fixed;inset:0;z-index:45;background:var(--bg);overflow:auto;padding-top:var(--safe-top)}
+.shophead{position:sticky;top:0;display:flex;align-items:center;gap:12px;padding:12px 16px;background:rgba(243,245,241,.95);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+.shophead b{font:700 19px var(--display);flex:1}
+#shopModeEl h3{font:700 15px var(--display);margin:18px 16px 6px}
+.sitem{display:flex;gap:14px;align-items:center;margin:0 12px 6px;padding:14px;border-radius:14px;background:var(--card);border:1px solid var(--line);cursor:pointer}
+.sitem input{width:26px;height:26px;accent-color:var(--green);flex:none}
+.sitem b{display:block;font-size:16px}.sitem.done{opacity:.5}.sitem.done b{text-decoration:line-through}
+.today{display:grid;grid-template-columns:1.2fr 1.4fr 1fr auto;gap:18px;align-items:center;background:var(--card);border:1px solid var(--line);border-radius:22px;padding:18px 20px;margin:18px 0 12px}
+.today .tdin,.today .tnext{display:flex;flex-direction:column;gap:3px}
+.today .tdin b{font:700 18px var(--display)}
+.today .okline{color:var(--green);font-size:13.5px}.today .needprice{font-size:13.5px}
+.trow{display:flex;gap:10px;align-items:baseline;padding:2px 0}.trow>b{min-width:52px;font-size:13.5px}
+.tchip{display:inline-block;font-size:13px;margin:0 8px 2px 0}
+@media (max-width:900px){.today{grid-template-columns:1fr;gap:12px}}
+details.info{margin:0 0 10px}details.info summary{cursor:pointer;color:var(--muted);font-size:13px;list-style:none}
+details.info summary::-webkit-details-marker{display:none}details.info[open] summary{margin-bottom:6px}
+nav.tabs button em{display:none;font-style:normal}
+
 /* ===== iPhone (15 Pro 393pt, Air 420pt) ===== */
 nav.tabs button i{font-style:normal;display:none}
 :root{--safe-top:env(safe-area-inset-top,0px);--safe-bot:env(safe-area-inset-bottom,0px)}
@@ -314,7 +350,9 @@ nav.tabs button i{font-style:normal;display:none}
   #nutOut table td:nth-child(n+3) b,#nutOut table td:nth-child(n+3) .dot{font-size:15px}
   /* the household list has no headings */
   main table.nohead td{justify-content:flex-start;text-align:left}
-  .intro{display:none}
+  details.info .intro{display:block}
+  nav.tabs button span{display:none}nav.tabs button em{display:block}
+  nav.tabs button{font-size:10.5px}
   /* At Home: each item as a compact row instead of a squeezed table */
   #pantryList table{display:block;overflow:visible}
   #pantryList thead,#pantryList tr:first-child:has(th){display:none}
@@ -348,19 +386,20 @@ html.standalone header{padding-top:calc(6px + var(--safe-top))}
   </div>
   <div class="areas" id="areas"><button type="button" data-area="launch" class="homebtn">⌂ Home screen</button><span id="areaName"></span></div>
   <nav class="tabs" id="tabs">
-    <button data-p="plan" class="on"><i>🗓️</i><span>Plan &amp; shop</span></button>
-    <button data-p="pantry"><i>🧊</i><span>At Home</span></button>
-    <button data-p="useup"><i>🍳</i><span>Make it now</span></button>
-    <button data-p="recipes"><i>📖</i><span>Recipe box</span></button>
-    <button data-p="nutrition"><i>📊</i><span>Nutrition</span></button>
-    <button data-p="discover"><i>✨</i><span>Discover</span></button>
-    <button data-p="settings"><i>⚙️</i><span>Settings</span></button>
+    <button data-p="plan" class="on"><i>🗓️</i><span>Plan &amp; shop</span><em>Plan</em></button>
+    <button data-p="pantry"><i>🧊</i><span>At Home</span><em>Home</em></button>
+    <button data-p="useup"><i>🍳</i><span>Make it now</span><em>Cook</em></button>
+    <button data-p="recipes"><i>📖</i><span>Recipe box</span><em>Recipes</em></button>
+    <button data-p="nutrition"><i>📊</i><span>Nutrition</span><em>Food</em></button>
+    <button data-p="discover"><i>✨</i><span>Discover</span><em>Ideas</em></button>
+    <button data-p="settings"><i>⚙️</i><span>Settings</span><em>Settings</em></button>
   </nav>
 </header>
 
 <main>
   <section id="launcher">
     <div class="hello"><h2 id="helloText">Hello</h2><p class="meta" id="helloDate"></p></div>
+    <div id="todayCard"></div>
     <div class="tiles" id="tiles"></div>
   </section>
   <section id="soon"><div id="subTiles" class="tiles"></div><div class="empty" id="soonText"></div></section>
@@ -377,6 +416,7 @@ html.standalone header{padding-top:calc(6px + var(--safe-top))}
     <div class="week" id="week"></div>
     <h2>Shopping list for this week</h2>
     <div class="row">
+      <button class="btn primary" id="shopModeBtn" type="button">🛒 Shopping mode</button>
       <button class="btn primary" id="shareList">Share this list</button>
       <label class="meta"><input type="checkbox" id="hideStaples" checked> Hide pantry staples</label>
     </div>
@@ -968,6 +1008,21 @@ function renderTV(){
 document.addEventListener('click',async e=>{ const t=e.target.closest('#tvReload,[data-tv]'); if(!t) return; e.preventDefault();
   if(t.id==='tvReload'){ tvst=null; return renderLauncher(); }
   t.disabled=true; toast('Sending to the TV…'); const r=await tvSend(t.dataset.tv); t.disabled=false; toast(r||'No answer from the bridge. Is the PC on?',5000); tvStatus(); });
+function renderToday(){
+  const el=$('#todayCard'); if(!el) return;
+  const tonight=S.meals.find(m=>m.planned_for===TODAY&&m.meal==='dinner'&&rec(m.recipe_id));
+  let missing=[]; try{ const w=week; week=mondayOf(TODAY); missing=shopPlan().filter(o=>o.buy>0&&!STAPLES.has(o.i)&&o.uses.some(m=>m.planned_for===TODAY)).map(o=>o.i); week=w; }catch(e){}
+  const line=p=>{ const ms=personMeals(p,TODAY).filter(m=>m.when!=='Dinner');
+    return `<div class="trow"><b>${p}</b><span>${ms.length?ms.map(m=>`<span class="tchip">${m.when==='Snackies'?'🍪':m.when==='Breakfast'?'☀️':'🥪'} ${esc(m.scan||m.out?(m.note||'out'):m.r?.title||'')}</span>`).join(''):'<span class="meta">nothing logged yet</span>'}</span></div>`; };
+  el.innerHTML=`<div class="today">
+    <div class="tdin"><span class="meta">Tonight</span>${tonight?`<b>${tonight.leftover_of?'🍱 ':''}${esc(rec(tonight.recipe_id).title)}</b>
+        <span class="${missing.length?'needprice':'okline'}">${tonight.leftover_of?'Leftovers, nothing to buy':missing.length?`Still need ${missing.slice(0,4).map(esc).join(', ')}${missing.length>4?'…':''}`:'Everything is at home ✓'}</span>`
+      :`<b>Nothing planned</b><button class="btn small" data-add="${TODAY}||dinner" type="button">＋ Add dinner</button>`}</div>
+    <div class="tmeals">${PEOPLE.map(line).join('')}</div>
+    <div class="tnext"><span class="meta">Next up</span><span>${schedSummary().replace(/^Next: /,'')}</span></div>
+    <button class="btn small" data-goplan type="button">Open today's plan</button></div>`;
+}
+document.addEventListener('click',e=>{ if(!e.target.closest('[data-goplan]')) return; area='meals'; phoneDay=TODAY; week=mondayOf(TODAY); renderAll(); document.querySelector('[data-p="plan"]').click(); window.scrollTo(0,0); });
 function renderLauncher(){
   document.body.classList.toggle('launch',area==='launch'); document.body.classList.toggle('soon',area!=='launch'&&area!=='meals');
   const a=AREAS.find(x=>x.id===area); $('#areaName').textContent=a?`${a.ic} ${a.name}`:'';
@@ -976,6 +1031,7 @@ function renderLauncher(){
     const h=new Date().getHours(), mine=S.members.find(x=>x.user_id===me?.user_id)?.name||me?.name||'';
     $('#helloText').textContent=`${h<12?'Good morning':h<17?'Good afternoon':'Good evening'}${mine?', '+mine:''}`;
     $('#helloDate').textContent=new Date().toLocaleDateString(undefined,{weekday:'long',month:'long',day:'numeric'});
+    renderToday();
     $('#tiles').innerHTML=AREAS.map(x=>`<button class="tile ${x.live||x.subs||x.cal?'':'later'}" data-area="${x.id}" type="button"><span class="ic">${x.ic}</span><b>${x.name}</b>
       <span class="meta">${x.live?mealsSummary():x.id==='schedule'?schedSummary():esc(x.blurb)}</span>${x.live||x.subs||x.cal?'':'<span class="soonTag">Coming soon</span>'}</button>`).join('');
   } else if(a?.cal){
@@ -1006,6 +1062,17 @@ document.addEventListener('click',e=>{ const t=e.target.closest('[data-area]'); 
 document.addEventListener('click',e=>{ const t=e.target.closest('[data-pday]'); if(!t) return; phoneDay=t.dataset.pday;
   document.querySelectorAll('[data-pday]').forEach(b=>b.classList.toggle('on',b===t));
   document.querySelectorAll('#week .day').forEach(x=>x.classList.toggle('sel',x.dataset.d===phoneDay)); });
+// Swipe left/right on the day card to move between days
+(()=>{ let x0=null,y0=null;
+  document.addEventListener('touchstart',e=>{ if(!e.target.closest('#week')) return; x0=e.touches[0].clientX; y0=e.touches[0].clientY; },{passive:true});
+  document.addEventListener('touchend',e=>{ if(x0==null) return; const dx=e.changedTouches[0].clientX-x0, dy=e.changedTouches[0].clientY-y0; x0=null;
+    if(Math.abs(dx)<70||Math.abs(dy)>Math.abs(dx)*0.7) return;
+    const days=weekDays(), i=days.indexOf(phoneDay), j=Math.max(0,Math.min(6,i+(dx<0?1:-1))); if(j===i) return;
+    phoneDay=days[j]; document.querySelectorAll('[data-pday]').forEach(b=>b.classList.toggle('on',b.dataset.pday===phoneDay));
+    document.querySelectorAll('#week .day').forEach(x=>x.classList.toggle('sel',x.dataset.d===phoneDay)); },{passive:true});
+})();
+// Long explanations fold behind a small ⓘ so screens stay clean
+document.querySelectorAll('p.intro').forEach(p=>{ const d=document.createElement('details'); d.className='info'; d.innerHTML='<summary>ⓘ How this works</summary>'; p.parentNode.insertBefore(d,p); d.appendChild(p); });
 // ---- Which device is each person on? (recorded when they open the app) ----
 function deviceLabel(){
   const ua=navigator.userAgent, w=Math.min(screen.width,screen.height), h=Math.max(screen.width,screen.height), r=window.devicePixelRatio;
@@ -1064,7 +1131,7 @@ function renderPlan(){
           <select data-move="${m.id}" style="font-size:11.5px;padding:2px 4px;width:auto;margin:0"><option value="">Move…</option>${days.filter(x=>x!==d&&!hasDinner(x)).map(x=>`<option value="${x}">${dayName(x)}</option>`).join('')}</select>
           <button data-unplan="${m.id}" title="Remove">✕</button>
         </div></div>`}).join('')}
-      ${S.recipes.length&&!ms.some(m=>rec(m.recipe_id))?`<select data-addday="${d}"><option value="">+ Add dinner</option>${opts}</select>`:''}
+      ${!ms.some(m=>rec(m.recipe_id))?`<button class="addbtn big" data-add="${d}||dinner" type="button">＋ Add dinner</button>`:''}
       ${scansFor(d,null,'dinner').map(m=>scanLine(m).replace('lrow scanned','lrow').replace('<span class="lwhat">',`<b>${esc(m.person)}</b> <span class="lwhat">`)).join('')}
       <div class="lrow" style="gap:4px"><span class="meta">📷 dinner:</span>${PEOPLE.map(p=>`<button data-scanday="${d}" data-person="${p}" data-slot="dinner" title="Scan ${p}'s dinner">${p}</button>`).join('')}</div>
       <div class="lunch snackbox"><div class="lh">Snackies</div>${PEOPLE.map(p=>snackRows(d,p,opts)).join('')}</div>
@@ -1215,10 +1282,7 @@ function snackRows(d,p,opts){
   return `<div class="snacks"><b>${p}</b>${items.map(m=>{ const l=label(m);
       return l==null?`<div class="lrow"><input class="outnote" data-outnote="${m.id}" placeholder="🥡 What did you have?" enterkeyhint="done"><button data-unplan="${m.id}" title="Remove">✕</button></div>`
         :`<div class="lrow"><span class="lwhat">${l}${m.nutrition?.calories!=null&&isScan(m)?` <span class="meta">· ${Math.round(m.nutrition.calories)} cal</span>`:''}</span><button data-unplan="${m.id}" title="Remove">✕</button></div>`;}).join('')}
-    <div class="lrow"><select data-lunchset="${d}|${p}|snack"><option value="">${items.length?'Add another…':'Add…'}</option>
-      ${lo.length?`<optgroup label="Leftovers">${lo.map(x=>`<option value="lo:${x.id}">🍱 ${esc(rec(x.recipe_id).title)} (${leftoversOf(x)} left)</option>`).join('')}</optgroup>`:''}
-      <optgroup label="Out"><option value="out">🥡 Out / picked up / delivered</option></optgroup>
-      <optgroup label="Make a recipe">${opts}</optgroup></select>
+    <div class="lrow"><button class="addbtn" data-add="${d}|${p}|snack" type="button">＋ ${items.length?'Add another':'Add a snackie'}</button>
       <button data-scanday="${d}" data-person="${p}" data-slot="snack" title="Scan a snack">📷</button></div></div>`;
 }
 const scanLine=m=>`<div class="lrow scanned"><span class="lwhat">📷 ${esc(m.note||'')}${m.nutrition?.calories!=null?` <span class="meta">· ${Math.round(m.nutrition.calories)} cal</span>`:''}</span><button data-unplan="${m.id}" title="Remove">✕</button></div>`;
@@ -1235,11 +1299,47 @@ function lunchRow1(d,p,opts,meal='lunch'){
     return `<div class="lrow ${m.cooked_at?'cooked':''}"><b>${p}</b> <span class="lwhat">${what}</span>
       ${m.recipe_id&&!m.leftover_of?`<button data-cook="${m.id}" data-v="${m.cooked_at?0:1}" title="${m.cooked_at?'Undo cooked':'Mark cooked'}">${m.cooked_at?'↶':'✓'}</button>`:''}${scanBtn(d,p,meal)}<button data-unplan="${m.id}" title="Clear">✕</button></div>`; }
   const lo=leftoverMeals(d,1).filter(x=>!(isLunch(x)&&x.planned_for===d));
-  return `<div class="lrow"><b>${p}</b> <select data-lunchset="${d}|${p}|${meal}"><option value="">Add…</option>
-    ${lo.length?`<optgroup label="Leftovers">${lo.map(x=>`<option value="lo:${x.id}">🍱 ${esc(rec(x.recipe_id).title)} (${leftoversOf(x)} left)</option>`).join('')}</optgroup>`:''}
-    <optgroup label="Out"><option value="out">🥡 Out / picked up / delivered</option></optgroup>
-    <optgroup label="Make a recipe">${opts}</optgroup></select>${scanBtn(d,p,meal)}</div>`;
+  return `<div class="lrow"><b>${p}</b> <button class="addbtn" data-add="${d}|${p}|${meal}" type="button">＋ Add${lo.length?` <span class="meta">· ${lo.length} leftover${lo.length>1?'s':''}</span>`:''}</button>${scanBtn(d,p,meal)}</div>`;
 }
+// ---- Add sheet: one place to add any meal (leftovers · out · a recipe · scan) ----
+let addS=null;
+function openAdd(key){ const [d,p,meal]=key.split('|'); addS={d,p:p||null,meal,q:''}; renderAdd(); setTimeout(()=>$('#addQ')?.focus({preventScroll:true}),60); }
+function closeAdd(){ addS=null; renderAdd(); }
+function renderAdd(){
+  let el=$('#addSheet'); if(!addS){ el?.remove(); return; }
+  if(!el){ el=document.createElement('div'); el.id='addSheet'; el.className='sheetwrap'; document.body.appendChild(el); }
+  const {d,p,meal,q}=addS, dinner=meal==='dinner';
+  const lo=leftoverMeals(d,dinner?EAT:1).filter(x=>!(isLunch(x)&&x.planned_for===d));
+  const ql=q.toLowerCase();
+  const recs=S.recipes.filter(r=>!ql||r.title.toLowerCase().includes(ql)||r.ingredients.some(i=>i.includes(ql)))
+    .sort((a,b)=>(b.status==='past')-(a.status==='past')||(lastCooked(b.id)?.cooked_at||'').localeCompare(lastCooked(a.id)?.cooked_at||'')).slice(0,ql?20:8);
+  el.innerHTML=`<div class="sheet" role="dialog" aria-label="Add a meal">
+    <div class="sheethead"><b>${p?esc(p)+"'s ":''}${SLOT_LABEL[meal].toLowerCase()} · ${dayName(d,'long')}</b><button class="btn small" data-addx type="button">Close</button></div>
+    ${lo.length?`<h3>🍱 Leftovers</h3><div class="picks">${lo.map(x=>`<button type="button" class="pick" data-addpick="lo:${x.id}"><b>${esc(rec(x.recipe_id).title)}</b><span class="meta">${leftoversOf(x)} serving${leftoversOf(x)>1?'s':''} left · from ${dayName(x.planned_for,'long')}</span></button>`).join('')}</div>`:''}
+    ${dinner?'':`<h3>🥡 Out, picked up or delivered</h3><form class="row" data-addout style="margin:0"><input id="addOut" placeholder="What did you have? e.g. Sweetgreen bowl" enterkeyhint="done" style="flex:1"><button class="btn">Add</button></form>`}
+    <h3>🍳 Make something</h3>
+    <input id="addQ" type="search" placeholder="Search recipes or an ingredient" value="${esc(q)}">
+    <div class="picks">${recs.map(r=>`<button type="button" class="pick" data-addpick="r:${r.id}">${r.image_url?`<img src="${esc(r.image_url)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">`:''}<span><b>${esc(r.title)}</b><span class="meta">${r.status==='past'?(lastCooked(r.id)?'made '+ago(lastCooked(r.id).cooked_at):'in the recipe box'):'new to try'}</span></span></button>`).join('')||'<p class="meta">No recipes match.</p>'}</div>
+    <button type="button" class="btn" data-addscan style="margin-top:12px;width:100%">📷 Scan a barcode or label instead</button></div>`;
+}
+document.addEventListener('click',async e=>{
+  const a=e.target.closest('[data-add]'); if(a){ e.preventDefault(); return openAdd(a.dataset.add); }
+  if(!addS) return;
+  if(e.target.id==='addSheet'||e.target.closest('[data-addx]')) return closeAdd();
+  if(e.target.closest('[data-addscan]')){ const {d,p,meal}=addS; closeAdd(); return openScan(d,p||undefined,meal); }
+  const pk=e.target.closest('[data-addpick]'); if(!pk) return;
+  const {d,p,meal}=addS, v=pk.dataset.addpick; closeAdd();
+  if(meal==='dinner'){
+    if(v.startsWith('lo:')) await DB.planLeftovers(S.meals.find(x=>String(x.id)===v.slice(3)),d); else await DB.plan(v.slice(2),d);
+  } else await setLunch(d,p,v.startsWith('lo:')?v:v.slice(2),meal);
+  toast(`Added to ${p?p+"'s ":''}${SLOT_LABEL[meal].toLowerCase()}`); renderAll();
+});
+document.addEventListener('input',e=>{ if(e.target.id==='addQ'&&addS){ addS.q=e.target.value; const pos=e.target.selectionStart; renderAdd(); const i=$('#addQ'); i.focus(); i.setSelectionRange(pos,pos); } });
+document.addEventListener('submit',async e=>{ if(!e.target.matches?.('[data-addout]')) return; e.preventDefault(); e.stopImmediatePropagation();
+  const note=$('#addOut').value.trim(); if(!note||!addS) return; const {d,p,meal}=addS; closeAdd();
+  const {data}=await sb.from('meal_plan').insert({planned_for:d,meal,person:p,recipe_id:null,note}).select('id').single();
+  toast(`Added: ${note}`); await DB.load(); renderAll(); if(data?.id) saveOutNote(data.id,note); },true);
+document.addEventListener('keydown',e=>{ if(e.key==='Escape'&&addS) closeAdd(); });
 async function setLunch(d,p,v,meal='lunch'){
   const base={planned_for:d,meal,person:p};
   if(v==='out') return DB.run(sb.from('meal_plan').insert({...base,recipe_id:null}));
@@ -1337,7 +1437,37 @@ function renderTomorrow(){
   }
   $('#tomorrow').innerHTML=`<div class="card" style="margin:10px 0 14px">${head}${body}</div>`;
 }
+const AISLES=[['🥬','Produce',/onion|garlic|shallot|lemon|lime|basil|parsley|cilantro|dill|mint|thyme|rosemary|sage|chive|spinach|kale|lettuce|tomato|potato|carrot|celery|ginger|mushroom|scallion|cucumber|pepper|jalape|serrano|chile|avocado|apple|zucchini|asparagus|squash|berries|leek|cabbage|broccoli|snap peas|edamame|herb/],
+  ['🧀','Dairy & eggs',/milk|butter|cream|yogurt|egg|cheese|parmesan|feta|gruyere|monterey|paneer|ricotta|mozzarella|cheddar|cotija|provolone|labneh/],
+  ['🥩','Meat & fish',/chicken|turkey|beef|pork|bacon|salmon|tuna|shrimp|fish|sausage|anchov/],
+  ['🍞','Bakery',/bread|tortilla|pita|bun|roll|baguette/],
+  ['🧊','Frozen',/puff pastry|frozen/],
+  ['🥫','Pantry',/./]];
+const aisleOf=i=>AISLES.find(a=>a[2].test(i));
+let shopMode=false;
+function renderShopMode(){
+  let el=$('#shopModeEl'); if(!shopMode){ el?.remove(); document.body.classList.remove('shopping'); return; }
+  if(!el){ el=document.createElement('div'); el.id='shopModeEl'; document.body.appendChild(el); }
+  document.body.classList.add('shopping');
+  const rows=shopPlan().filter(o=>!STAPLES.has(o.i)); window._shop=Object.fromEntries(rows.map(o=>[o.i,o]));
+  const got=new Set(S.have.filter(h=>h.week_start===week).map(h=>h.ingredient));
+  const items=rows.filter(o=>o.buy>0||got.has(o.i));
+  const left=items.filter(o=>o.buy>0).length;
+  el.innerHTML=`<div class="shophead"><button class="btn small" id="shopModeX" type="button">Done</button><b>🛒 ${left?`${left} to get`:'All done'}</b><span class="meta">${shortDate(week)}–${shortDate(addDays(week,6))}</span></div>
+    ${items.length?AISLES.map(([ic,name])=>{ const xs=items.filter(o=>aisleOf(o.i)[1]===name).sort((a,b)=>(a.buy>0?0:1)-(b.buy>0?0:1)||a.i.localeCompare(b.i)); if(!xs.length) return '';
+      return `<h3>${ic} ${name}</h3>${xs.map(o=>{ const done=o.buy<=0;
+        return `<label class="sitem ${done?'done':''}"><input type="checkbox" ${done?'checked':''} data-shopcheck="${esc(o.i)}"><span><b>${esc(cap(o.i))}</b><span class="meta">${done?'in the cart':`${o.pk.u==='each'&&o.pk.label==='1'?o.buy:`${o.buy} × ${esc(o.pk.label)}`}${o.pk.price!=null?` · $${(o.buy*o.pk.price).toFixed(2)}`:''}`}</span></span></label>`; }).join('')}`; }).join('')
+      :'<p class="meta" style="padding:20px">Nothing to buy this week.</p>'}
+    <p class="meta" style="padding:0 16px 24px">Checking an item adds it to At Home.</p>`;
+}
+document.addEventListener('click',e=>{ if(e.target.id==='shopModeBtn'){ shopMode=true; renderShopMode(); } if(e.target.id==='shopModeX'){ shopMode=false; renderShopMode(); } });
+document.addEventListener('change',async e=>{ const i=e.target.dataset?.shopcheck; if(i===undefined) return;
+  const o=window._shop?.[i], pk=pkgOf(i);
+  e.target.closest('.sitem')?.classList.toggle('done',e.target.checked);
+  if(e.target.checked){ if(o) await DB.bought(o,true); } else await DB.bought(o&&o.buy>0?o:{i,buy:1,pk,D:pk.u},false);
+  renderShopMode(); });
 function renderShop(){
+  if(shopMode) renderShopMode();
   if(!S.recipes.length){ $('#shopList').innerHTML='<div class="empty">The recipe box is empty. Add a recipe by pasting its link under <b>Recipe box</b>, then put it on a day.</div>'; return; }
   const hideSt=$('#hideStaples').checked;
   const rows=shopPlan().filter(o=>!(hideSt&&STAPLES.has(o.i)));
@@ -1609,7 +1739,10 @@ document.addEventListener('click',async e=>{
   else if(t.id==='wkNext'){ week=addDays(week,7); }
   else if(t.id==='wkToday'){ week=mondayOf(TODAY); }
   else if(t.dataset.cook){ await DB.setCooked(t.dataset.cook,t.dataset.v==='1'); }
-  else if(t.dataset.unplan){ await DB.unplan(t.dataset.unplan); }
+  else if(t.dataset.unplan){ const row={...S.meals.find(x=>String(x.id)===String(t.dataset.unplan))}; await DB.unplan(t.dataset.unplan);
+    if(row.planned_for){ const what=row.recipe_id?rec(row.recipe_id)?.title:row.note||'that'; delete row.id;
+      toast(`Removed ${what||'that'}`,6000,{label:'Undo',fn:async()=>{ if(row.recipe_id&&!rec(row.recipe_id)) return toast("Can't bring that back");
+        await DB.run(sb.from('meal_plan').insert(row)); toast('Put back'); renderAll(); }}); } }
   else if(t.dataset.left){ await DB.run(sb.from('meal_plan').update({left_after:+t.dataset.n}).eq('id',t.dataset.left)); const m=S.meals.find(x=>String(x.id)===t.dataset.left); toast(+t.dataset.n?`${t.dataset.n} servings of ${rec(m.recipe_id).title} saved as leftovers`:'No leftovers'); }
   else if(t.dataset.lunch){ const m=S.meals.find(x=>String(x.id)===t.dataset.lunch); await DB.lunch(m,+t.dataset.d); if(+t.dataset.d>0) toast(`Lunch logged: ${leftoversOf(S.meals.find(x=>x.id===m.id))} servings of ${rec(m.recipe_id).title} left`); }
   else if(t.dataset.lo){ const m=S.meals.find(x=>String(x.id)===t.dataset.lo); await DB.planLeftovers(m,addDays(TODAY,1)); toast('Leftovers planned for tomorrow'); }
