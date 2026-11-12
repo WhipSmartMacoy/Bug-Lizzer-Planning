@@ -287,9 +287,33 @@ nav.tabs button i{font-style:normal;display:none}
   .lrow{font-size:15px;gap:6px}.lrow b{min-width:56px}
   .lrow select{font-size:15px!important}
   .meal{padding:10px}
-  /* tables scroll sideways inside their card instead of widening the page */
+  /* no sideways scrolling: every table becomes stacked, labelled rows */
   html,body{overflow-x:hidden;max-width:100%}
-  main table{display:block;overflow-x:auto;-webkit-overflow-scrolling:touch;max-width:100%;font-size:14px}
+  main div[style*="overflow:auto"]{overflow:visible!important}
+  main table{display:block;width:100%;font-size:14.5px;border:0;background:transparent}
+  main table tbody{display:block}
+  main table tr.thead{display:none}
+  main table tr{display:block;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:10px 12px;margin:0 0 8px}
+  main table td{display:block;padding:5px 0;border:0;text-align:right;min-width:0;overflow-wrap:anywhere}
+  main table td[data-label]::before{content:attr(data-label);float:left;margin-right:12px;font-size:12.5px;font-weight:600;color:var(--muted);text-align:left}
+  main table td::after{content:"";display:block;clear:both}
+  main table td .btn{margin-left:8px}
+  main table td:first-child{font-size:16px;font-weight:700;text-align:left}
+  main table td:first-child::before{display:none}
+  main table td:empty{display:none}
+  main table td.num{font-variant-numeric:tabular-nums}
+  main table tr.have{opacity:.6}
+  /* Nutrition: the seven numbers sit in a tidy grid under each day */
+  #nutOut table tr{display:grid;grid-template-columns:repeat(4,1fr);gap:6px 10px}
+  #nutOut table td{display:flex;flex-direction:column-reverse;align-items:flex-start;text-align:left;gap:0;padding:0}
+  #nutOut table td::before{font-size:11.5px;float:none;margin:0}
+  #nutOut table td::after{display:none}
+  #nutOut table tr.noday,#nutOut table tr.thead{display:none}
+  #nutOut table td:nth-child(1),#nutOut table td:nth-child(2){grid-column:1/-1;flex-direction:column;align-items:flex-start}
+  #nutOut table td:nth-child(2)::before{display:none}
+  #nutOut table td:nth-child(n+3) b,#nutOut table td:nth-child(n+3) .dot{font-size:15px}
+  /* the household list has no headings */
+  main table.nohead td{justify-content:flex-start;text-align:left}
   .intro{display:none}
   /* At Home: each item as a compact row instead of a squeezed table */
   #pantryList table{display:block;overflow:visible}
@@ -297,6 +321,7 @@ nav.tabs button i{font-style:normal;display:none}
   #pantryList tbody{display:block}
   #pantryList tr{display:grid;grid-template-columns:1fr auto;gap:2px 10px;padding:10px 12px;border-bottom:1px solid var(--line);align-items:center}
   #pantryList td{display:block;padding:0;border:0}
+  #pantryList td::before{display:none!important}
   #pantryList td:nth-child(1){font-weight:700}
   #pantryList td:nth-child(2){text-align:right}
   #pantryList td:nth-child(3){grid-column:1}
@@ -1000,6 +1025,16 @@ async function recordDevice(){
   await sb.from('members').update({device:d,device_seen_at:new Date().toISOString()}).eq('user_id',me.user_id);
 }
 document.documentElement.classList.toggle('standalone',!!(matchMedia('(display-mode: standalone)').matches||navigator.standalone));
+// Phone tables: copy each column heading onto its cells so rows can stack as labelled cards.
+function labelTables(root=document){
+  root.querySelectorAll('main table').forEach(t=>{
+    const head=t.querySelector('tr'); if(!head||!head.querySelector('th')) { t.classList.add('nohead'); return; }
+    const names=[...head.children].map(th=>th.textContent.trim());
+    head.classList.add('thead');
+    t.querySelectorAll('tr').forEach(tr=>{ if(tr===head) return; [...tr.children].forEach((td,i)=>{ if(!td.dataset.label&&names[i]) td.dataset.label=names[i]; }); });
+  });
+}
+new MutationObserver(()=>{ clearTimeout(window.__lt); window.__lt=setTimeout(()=>labelTables(),30); }).observe(document.body,{childList:true,subtree:true});
 function renderWho(){ $('#who').innerHTML=me?`${av(me.user_id)}<span>${esc(me.name)}</span><button class="btn small" id="signOut">Sign out</button>`:''; }
 
 let phoneDay=TODAY;
@@ -1267,7 +1302,7 @@ function renderNutrition(){
         return `<div class="${st}"><b>${fmtN(tot[k],u)}</b><span>${l} this week</span><small>${counted?fmtN((tot[k]||0)/counted,u)+' a day':''}</small></div>`}).join('')}</div>
 
       <div style="overflow:auto"><table><tr><th>Day</th><th>Meals</th>${MAC.map(([k,l])=>`<th class="num">${l}</th>`).join('')}</tr>
-      ${perDay.map(x=>`<tr class="${x.d>TODAY?'have':''}"><td><b>${dayName(x.d)}</b> <span class="meta">${shortDate(x.d)}${x.d>TODAY?' · planned':''}</span></td>
+      ${perDay.map(x=>`<tr class="${x.d>TODAY?'have':''} ${x.ms.length?'':'noday'}"><td><b>${dayName(x.d)}</b> <span class="meta">${shortDate(x.d)}${x.d>TODAY?' · planned':''}</span></td>
         <td>${x.ms.length?x.ms.map(m=>`<div class="meta"><b>${m.when}:</b> ${m.scan?`📷 ${esc(m.note||'')}`:m.out?`🥡 ${esc(m.note||'out')}${m.n?' <span class="meta">(est.)</span>':''}`:(m.left?'🍱 ':'')+esc(m.r?.title||'')+(m.r&&!m.r.nutrition?' <span class="needprice">· no info</span>':'')}</div>`).join(''):'<span class="meta">—</span>'}</td>
         ${MAC.map(([k,,u])=>{ const st=T&&T[k]&&x.t[k]!=null&&x.d<=TODAY?status(x.t[k],T[k],k):'';
           return `<td class="num"><span class="dot ${st}">${x.t[k]!=null?fmtN(x.t[k],u):'<span class="meta">—</span>'}</span></td>`}).join('')}</tr>`).join('')}
