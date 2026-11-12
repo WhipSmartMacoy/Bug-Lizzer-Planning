@@ -826,6 +826,11 @@ const DB = {
     S.recipes=r.data||[]; S.prices=Object.fromEntries((p.data||[]).map(x=>[x.ingredient,x]));
     S.meals=m.data||[]; S.have=h.data||[]; S.members=mem.data||[]; S.activity=act.data||[];
     byId=Object.fromEntries(S.recipes.map(x=>[String(x.id),x]));
+    // Anything we've cooked belongs in the Recipe box (fixes recipes marked cooked before this was automatic)
+    const cookedNew=[...new Set(S.meals.filter(x=>x.cooked_at&&x.recipe_id).map(x=>String(x.recipe_id)))].filter(id=>byId[id]&&byId[id].status!=='past');
+    if(cookedNew.length&&!DB._healing){ DB._healing=true;
+      for(const id of cookedNew){ const {error}=await sb.from('recipes').update({status:'past'}).eq('id',byId[id].id); if(!error) byId[id].status='past'; }
+      DB._healing=false; }
   },
   async run(q){ const {error}=await q; if(error) toast('Could not save: '+error.message); await DB.load(); return !error; },
   plan:(recipe_id,day)=>hasDinner(day)?(toast(`${dayName(day,'long')} already has a dinner`),false):DB.run(sb.from('meal_plan').insert({recipe_id,planned_for:day})),
@@ -838,11 +843,13 @@ const DB = {
   move:(id,day)=>DB.run(sb.from('meal_plan').update({planned_for:day}).eq('id',id)),
   async setCooked(id,v){
     const m=S.meals.find(x=>String(x.id)===String(id)); const r=m&&rec(m.recipe_id);
+    const wasNew=v&&r&&r.status!=='past';
+    if(wasNew) await sb.from('recipes').update({status:'past'}).eq('id',r.id);   // cooked → it goes in the Recipe box
     const ok=await DB.run(sb.from('meal_plan').update(v?{cooked_at:new Date().toISOString(),cooked_by:me.user_id}:{cooked_at:null,cooked_by:null}).eq('id',id));
     if(ok&&r&&!m.leftover_of){ const used=await DB.usePantry(r, v?-1:1);   // cooking uses ingredients up; undo puts them back
       const names=used.map(x=>x.ingredient), skipped=Object.keys(r.amounts||{}).filter(i=>!names.includes(i)&&pantryOf(i));
-      toast(!names.length?(v?'Cooked ✓ (none of its ingredients are tracked in At Home)':'Un-cooked'):
-        (v?'Cooked ✓ · used from At Home: ':'Put back in At Home: ')+names.slice(0,6).join(', ')+(names.length>6?` +${names.length-6} more`:'')+(skipped.length?` · couldn't measure ${skipped.join(', ')}`:'')+(v&&servingsNum(r)>eaten(m)?' · tap how much is left on the card':''),6000); }
+      toast((wasNew?'📖 Added to the Recipe box · ':'')+(!names.length?(v?'Cooked ✓ (none of its ingredients are tracked in At Home)':'Un-cooked'):
+        (v?'Cooked ✓ · used from At Home: ':'Put back in At Home: ')+names.slice(0,6).join(', ')+(names.length>6?` +${names.length-6} more`:'')+(skipped.length?` · couldn't measure ${skipped.join(', ')}`:'')+(v&&servingsNum(r)>eaten(m)?' · tap how much is left on the card':'')),6000); }
     return ok;
   },
   // Add (sign=1) or remove (sign=-1) a recipe's amounts from the pantry, for items the pantry tracks.
