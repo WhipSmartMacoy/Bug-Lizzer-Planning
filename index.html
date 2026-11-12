@@ -358,6 +358,9 @@ html.standalone header{padding-top:calc(6px + var(--safe-top))}
 
   <section class="panel" id="settings">
     <div class="card" style="max-width:760px;margin-bottom:16px"><h2 style="margin-top:0">Household</h2><div id="people"></div></div>
+    <div class="card" style="max-width:760px;margin-bottom:16px"><h2 style="margin-top:0">Your password</h2>
+      <p class="meta" style="margin:0 0 8px">Needed to sign in from the app on your iPhone home screen (email links open in Safari instead).</p>
+      <form id="setPwForm" class="row" style="margin:0"><input type="text" autocomplete="username" style="display:none"><input id="newPw" type="password" minlength="8" autocomplete="new-password" placeholder="New password (8+ characters)" style="flex:1 1 240px"><button class="btn primary">Save password</button></form></div>
     <div class="card" style="max-width:760px;margin-bottom:16px"><h2 style="margin-top:0">Shared calendar</h2>
       <p class="meta" style="margin:0 0 8px">The public iCloud calendar link (Calendar → share → Public Calendar). Only household members can see it.</p>
       <form id="calForm" class="row" style="margin:0"><input id="calUrl" type="text" placeholder="webcal://p…-caldav.icloud.com/published/2/…" style="flex:1 1 320px"><button class="btn primary">Save</button></form>
@@ -706,8 +709,15 @@ async function startAuth(){
   gate(''); boot();
 }
 function showSignIn(){
-  gate(`<h1>Bug-Lizzer Planning</h1><p class="meta">Sign in with your email. We'll send a one-time link, no password needed.</p>
-  <form id="signInForm"><input type="email" id="email" required placeholder="you@example.com" autocomplete="email"><button class="btn primary">Email me a sign-in link</button></form>`);
+  const homeApp=document.documentElement.classList.contains('standalone');
+  gate(`<h1>Bug-Lizzer Planning</h1>
+  <form id="pwForm" style="display:flex;flex-direction:column;gap:8px">
+    <input type="email" id="pwEmail" required placeholder="you@example.com" autocomplete="username">
+    <input type="password" id="pwPass" required placeholder="Password" autocomplete="current-password">
+    <button class="btn primary">Sign in</button><p class="meta" id="pwMsg" style="margin:0"></p></form>
+  <details ${homeApp?'':'open'} style="margin-top:14px"><summary class="meta">No password yet? Get an email link</summary>
+    <p class="meta">We'll email a one-time link. ${homeApp?'<b>On iPhone the link opens in Safari, not this home-screen app</b>: sign in there, set a password under Meals → Settings, then come back here.':'After signing in you can set a password (Meals → Settings) to use the iPhone home-screen app.'}</p>
+    <form id="signInForm"><input type="email" id="email" required placeholder="you@example.com" autocomplete="email"><button class="btn">Email me a sign-in link</button></form></details>`);
 }
 function showNamePrompt(email){
   gate(`<h1>Welcome!</h1><p class="meta">Signed in as ${esc(email)}. What should the household call you?</p>
@@ -1418,7 +1428,18 @@ document.addEventListener('submit',async e=>{
   if(f.id==='signInForm'){
     const email=$('#email').value.trim();
     const {error}=await sb.auth.signInWithOtp({email,options:{emailRedirectTo:location.origin+location.pathname}});
-    gate(error?`<h1>Hmm</h1><p class="meta">${esc(error.message)}</p><button class="btn" id="backToSignIn">Try again</button>`:`<h1>Check your email</h1><p class="meta">A sign-in link is on its way to <b>${esc(email)}</b>. Open it on this device.</p>`);
+    gate(error?`<h1>Hmm</h1><p class="meta">${esc(error.message)}</p><button class="btn" id="backToSignIn">Try again</button>`:`<h1>Check your email</h1><p class="meta">A sign-in link is on its way to <b>${esc(email)}</b>. Open it on this device. Once you're in, set a password under Meals → Settings so the iPhone home-screen app can sign in too.</p><button class="btn small" id="backToSignIn" type="button">Back</button>`);
+  }
+  if(f.id==='pwForm'){
+    $('#pwMsg').textContent='Signing in…';
+    const {error}=await sb.auth.signInWithPassword({email:$('#pwEmail').value.trim(),password:$('#pwPass').value});
+    if(error){ $('#pwMsg').textContent=/invalid/i.test(error.message)?"That email and password don't match. No password yet? Use the email link below first.":error.message; return; }
+    startAuth();
+  }
+  if(f.id==='setPwForm'){
+    const pw=$('#newPw').value; if(pw.length<8) return toast('Use at least 8 characters');
+    const {error}=await sb.auth.updateUser({password:pw});
+    toast(error?'Could not set it: '+error.message:'Password saved. Use it to sign in on the iPhone home-screen app.',5000); if(!error) $('#newPw').value='';
   }
   if(f.id==='nameForm'){
     const { data:{ user } } = await sb.auth.getUser();
