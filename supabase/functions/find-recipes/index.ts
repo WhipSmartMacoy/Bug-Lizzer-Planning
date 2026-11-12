@@ -166,7 +166,9 @@ Deno.serve(async (req) => {
         uses, fresh: uses.filter((i) => fresh.includes(i)), need: ings.filter((i) => !have.includes(i)) };
     }))).filter(Boolean) as any[];
     results.sort((a, b) => b.fresh.length - a.fresh.length || b.uses.length - a.uses.length || a.need.length - b.need.length);
-    return json({ results: results.slice(0, 15), searched: queries, candidates: cand.length, perSite });
+    const sites = pages.map(({ s, html }, k) => `${s.name}: ${html.length}b/${lists[k].length}`);
+    return json({ results: results.slice(0, 15), searched: queries, candidates: cand.length, perSite, sites,
+      sample: Object.fromEntries(pages.slice(0, SITES.length).map(({ s, html }) => [s.name, (html.match(/href="[^"]*recipe[^"]*"/g) || []).slice(0, 4)])) });
   } catch (e) {
     return json({ error: "Search failed: " + (e as Error).message }, 200);
   }
