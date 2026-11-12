@@ -907,9 +907,8 @@ function renderNutrition(){
     const miss=perDay.reduce((a,x)=>a+x.missing,0);
     return `<div class="card" style="margin-bottom:16px">
       <div class="row" style="justify-content:space-between;align-items:baseline"><h2 style="margin:0">${p}</h2><span class="meta">${counted} day${counted===1?'':'s'} with meals this week${miss?` · ${miss} meal${miss>1?'s':''} without nutrition info`:''}</span></div>
-      ${T?`<p class="meta" style="margin:4px 0 0">${T.p.height_in>=12?Math.floor(T.p.height_in/12)+'′'+Math.round(T.p.height_in%12)+'″':''} · ${T.p.weight_lb} lb · BMI ${T.bmi.toFixed(1)} · goal ${T.p.goal_lb||T.p.weight_lb} lb · daily target <b>${T.calories.toLocaleString()} cal, ${T.protein} g protein, ${T.carbs} g carbs, ${T.fat} g fat</b></p>`:''}
       <div class="macros">${MAC.slice(0,4).map(([k,l,u])=>{const t=wkT(k), st=t?status(tot[k]||0,T[k]*soFar,k):'';
-        return `<div class="${st}"><b>${fmtN(tot[k],u)}</b><span>${l} this week${t?` · of ${fmtN(t,u)}`:''}</span><small>${T?fmtN(T[k],u)+' a day target':''}</small></div>`}).join('')}</div>
+        return `<div class="${st}"><b>${fmtN(tot[k],u)}</b><span>${l} this week</span><small>${counted?fmtN((tot[k]||0)/counted,u)+' a day':''}</small></div>`}).join('')}</div>
 
       <div style="overflow:auto"><table><tr><th>Day</th><th>Meals</th>${MAC.map(([k,l])=>`<th class="num">${l}</th>`).join('')}</tr>
       ${perDay.map(x=>`<tr class="${x.d>TODAY?'have':''}"><td><b>${dayName(x.d)}</b> <span class="meta">${shortDate(x.d)}${x.d>TODAY?' · planned':''}</span></td>
@@ -917,7 +916,7 @@ function renderNutrition(){
         ${MAC.map(([k,,u])=>{ const st=T&&T[k]&&x.t[k]!=null&&x.d<=TODAY?status(x.t[k],T[k],k):'';
           return `<td class="num"><span class="dot ${st}">${x.t[k]!=null?fmtN(x.t[k],u):'<span class="meta">—</span>'}</span></td>`}).join('')}</tr>`).join('')}
       <tr><td><b>Week</b></td><td></td>${MAC.map(([k,,u])=>`<td class="num"><b class="dot ${T&&T[k]?status(tot[k]||0,T[k]*soFar,k):''}">${fmtN(tot[k],u)}</b></td>`).join('')}</tr>
-      ${T?`<tr><td class="meta">Target</td><td class="meta">a day / a week</td>${MAC.map(([k,,u])=>`<td class="num meta">${T[k]!=null?fmtN(T[k],u)+'<br>'+fmtN(T[k]*7,u):'—'}</td>`).join('')}</tr>`:''}</table></div></div>`;
+      </table></div></div>`;
   }).join('')+'<p class="meta"><span class="dot ok">●</span> on track &nbsp; <span class="dot under">●</span> under &nbsp; <span class="dot over">●</span> over · weeks compare against the days so far.</p><p class="meta">Nutrition is per serving as listed on each recipe page (NYT Cooking calculates it). Pantry staples you add or skip aren\'t reflected.</p>';
 }
 document.addEventListener('click',e=>{ const t=e.target.closest('#nutPrev,#nutNext,#nutToday'); if(!t) return;
