@@ -43,6 +43,10 @@ body.soon nav.tabs, body.soon main>.panel{display:none!important}
 .caldate{display:flex;flex-direction:column}.caldate span{font-size:12px;color:var(--muted)}.caldate.today b{color:var(--green)}
 .calev{display:grid;grid-template-columns:72px 1fr;gap:8px;padding:3px 0;font-size:14px}.calev .t{color:var(--muted);font-size:13px}
 @media (max-width:640px){.calday{grid-template-columns:1fr;gap:4px}}
+.scenes{grid-column:1/-1;display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
+.scene{display:flex;flex-direction:column;gap:6px;text-align:left;font:inherit;color:#fff;background:linear-gradient(135deg,#1d2b6b,#3b4fb8);border:0;border-radius:18px;padding:18px;cursor:pointer;min-height:120px;box-shadow:var(--shadow)}
+.scene[data-scene=rest]{background:linear-gradient(135deg,#2a2438,#5b4a7a)}
+.scene .ic{font-size:30px}.scene b{font-size:22px;letter-spacing:.02em}.scene .meta{color:rgba(255,255,255,.8);font-size:12.5px}
 .tile .soonTag{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
 .areas span{padding:4px 10px;border-radius:99px;border:1px solid var(--line);color:var(--muted)}
 .areas span.on{background:var(--ink);color:#fff;border-color:var(--ink)}
@@ -692,7 +696,9 @@ function card(r, extra=''){
 // ---- Home screen: the app opens here ----
 const AREAS=[
   {id:'meals',ic:'🍽️',name:'Meals',live:true},
-  {id:'home',ic:'🏠',name:'Home',blurb:'Entertainment and lights',subs:[
+  {id:'home',ic:'🏠',name:'Home',blurb:'Scenes, entertainment and lights',scenes:[
+    {id:'jeopardy',ic:'🎯',name:'JEOPARDY!',steps:['Lights: game-night scene','LG TV: on, open Disney+','Play the newest JEOPARDY! episode we haven\'t watched']},
+    {id:'rest',ic:'🌙',name:'Rest Mode',steps:['Lights: dim and warm','LG TV: off']}],subs:[
     {id:'entertainment',ic:'📺',name:'Entertainment',blurb:'The LG TV: power, volume, inputs and apps'},
     {id:'lights',ic:'💡',name:'Lights',blurb:'Philips Hue: rooms, scenes and brightness'}]},
   {id:'schedule',ic:'📅',name:'Schedule & Travel',blurb:'What\'s coming up, and trips',subs:[
@@ -749,13 +755,16 @@ function renderLauncher(){
   } else if(a?.subs){
     const sb=a.subs.find(x=>x.id===sub);
     $('#areaName').innerHTML=sb?`<a href="#" data-area="${a.id}">${a.ic} ${a.name}</a> › ${sb.ic} ${sb.name}`:`${a.ic} ${a.name}`;
-    $('#subTiles').innerHTML=sb?'':a.subs.map(x=>`<button class="tile" data-sub="${x.id}" type="button"><span class="ic">${x.ic}</span><b>${x.name}</b><span class="meta">${esc(x.blurb)}</span>${x.live?`<span class="meta">${schedSummary()}</span>`:`<span class="soonTag">${x.tag||'Not connected yet'}</span>`}</button>`).join('');
+    $('#subTiles').innerHTML=sb?'':(a.scenes?`<div class="scenes">${a.scenes.map(x=>`<button class="scene" data-scene="${x.id}" type="button"><span class="ic">${x.ic}</span><b>${esc(x.name)}</b><span class="meta">${x.steps.map(esc).join(' · ')}</span></button>`).join('')}</div>`:'')+a.subs.map(x=>`<button class="tile" data-sub="${x.id}" type="button"><span class="ic">${x.ic}</span><b>${x.name}</b><span class="meta">${esc(x.blurb)}</span>${x.live?`<span class="meta">${schedSummary()}</span>`:`<span class="soonTag">${x.tag||'Not connected yet'}</span>`}</button>`).join('');
     $('#soonText').style.display=sb?'':'none';
     if(sb?.id==='schedule'){ $('#soonText').className='schedwrap'; renderSchedule(); return; }
     $('#soonText').className='empty';
     if(sb) $('#soonText').innerHTML=sb.tag?`<div style="font-size:40px">${sb.ic}</div><b>${sb.name}</b> is coming soon.<br>${esc(sb.blurb)}.`:`<div style="font-size:40px">${sb.ic}</div><b>${sb.name}</b> isn't connected yet.<br>${esc(sb.blurb)} will show here once it's linked to the house.`;
   } else if(!a?.live){ $('#subTiles').innerHTML=''; $('#soonText').style.display=''; $('#soonText').innerHTML=`<div style="font-size:40px">${a.ic}</div><b>${a.name}</b> is coming soon.<br>${esc(a.blurb)}.`; }
 }
+document.addEventListener('click',e=>{ const t=e.target.closest('[data-scene]'); if(!t) return;
+  const sc=AREAS.find(a=>a.id==='home').scenes.find(x=>x.id===t.dataset.scene);
+  toast(`${sc.name} isn't connected yet. Once the lights and TV are linked, this will run: ${sc.steps.join(', ')}.`,6000); });
 document.addEventListener('click',e=>{ const t=e.target.closest('[data-sub]'); if(!t) return; sub=t.dataset.sub; renderLauncher(); window.scrollTo(0,0); });
 document.addEventListener('click',e=>{ const t=e.target.closest('[data-area]'); if(!t) return; e.preventDefault(); area=t.dataset.area; sub=null; renderLauncher(); window.scrollTo(0,0); });
 function renderWho(){ $('#who').innerHTML=me?`${av(me.user_id)}<span>${esc(me.name)}</span><button class="btn small" id="signOut">Sign out</button>`:''; }
