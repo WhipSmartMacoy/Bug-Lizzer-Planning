@@ -1,0 +1,8 @@
+{
+  "name": "bug-lizzer-tv-bridge",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Lets the Bug-Lizzer Planning app control the LG TV on the home network.",
+  "main": "bridge.js",
+  "dependencies": { "lgtv2": "^1.6.3" }
+}
