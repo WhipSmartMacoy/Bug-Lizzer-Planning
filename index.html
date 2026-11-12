@@ -1368,7 +1368,7 @@ function renderAdd(){
   el.innerHTML=`<div class="sheet" role="dialog" aria-label="Add a meal">
     <div class="sheethead"><b>${p?esc(p)+"'s ":''}${SLOT_LABEL[meal].toLowerCase()} · ${dayName(d,'long')}</b><button class="btn small" data-addx type="button">Close</button></div>
     ${lo.length?`<h3>🍱 Leftovers</h3><div class="picks">${lo.map(x=>`<button type="button" class="pick" data-addpick="lo:${x.id}"><b>${esc(rec(x.recipe_id).title)}</b><span class="meta">${leftoversOf(x)} serving${leftoversOf(x)>1?'s':''} left · from ${dayName(x.planned_for,'long')}</span></button>`).join('')}</div>`:''}
-    ${dinner?`<h3>🫙 Scrunge</h3><form class="row" data-addscr style="margin:0"><input id="addScr" placeholder="Whatever's around (optional), e.g. eggs and toast" enterkeyhint="done" style="flex:1"><button class="btn primary">Scrunge</button></form>`:''}
+    ${dinner?`<h3>🫙 Scrunge</h3><form class="row" data-addscr style="margin:0"><input id="addScr" placeholder="What's around? (optional)" enterkeyhint="done" style="flex:1"><button class="btn primary">Scrunge</button></form>`:''}
     ${dinner?'':`<h3>🥡 Out, picked up or delivered</h3><form class="row" data-addout style="margin:0"><input id="addOut" placeholder="What did you have? e.g. Sweetgreen bowl" enterkeyhint="done" style="flex:1"><button class="btn">Add</button></form>`}
     <h3>🍳 Make something</h3>
     <input id="addQ" type="search" placeholder="Search recipes or an ingredient" value="${esc(q)}">
