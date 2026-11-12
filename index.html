@@ -255,6 +255,7 @@ table{border-radius:14px}
 .addbtn:hover{background:var(--green-soft);border-style:solid;border-color:var(--green-soft)}
 .addbtn.big{flex:none;width:100%;padding:12px;text-align:center}
 .addbtn .meta{font-weight:500}
+.sheetwrap[hidden]{display:none!important}
 .sheetwrap{position:fixed;inset:0;z-index:40;background:rgba(23,33,28,.35);display:flex;align-items:flex-end;justify-content:center}
 .sheet{background:var(--card);width:min(560px,100%);max-height:88vh;overflow:auto;border-radius:22px 22px 0 0;padding:16px 16px calc(18px + var(--safe-bot));box-shadow:0 -12px 40px rgba(23,33,28,.2)}
 @media (min-width:641px){.sheetwrap{align-items:center}.sheet{border-radius:22px}}
@@ -267,6 +268,35 @@ table{border-radius:14px}
 .pick b{display:block;font-size:15px}.pick .meta{font-size:12.5px}
 #addQ{width:100%}
 .sheet input{font:inherit;padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:#fff;min-width:0}
+.hometop{display:flex;gap:8px;margin:4px 0 10px}
+#homeQ{flex:1;min-width:0;font:inherit;padding:11px 14px;border:1px solid var(--line);border-radius:14px;background:#fff}
+.homefilt{display:grid;grid-template-columns:repeat(4,1fr);gap:4px;margin-bottom:14px;background:#e8ece6;padding:4px;border-radius:14px}
+.homefilt button{font:inherit;font-size:13px;padding:7px 2px;border-radius:10px;border:0;background:none;color:inherit;cursor:pointer;white-space:nowrap;display:flex;flex-direction:column;align-items:center;line-height:1.25}
+.homefilt button.on{background:var(--card);box-shadow:0 1px 3px rgba(23,33,28,.12);font-weight:600}
+.homefilt button span{opacity:.55;font-size:11.5px;font-weight:500}
+.hgroup{margin:0 0 18px}
+.hgroup>h2{display:flex;align-items:baseline;gap:8px;font-size:16px;margin:0 0 6px}
+.hgroup>h2 .meta{font-family:var(--body,inherit);font-size:13px;font-weight:500}
+.hlist{background:var(--card);border:1px solid var(--line);border-radius:16px;overflow:hidden}
+.hitem{border-top:1px solid var(--line)}.hitem:first-child{border-top:0}
+.hrow{display:flex;align-items:center;gap:10px;width:100%;padding:10px 14px;font:inherit;text-align:left;background:none;border:0;color:inherit;cursor:pointer}
+.hrow b{flex:1;font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hrow .amt{color:var(--muted,#5b6660);font-size:14px;white-space:nowrap}
+.hrow .chev{opacity:.35;transition:transform .2s}.hitem.open .chev{transform:rotate(90deg)}
+.hitem.open{background:#f7f9f6}
+.hmore{padding:0 14px 14px;display:flex;flex-direction:column;gap:10px}
+.hmore .row{margin:0;gap:6px;align-items:center}
+.hmore input[type=number]{width:90px;font:inherit;padding:8px 10px;border:1px solid var(--line);border-radius:10px}
+.hmore .meta{font-size:12.5px}
+.hstaples summary{list-style:none;cursor:pointer;padding:11px 14px;border-top:1px solid var(--line);font-size:13.5px;color:var(--muted,#5b6660)}
+.hstaples summary::-webkit-details-marker{display:none}
+.hstaples[open] summary{background:#fafbf9}
+.hstaples .stchips{display:flex;flex-wrap:wrap;gap:6px;padding:4px 14px 14px}
+.hstaples .stchips button{font:inherit;font-size:13px;padding:5px 10px;border-radius:99px;border:1px solid var(--line);background:#fff;color:inherit;cursor:pointer}
+.addform{display:flex;flex-direction:column;gap:8px}
+.addform select{font:inherit;padding:9px 8px;border:1px solid var(--line);border-radius:12px;background:#fff;min-width:0}
+.pick .pickic{font-size:24px;width:40px;text-align:center;flex:none}
+label.pick{cursor:pointer}
 body.shopping{overflow:hidden}
 #shopModeEl{position:fixed;inset:0;z-index:45;background:var(--bg);overflow:auto;padding-top:var(--safe-top)}
 .shophead{position:sticky;top:0;display:flex;align-items:center;gap:12px;padding:12px 16px;background:rgba(243,245,241,.95);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
@@ -425,19 +455,31 @@ html.standalone header{padding-top:calc(6px + var(--safe-top))}
 
   <section class="panel" id="pantry">
     <p class="intro"><b>What's already at home</b>, sorted into the fridge, freezer and pantry. Buying from the shopping list adds here, and marking a meal as cooked takes its ingredients out, so leftovers (like half a carton of broth) count toward the next recipe. Adjust anything that's off.</p>
-    <form id="pantryAdd" class="row">
-      <input type="text" id="panIng" list="ingList" placeholder="Ingredient" required style="flex:1 1 200px">
-      <datalist id="ingList"></datalist>
-      <input type="number" id="panQ" step="any" min="0" placeholder="Amount" required style="width:110px">
-      <select id="panU"></select>
-      <select id="panLoc"><option value="">Where? (auto)</option><option value="fridge">🧊 Fridge</option><option value="freezer">❄️ Freezer</option><option value="pantry">🥫 Pantry</option></select>
-      <button class="btn primary">Add / update</button>
-    </form>
-    <div class="row" style="margin:6px 0 4px">
-      <label class="btn" for="receiptFile">📷 Scan a receipt</label>
-      <input type="file" id="receiptFile" accept="image/*" capture="environment" hidden>
-      <button class="btn" id="usualsToggle" type="button">⭐ Add from our usual Fairway items</button>
+    <div class="hometop">
+      <input type="search" id="homeQ" placeholder="Search what's at home" autocomplete="off">
+      <button class="btn primary" type="button" id="homeAddBtn">＋ Add</button>
     </div>
+    <div class="homefilt" id="homeFilt"></div>
+    <div class="sheetwrap" id="homeAddSheet" hidden><div class="sheet">
+      <div class="sheethead"><b>Add to At Home</b><button class="btn small" type="button" id="homeAddClose">Done</button></div>
+      <h3>Type it in</h3>
+      <form id="pantryAdd" class="addform">
+        <input type="text" id="panIng" list="ingList" placeholder="Ingredient" required>
+        <datalist id="ingList"></datalist>
+        <div class="row" style="gap:6px;margin:0">
+          <input type="number" id="panQ" step="any" min="0" placeholder="Amount" required style="flex:1 1 90px">
+          <select id="panU"></select>
+          <select id="panLoc"><option value="">Where? (auto)</option><option value="fridge">🧊 Fridge</option><option value="freezer">❄️ Freezer</option><option value="pantry">🥫 Pantry</option></select>
+        </div>
+        <button class="btn primary">Add / update</button>
+      </form>
+      <h3>Or bring in a shop</h3>
+      <div class="picks">
+        <label class="pick" for="receiptFile"><span class="pickic">📷</span><span><b>Scan a receipt</b><span class="meta">Take a photo and review what it found</span></span></label>
+        <button class="pick" id="usualsToggle" type="button"><span class="pickic">⭐</span><span><b>Our usual Fairway items</b><span class="meta">Tick what you bought</span></span></button>
+      </div>
+      <input type="file" id="receiptFile" accept="image/*" capture="environment" hidden>
+    </div></div>
     <div id="usualsPanel"></div>
     <div id="receiptReview"></div>
     <div id="pantryList"></div>
@@ -1629,23 +1671,41 @@ function renderSettings(){
 }
 const UNITS={cups:['ml',236.6],tbsp:['ml',14.79],tsp:['ml',4.93],'fl oz':['ml',29.57],quarts:['ml',946],ml:['ml',1],oz:['g',28.35],lb:['g',453.6],g:['g',1],each:['each',1],packages:['pkg',1]};
 const unitOpts=()=>Object.keys(UNITS).map(u=>`<option>${u}</option>`).join('');
-let editingPantry=null;
+let editingPantry=null, homeLoc='all', homeQ='';
 function renderPantry(){
   if(!$('#panU').options.length) $('#panU').innerHTML=unitOpts();
   $('#ingList').innerHTML=allIngredients().map(i=>`<option value="${esc(i)}">`).join('');
   const onHand=S.pantry.filter(p=>+p.q>0);
-  const groups=['fridge','freezer','pantry'].map(loc=>[loc,onHand.filter(p=>storeOf(p.ingredient)===loc).sort((a,b)=>(b.q>0)-(a.q>0)||a.ingredient.localeCompare(b.ingredient))]);
-  const rowHtml=p=>{const pk=pkgOf(p.ingredient), loc=storeOf(p.ingredient);
-    return `<tr class="${+p.q>0?'':'have'}"><td><span class="${+p.q>0?'':'name'}">${esc(cap(p.ingredient))}</span></td>
-    <td>${editingPantry===p.ingredient?`<form class="row" data-panedit="${esc(p.ingredient)}" style="margin:0;gap:6px"><input name="q" type="number" step="any" min="0" value="${round(+p.q,100)}" style="width:90px"><select name="u">${Object.keys(UNITS).map(u=>`<option ${UNITS[u][0]===p.u&&UNITS[u][1]===1?'selected':''}>${u}</option>`).join('')}</select><button class="btn small primary">Save</button></form>`
-      :`<b>${esc(fmtAmt(+p.q,p.u))}</b>${pk.u===p.u&&pk.q&&+p.q>0&&pk.u!=='pkg'&&pk.label!=='1'?` <span class="meta">(${round(+p.q/pk.q,4)} of a ${esc(pk.label)})</span>`:''}${!p.location&&FRIDGE_ONCE_OPEN.has(p.ingredient)&&storeOf(p.ingredient)==='fridge'?' <span class="meta">· opened</span>':''}`}</td>
-    <td><select data-moveto="${esc(p.ingredient)}" style="font-size:12.5px;padding:4px 6px">${['fridge','freezer','pantry'].map(l=>`<option value="${l}" ${l===loc?'selected':''}>${STORE_ICON[l]} ${cap(l)}</option>`).join('')}</select></td>
-    <td class="meta">${p.updated_by?esc(nameOf(p.updated_by))+', ':''}${ago(p.updated_at)}</td>
-    <td class="num"><a href="#" data-panedit-open="${esc(p.ingredient)}">edit</a> · <a href="#" data-panzero="${esc(p.ingredient)}">used up</a></td></tr>`};
-  $('#pantryList').innerHTML=onHand.length?groups.map(([loc,rows])=>`<h2 style="margin-top:18px">${STORE_ICON[loc]} ${cap(loc)} <span class="meta" style="font:inherit;font-size:13px">${rows.filter(r=>+r.q>0).length} item${rows.filter(r=>+r.q>0).length===1?'':'s'}</span></h2>`+
-    (rows.length?`<table><tr><th>Item</th><th>On hand</th><th>Kept in</th><th>Updated</th><th></th></tr>${rows.map(rowHtml).join('')}</table>`:`<p class="meta">Nothing in ${STORE_LABEL[loc]} yet.</p>`)).join('')
-    :'<div class="empty">Nothing tracked yet. Tap <b>Got it ✓</b> on the shopping list after shopping, or add what you already have above.</div>';
+  const LOCS=['fridge','freezer','pantry'];
+  const count=l=>onHand.filter(p=>l==='all'||storeOf(p.ingredient)===l).length;
+  $('#homeFilt').innerHTML=onHand.length?['all',...LOCS].map(l=>`<button type="button" data-homeloc="${l}" class="${homeLoc===l?'on':''}">${l==='all'?'All':STORE_ICON[l]+' '+cap(l)}<span>${count(l)}</span></button>`).join(''):'';
+  const q=homeQ.trim().toLowerCase();
+  const shown=onHand.filter(p=>(homeLoc==='all'||storeOf(p.ingredient)===homeLoc)&&(!q||p.ingredient.includes(q)));
+  const amtOf=p=>{const pk=pkgOf(p.ingredient);
+    return esc(fmtAmt(+p.q,p.u))+(pk.u===p.u&&pk.q&&pk.u!=='pkg'&&pk.label!=='1'?` <span class="meta">· ${round(+p.q/pk.q,4)} ${esc(pk.label)}</span>`:'')+(!p.location&&FRIDGE_ONCE_OPEN.has(p.ingredient)&&storeOf(p.ingredient)==='fridge'?' <span class="meta">· opened</span>':'');};
+  const item=p=>{const loc=storeOf(p.ingredient), open=editingPantry===p.ingredient;
+    return `<div class="hitem ${open?'open':''}"><button type="button" class="hrow" data-hopen="${esc(p.ingredient)}"><b>${esc(cap(p.ingredient))}</b><span class="amt">${amtOf(p)}</span><span class="chev">›</span></button>${open?`<div class="hmore">
+      <form class="row" data-panedit="${esc(p.ingredient)}"><input name="q" type="number" step="any" min="0" value="${round(+p.q,100)}" aria-label="Amount"><select name="u">${Object.keys(UNITS).map(u=>`<option ${UNITS[u][0]===p.u&&UNITS[u][1]===1?'selected':''}>${u}</option>`).join('')}</select><button class="btn small primary">Save</button></form>
+      <div class="row"><select data-moveto="${esc(p.ingredient)}" aria-label="Kept in">${LOCS.map(l=>`<option value="${l}" ${l===loc?'selected':''}>${STORE_ICON[l]} ${cap(l)}</option>`).join('')}</select><button type="button" class="btn small" data-panzero="${esc(p.ingredient)}">Used up</button></div>
+      <span class="meta">Updated ${p.updated_by?'by '+esc(nameOf(p.updated_by))+' ':''}${ago(p.updated_at)}</span></div>`:''}</div>`;};
+  const group=(loc,rows)=>{const main=rows.filter(p=>!optional(p.ingredient)), basics=rows.filter(p=>optional(p.ingredient));
+    const sortN=(a,b)=>a.ingredient.localeCompare(b.ingredient); main.sort(sortN); basics.sort(sortN);
+    const openBasic=basics.some(p=>p.ingredient===editingPantry)||!!q;
+    return `<div class="hgroup">${homeLoc==='all'?`<h2>${STORE_ICON[loc]} ${cap(loc)} <span class="meta">${rows.length}</span></h2>`:''}<div class="hlist">${main.map(item).join('')}${basics.length?(main.length||!q?`<details class="hstaples" ${openBasic?'open':''}><summary>＋ ${basics.length} staple${basics.length>1?'s':''}, herb${basics.length>1?'s':''} & spice${basics.length>1?'s':''}</summary>${openBasic?basics.map(item).join(''):`<div class="stchips">${basics.map(p=>`<button type="button" data-hopen="${esc(p.ingredient)}">${esc(cap(p.ingredient))}</button>`).join('')}</div>`}</details>`:basics.map(item).join('')):''}</div></div>`;};
+  if(!onHand.length){ $('#pantryList').innerHTML='<div class="empty">Nothing tracked yet. Tap <b>＋ Add</b> to type things in or scan a receipt, or tap <b>Got it ✓</b> on the shopping list after shopping.</div>'; return; }
+  if(!shown.length){ $('#pantryList').innerHTML=`<div class="empty">${q?`No “${esc(q)}” at home${homeLoc!=='all'?' in '+STORE_LABEL[homeLoc]:''}.`:`Nothing in ${STORE_LABEL[homeLoc]}.`}</div>`; return; }
+  $('#pantryList').innerHTML=LOCS.map(l=>[l,shown.filter(p=>storeOf(p.ingredient)===l)]).filter(([,r])=>r.length).map(([l,r])=>group(l,r)).join('');
 }
+document.addEventListener('input',e=>{ if(e.target.id==='homeQ'){ homeQ=e.target.value; renderPantry(); } });
+document.addEventListener('click',e=>{
+  const t=e.target.closest('[data-homeloc],[data-hopen],#homeAddBtn,#homeAddClose,#homeAddSheet,#usualsToggle,label[for=receiptFile]'); if(!t) return;
+  const sheet=$('#homeAddSheet');
+  if(t.dataset.homeloc){ homeLoc=t.dataset.homeloc; editingPantry=null; renderPantry(); }
+  else if(t.dataset.hopen){ editingPantry=editingPantry===t.dataset.hopen?null:t.dataset.hopen; renderPantry(); }
+  else if(t.id==='homeAddBtn'){ sheet.hidden=false; setTimeout(()=>$('#panIng').focus({preventScroll:true}),60); }
+  else if(t.id==='homeAddClose'||(t.id==='homeAddSheet'&&e.target===sheet)){ sheet.hidden=true; }
+  else if(t.id==='usualsToggle'||t.matches('label[for=receiptFile]')){ sheet.hidden=true; }
+});
 function renderAll(){
   renderLauncher();
   if(!window.__devRec&&me&&S.members.length){ window.__devRec=1; recordDevice(); }
@@ -1730,7 +1790,7 @@ document.addEventListener('click',async e=>{
   else if(t.dataset.bought){ const o=window._shop?.[t.dataset.bought]; if(o){ await DB.bought(o,true); toast(`Added to At Home: ${o.buy} × ${o.pk.label}`);} }
   else if(t.dataset.unbuy){ e.preventDefault(); const o=window._shop?.[t.dataset.unbuy]; const pk=pkgOf(t.dataset.unbuy); await DB.bought(o||{i:t.dataset.unbuy,buy:1,pk,D:pk.u},false); }
   else if(t.dataset.panzero){ e.preventDefault(); const p={...pantryOf(t.dataset.panzero)}, where=STORE_LABEL[storeOf(p.ingredient)];
-    const row=t.closest('tr'); if(row){ row.style.transition='opacity .3s'; row.style.opacity='.2'; }
+    const row=t.closest('.hitem,tr'); if(row){ row.style.transition='opacity .3s'; row.style.opacity='.2'; }
     await DB.removePantry(p.ingredient);
     toast(`${cap(p.ingredient)} is used up and removed from ${where}`,6000,{label:'Undo',fn:async()=>{ await DB.run(sb.from('pantry').upsert({ingredient:p.ingredient,q:p.q,u:p.u,location:p.location||null,updated_by:me.user_id,updated_at:new Date().toISOString()})); toast(`${cap(p.ingredient)} is back in At Home`); renderAll(); }}); }
   else if(t.dataset.paneditOpen){ e.preventDefault(); editingPantry=t.dataset.paneditOpen; renderPantry(); return; }
@@ -1838,7 +1898,7 @@ document.addEventListener('change',e=>{
 document.addEventListener('input',e=>{ if(e.target.id==='usualsSearch') renderUsuals(); });
 document.addEventListener('click',e=>{
   const t=e.target.closest('#usualsToggle,#usualsClose,#usualsReview,#reviewSave,#reviewCancel,[data-usual]'); if(!t) return;
-  if(t.id==='usualsToggle'){ usualsOpen=!usualsOpen; renderUsuals(); }
+  if(t.id==='usualsToggle'){ usualsOpen=true; renderUsuals(); setTimeout(()=>$('#usualsPanel').scrollIntoView({behavior:'smooth',block:'start'}),50); }
   else if(t.id==='usualsClose'){ usualsOpen=false; renderUsuals(); }
   else if(t.dataset.usual){ const n=t.dataset.usual; usualsPick.has(n)?usualsPick.delete(n):usualsPick.add(n); renderUsuals(); }
   else if(t.id==='usualsReview'){ review={source:'usuals',rows:S.usuals.filter(u=>usualsPick.has(u.name)).map(u=>toReviewRow({usual:u,line:u.name}))}; usualsOpen=false; renderUsuals(); renderReview(); }
