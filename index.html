@@ -701,9 +701,7 @@ const AREAS=[
     {id:'rest',ic:'🌙',name:'Rest Mode',steps:['Lights: dim and warm','LG TV: off']}],subs:[
     {id:'entertainment',ic:'📺',name:'Entertainment',blurb:'The LG TV: power, volume, inputs and apps'},
     {id:'lights',ic:'💡',name:'Lights',blurb:'Philips Hue: rooms, scenes and brightness'}]},
-  {id:'schedule',ic:'📅',name:'Schedule & Travel',blurb:'What\'s coming up, and trips',subs:[
-    {id:'schedule',ic:'📅',name:'Schedule',blurb:'Our shared iCloud calendar',live:true},
-    {id:'travel',ic:'✈️',name:'Travel',blurb:'Trips, packing and plans',tag:'Coming soon'}]},
+  {id:'schedule',ic:'📅',name:'Schedule',blurb:'Our shared iCloud calendar',cal:true},
   {id:'finance',ic:'💵',name:'Finance',blurb:'Bills and spending'}];
 let area='launch', sub=null;
 function mealsSummary(){
@@ -750,8 +748,10 @@ function renderLauncher(){
     const h=new Date().getHours(), mine=S.members.find(x=>x.user_id===me?.user_id)?.name||me?.name||'';
     $('#helloText').textContent=`${h<12?'Good morning':h<17?'Good afternoon':'Good evening'}${mine?', '+mine:''}`;
     $('#helloDate').textContent=new Date().toLocaleDateString(undefined,{weekday:'long',month:'long',day:'numeric'});
-    $('#tiles').innerHTML=AREAS.map(x=>`<button class="tile ${x.live||x.subs?'':'later'}" data-area="${x.id}" type="button"><span class="ic">${x.ic}</span><b>${x.name}</b>
-      <span class="meta">${x.live?mealsSummary():x.id==='schedule'?schedSummary():esc(x.blurb)}</span>${x.live||x.subs?'':'<span class="soonTag">Coming soon</span>'}</button>`).join('');
+    $('#tiles').innerHTML=AREAS.map(x=>`<button class="tile ${x.live||x.subs||x.cal?'':'later'}" data-area="${x.id}" type="button"><span class="ic">${x.ic}</span><b>${x.name}</b>
+      <span class="meta">${x.live?mealsSummary():x.id==='schedule'?schedSummary():esc(x.blurb)}</span>${x.live||x.subs||x.cal?'':'<span class="soonTag">Coming soon</span>'}</button>`).join('');
+  } else if(a?.cal){
+    $('#subTiles').innerHTML=''; $('#soonText').style.display=''; $('#soonText').className='schedwrap'; renderSchedule();
   } else if(a?.subs){
     const sb=a.subs.find(x=>x.id===sub);
     $('#areaName').innerHTML=sb?`<a href="#" data-area="${a.id}">${a.ic} ${a.name}</a> › ${sb.ic} ${sb.name}`:`${a.ic} ${a.name}`;
