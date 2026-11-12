@@ -38,6 +38,11 @@ body.soon nav.tabs, body.soon main>.panel{display:none!important}
 .tile .meta{font-size:13px}
 .tile.later{opacity:.7}
 @media (max-width:640px){.tiles{grid-template-columns:1fr 1fr;gap:10px}#tiles .tile:last-child:nth-child(even){grid-column:auto}.tile{min-height:118px;padding:14px;border-radius:14px}.tile[data-area=meals]{grid-column:1/-1}.tile .ic{font-size:28px}.tile b{font-size:17px}.hello h2{font-size:25px;margin-top:16px}}
+.schedwrap{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:16px;text-align:left}
+.calday{display:grid;grid-template-columns:120px 1fr;gap:12px;padding:10px 0;border-top:1px solid var(--line)}
+.caldate{display:flex;flex-direction:column}.caldate span{font-size:12px;color:var(--muted)}.caldate.today b{color:var(--green)}
+.calev{display:grid;grid-template-columns:72px 1fr;gap:8px;padding:3px 0;font-size:14px}.calev .t{color:var(--muted);font-size:13px}
+@media (max-width:640px){.calday{grid-template-columns:1fr;gap:4px}}
 .tile .soonTag{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
 .areas span{padding:4px 10px;border-radius:99px;border:1px solid var(--line);color:var(--muted)}
 .areas span.on{background:var(--ink);color:#fff;border-color:var(--ink)}
@@ -272,6 +277,10 @@ a{color:var(--green)}
 
   <section class="panel" id="settings">
     <div class="card" style="max-width:760px;margin-bottom:16px"><h2 style="margin-top:0">Household</h2><div id="people"></div></div>
+    <div class="card" style="max-width:760px;margin-bottom:16px"><h2 style="margin-top:0">Shared calendar</h2>
+      <p class="meta" style="margin:0 0 8px">The public iCloud calendar link (Calendar → share → Public Calendar). Only household members can see it.</p>
+      <form id="calForm" class="row" style="margin:0"><input id="calUrl" type="text" placeholder="webcal://p…-caldav.icloud.com/published/2/…" style="flex:1 1 320px"><button class="btn primary">Save</button></form>
+      <p class="meta" id="calStatus" style="margin:6px 0 0"></p></div>
     <div class="card" style="max-width:760px">
       <h2 style="margin:0">Prices</h2>
       <p class="meta" style="margin:0">Each ingredient is linked to one product on <a href="https://shop.fairwaymarket.com/store/fairway/storefront" target="_blank" rel="noopener">shop.fairwaymarket.com</a>. Refreshing re-checks every linked product page for today's price and flags anything out of stock.</p>
@@ -687,7 +696,7 @@ const AREAS=[
     {id:'entertainment',ic:'📺',name:'Entertainment',blurb:'The LG TV: power, volume, inputs and apps'},
     {id:'lights',ic:'💡',name:'Lights',blurb:'Philips Hue: rooms, scenes and brightness'}]},
   {id:'schedule',ic:'📅',name:'Schedule & Travel',blurb:'What\'s coming up, and trips',subs:[
-    {id:'schedule',ic:'📅',name:'Schedule',blurb:'Who\'s doing what, when',tag:'Coming soon'},
+    {id:'schedule',ic:'📅',name:'Schedule',blurb:'Our shared iCloud calendar',live:true},
     {id:'travel',ic:'✈️',name:'Travel',blurb:'Trips, packing and plans',tag:'Coming soon'}]},
   {id:'finance',ic:'💵',name:'Finance',blurb:'Bills and spending'}];
 let area='launch', sub=null;
@@ -697,6 +706,36 @@ function mealsSummary(){
   const home=S.pantry.filter(p=>+p.q>0).length;
   return [tonight?`Tonight: ${esc(rec(tonight.recipe_id).title)}${tonight.leftover_of?' (leftovers)':''}`:'Nothing planned for tonight', `${buy} to buy this week · ${home} items at home`].join('<br>');
 }
+// ---- Schedule: the shared iCloud calendar (read through the calendar-feed function) ----
+let cal=null, calBusy=false;
+async function loadCal(force){
+  if(calBusy||(!force&&cal&&Date.now()-cal.at<10*60e3)) return;
+  calBusy=true; const {data,error}=await sb.functions.invoke('calendar-feed',{body:{days:60}}); calBusy=false;
+  cal={at:Date.now(),...(data||{}),error:error?"Couldn't load the calendar.":data?.error};
+  renderLauncher();
+}
+const evStart=e=>e.allDay?parse(e.start):e.utc?new Date(e.start):new Date(e.start.replace(/Z$/,''));
+const evDay=e=>e.allDay?e.start:iso(evStart(e));
+const evTime=e=>e.allDay?'All day':evStart(e).toLocaleTimeString(undefined,{hour:'numeric',minute:'2-digit'});
+function schedSummary(){
+  if(!cal){ loadCal(); return 'Loading the calendar…'; }
+  if(cal.error) return esc(cal.error);
+  const next=(cal.events||[]).filter(e=>evDay(e)>=TODAY&&(e.allDay||evStart(e)>new Date()))[0];
+  return next?`Next: ${esc(next.title)} · ${evDay(next)===TODAY?'today':evDay(next)===addDays(TODAY,1)?'tomorrow':dayName(evDay(next),'long')} ${next.allDay?'':evTime(next)}`:'Nothing coming up';
+}
+function renderSchedule(){
+  const el=$('#soonText'); if(!cal){ el.innerHTML='<p class="meta">Loading the calendar…</p>'; loadCal(); return; }
+  if(cal.error){ el.innerHTML=`<p class="meta">${esc(cal.error)}</p><button class="btn small" id="calReload" type="button">Try again</button>`; return; }
+  const by={}; for(const e of cal.events||[]){ const d=evDay(e); if(d<TODAY) continue; (by[d]=by[d]||[]).push(e); }
+  const days=Object.keys(by).sort();
+  el.innerHTML=`<div class="row" style="justify-content:space-between;align-items:baseline"><h2 style="margin:0">${esc(cal.name||'Calendar')}</h2>
+    <span class="meta">from iCloud · updated ${ago(cal.fetched_at||cal.at)} <a href="#" id="calReload">refresh</a></span></div>
+    ${days.length?days.map(d=>`<div class="calday"><div class="caldate ${d===TODAY?'today':''}"><b>${d===TODAY?'Today':d===addDays(TODAY,1)?'Tomorrow':dayName(d,'long')}</b><span>${shortDate(d)}</span></div>
+      <div class="calevs">${by[d].sort((a,b)=>(a.allDay?0:1)-(b.allDay?0:1)||evStart(a)-evStart(b)).map(e=>`<div class="calev"><span class="t">${evTime(e)}</span><span><b>${esc(e.title)}</b>${e.location?`<br><span class="meta">${esc(e.location)}</span>`:''}</span></div>`).join('')}</div></div>`).join('')
+      :'<p class="meta">Nothing on the calendar in the next 60 days.</p>'}
+    <p class="meta" style="margin-top:12px">Showing the next 60 days. Add or change events in Apple Calendar; they show up here.</p>`;
+}
+document.addEventListener('click',e=>{ if(e.target.id==='calReload'){ e.preventDefault(); cal=null; renderLauncher(); loadCal(true); } });
 function renderLauncher(){
   document.body.classList.toggle('launch',area==='launch'); document.body.classList.toggle('soon',area!=='launch'&&area!=='meals');
   const a=AREAS.find(x=>x.id===area); $('#areaName').textContent=a?`${a.ic} ${a.name}`:'';
@@ -706,12 +745,14 @@ function renderLauncher(){
     $('#helloText').textContent=`${h<12?'Good morning':h<17?'Good afternoon':'Good evening'}${mine?', '+mine:''}`;
     $('#helloDate').textContent=new Date().toLocaleDateString(undefined,{weekday:'long',month:'long',day:'numeric'});
     $('#tiles').innerHTML=AREAS.map(x=>`<button class="tile ${x.live||x.subs?'':'later'}" data-area="${x.id}" type="button"><span class="ic">${x.ic}</span><b>${x.name}</b>
-      <span class="meta">${x.live?mealsSummary():esc(x.blurb)}</span>${x.live||x.subs?'':'<span class="soonTag">Coming soon</span>'}</button>`).join('');
+      <span class="meta">${x.live?mealsSummary():x.id==='schedule'?schedSummary():esc(x.blurb)}</span>${x.live||x.subs?'':'<span class="soonTag">Coming soon</span>'}</button>`).join('');
   } else if(a?.subs){
     const sb=a.subs.find(x=>x.id===sub);
     $('#areaName').innerHTML=sb?`<a href="#" data-area="${a.id}">${a.ic} ${a.name}</a> › ${sb.ic} ${sb.name}`:`${a.ic} ${a.name}`;
-    $('#subTiles').innerHTML=sb?'':a.subs.map(x=>`<button class="tile" data-sub="${x.id}" type="button"><span class="ic">${x.ic}</span><b>${x.name}</b><span class="meta">${esc(x.blurb)}</span><span class="soonTag">${x.tag||'Not connected yet'}</span></button>`).join('');
+    $('#subTiles').innerHTML=sb?'':a.subs.map(x=>`<button class="tile" data-sub="${x.id}" type="button"><span class="ic">${x.ic}</span><b>${x.name}</b><span class="meta">${esc(x.blurb)}</span>${x.live?`<span class="meta">${schedSummary()}</span>`:`<span class="soonTag">${x.tag||'Not connected yet'}</span>`}</button>`).join('');
     $('#soonText').style.display=sb?'':'none';
+    if(sb?.id==='schedule'){ $('#soonText').className='schedwrap'; renderSchedule(); return; }
+    $('#soonText').className='empty';
     if(sb) $('#soonText').innerHTML=sb.tag?`<div style="font-size:40px">${sb.ic}</div><b>${sb.name}</b> is coming soon.<br>${esc(sb.blurb)}.`:`<div style="font-size:40px">${sb.ic}</div><b>${sb.name}</b> isn't connected yet.<br>${esc(sb.blurb)} will show here once it's linked to the house.`;
   } else if(!a?.live){ $('#subTiles').innerHTML=''; $('#soonText').style.display=''; $('#soonText').innerHTML=`<div style="font-size:40px">${a.ic}</div><b>${a.name}</b> is coming soon.<br>${esc(a.blurb)}.`; }
 }
@@ -1152,7 +1193,18 @@ function renderActivity(){
 }
 const isFair = l => /^https:\/\/shop\.fairwaymarket\.com\/store\/fairway\/products\//.test(l||'');
 let lastRefresh=null;
+async function renderCalSetting(){
+  const el=$('#calStatus'); if(!el) return;
+  const {data}=await sb.from('app_settings').select('value,updated_at').eq('key','ical_url').maybeSingle();
+  el.textContent=data?.value?`Linked ✓ (…${data.value.slice(-8)}) · updated ${ago(data.updated_at)}`:'No calendar linked yet.';
+}
+document.addEventListener('submit',async e=>{ if(e.target.id!=='calForm') return; e.preventDefault(); e.stopImmediatePropagation();
+  const v=$('#calUrl').value.trim(); if(!/^(webcal|https):\/\//i.test(v)) return toast('Paste the webcal:// or https:// calendar link');
+  const {error}=await sb.from('app_settings').upsert({key:'ical_url',value:v,updated_at:new Date().toISOString()});
+  if(error) return toast('Could not save: '+error.message);
+  $('#calUrl').value=''; toast('Calendar linked'); cal=null; renderCalSetting(); loadCal(true); },true);
 function renderSettings(){
+  renderCalSetting();
   const all=allIngredients(); const linked=all.filter(i=>isFair(S.prices[i]?.link)); const need=all.filter(i=>!isFair(S.prices[i]?.link));
   const times=Object.values(S.prices).map(p=>p.checked_at).filter(Boolean).sort(); const last=times[times.length-1];
   const oos=all.filter(i=>S.prices[i]?.available===false);
