@@ -154,6 +154,14 @@ function findRecipe(node: any): any {
 const meta = (html: string, prop: string) =>
   html.match(new RegExp(`<meta[^>]+(?:property|name)=["']${prop}["'][^>]+content=["']([^"']+)`, "i"))?.[1] ||
   html.match(new RegExp(`<meta[^>]+content=["']([^"']+)["'][^>]+(?:property|name)=["']${prop}["']`, "i"))?.[1];
+// Per-serving nutrition from the recipe's own schema.org data (facts only): numbers, no text.
+function nutritionOf(recipe: any) {
+  const n = recipe?.nutrition; if (!n || typeof n !== "object") return null;
+  const v = (k: string) => { const m = String(n[k] ?? "").replace(/,/g, "").match(/[\d.]+/); return m ? Math.round(parseFloat(m[0]) * 10) / 10 : null; };
+  const out = { calories: v("calories"), protein: v("proteinContent"), carbs: v("carbohydrateContent"), fat: v("fatContent"),
+    fiber: v("fiberContent"), sugar: v("sugarContent"), sodium: v("sodiumContent") };
+  return Object.values(out).some((x) => x != null) ? out : null;
+}
 const decode = (s = "") => s.replace(/&amp;/g, "&").replace(/&#39;|&#x27;|&rsquo;/g, "'").replace(/&quot;/g, '"').replace(/&lt;/g, "<").replace(/&gt;/g, ">").trim();
 
 Deno.serve(async (req) => {
@@ -201,6 +209,7 @@ Deno.serve(async (req) => {
       ingredients: names(lines),
       amounts: amounts(lines),
       found_ingredients: lines.length > 0,
+      nutrition: nutritionOf(recipe),
     });
   } catch (e) {
     return json({ error: "Couldn't read that page: " + (e as Error).message }, 200);
