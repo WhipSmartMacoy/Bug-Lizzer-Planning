@@ -177,7 +177,7 @@ a{color:var(--green)}
   </section>
 
   <section class="panel" id="useup">
-    <p class="intro">Recipes that use up what's <b>At Home</b>, found on NYT Cooking. Fridge items count first because they spoil soonest. Pantry staples (flour, oil, salt, pepper, rice, common spices) don't count. These are links to the original sites; tap <b>Add to recipe box</b> on any you want to keep.</p>
+    <p class="intro">Recipes that use up what's <b>At Home</b>, found on NYT Cooking. Fridge items count first because they spoil soonest. Only recipes whose main ingredients are <b>all</b> At Home are shown. Herbs, spices and pantry staples (flour, oil, salt, pepper, rice) don't count, since you can pick those up or leave them out. These are links to the original sites; tap <b>Add to recipe box</b> on any you want to keep.</p>
     <div id="useupHave" style="margin-bottom:12px"></div>
     <div class="row" style="justify-content:space-between;align-items:center"><h2 style="margin:0">Ideas from the web</h2><button class="btn small" id="webAgain" type="button">Search again</button></div>
     <div id="webStatus" class="meta" style="margin:6px 0 10px"></div>
@@ -267,6 +267,11 @@ const CFG = window.BLP_CONFIG || {};
 const ONLINE = !!(CFG.url && CFG.key && window.supabase);
 const sb = ONLINE ? window.supabase.createClient(CFG.url, CFG.key) : null;
 const STAPLES = new Set(["water","salt","pepper","black pepper","rice","vegetable oil","canola oil","chili powder","smoked paprika","garam masala","curry powder","cardamom","cloves","allspice","fennel seeds","mustard seeds","red pepper","olive oil","garlic","butter","sugar","brown sugar","flour","neutral oil","soy sauce","red pepper flakes","cumin","paprika","cayenne","oregano","turmeric","cinnamon","nutmeg","honey","mustard","rice vinegar","sesame oil","baking soda","baking powder","vanilla","coriander","cornstarch","bay leaves"]);
+// Herbs and spices: optional for "Use it up" (pick them up or leave them out).
+const HERBS = new Set(["basil","parsley","cilantro","dill","mint","thyme","rosemary","sage","chives","tarragon","oregano","bay leaves","marjoram","lemongrass",
+  "cumin","paprika","smoked paprika","cayenne","cinnamon","nutmeg","coriander","turmeric","garam masala","curry powder","chili powder","cardamom","cloves","allspice",
+  "fennel seeds","mustard seeds","red pepper flakes","sesame seeds","star anise","saffron","za'atar","sumac","five-spice","vanilla","fresh chiles","jalapeño","serrano peppers"]);
+const optional = i => STAPLES.has(i)||HERBS.has(i);
 const COLORS = ["#3f6b4a","#b9772b","#5a6fa8","#a6463a","#7a5c99","#2f7f86","#8a6d3b"];
 const FAIRWAY = q => 'https://shop.fairwaymarket.com/store/fairway/s?k='+encodeURIComponent(q);
 const LS = { get:(k,d)=>{try{return JSON.parse(localStorage.getItem('blp.'+k))??d}catch(e){return d}}, set:(k,v)=>{try{localStorage.setItem('blp.'+k,JSON.stringify(v))}catch(e){}} };
@@ -693,19 +698,20 @@ function renderRecipes(){
   $('#recGrid').innerHTML=list.map(r=>card(r)).join('')||`<div class="empty">${S.recipes.length?'No matches.':'The recipe box is empty. Paste a recipe link above to add the first one.'}</div>`;
 }
 function renderUseup(){
-  const on=S.pantry.filter(p=>+p.q>0&&!STAPLES.has(p.ingredient));
+  const on=S.pantry.filter(p=>+p.q>0&&!optional(p.ingredient));
   const fresh=new Set(on.filter(p=>storeOf(p.ingredient)==='fridge').map(p=>p.ingredient)), have=new Set(on.map(p=>p.ingredient));
   $('#useupHave').innerHTML=on.length?`<div class="meta">At Home now: ${['fridge','freezer','pantry'].map(l=>{const xs=on.filter(p=>storeOf(p.ingredient)===l);return xs.length?`${STORE_ICON[l]} ${xs.map(p=>esc(p.ingredient)).join(', ')}`:''}).filter(Boolean).join(' · ')}</div>`:'';
   findOnline();
   if(!on.length){$('#useupResults').innerHTML='<div class="empty">Nothing is tracked At Home yet. Scan a receipt, add from your usual Fairway items, or tap <b>Got it ✓</b> after shopping, and ideas show up here.</div>';return;}
-  const scored=S.recipes.map(r=>{const hit=r.ingredients.filter(i=>have.has(i)), f=hit.filter(i=>fresh.has(i)), buy=r.ingredients.filter(i=>!have.has(i)&&!STAPLES.has(i)); return {r,hit,f,buy}})
-    .filter(x=>x.hit.length).sort((a,b)=>b.f.length-a.f.length||b.hit.length-a.hit.length||a.buy.length-b.buy.length).slice(0,24);
-  $('#useupResults').innerHTML=scored.map(x=>card(x.r,`<div class="meta"><b style="color:var(--green)">Uses ${x.hit.length}</b> from home: ${x.hit.map(i=>(fresh.has(i)?'🧊 ':'')+esc(i)).join(', ')}<br>${x.buy.length?'Still need: '+x.buy.map(esc).join(', '):'<b>Nothing else to buy</b>'}</div>`)).join('')||'<div class="empty">No recipes in the box use what\'s At Home right now.</div>';
+  const haveAll=new Set(S.pantry.filter(p=>+p.q>0).map(p=>p.ingredient));
+  const scored=S.recipes.map(r=>{const hit=r.ingredients.filter(i=>have.has(i)), f=hit.filter(i=>fresh.has(i)), buy=r.ingredients.filter(i=>!haveAll.has(i)&&!optional(i)); return {r,hit,f,buy}})
+    .filter(x=>x.hit.length&&!x.buy.length).sort((a,b)=>b.f.length-a.f.length||b.hit.length-a.hit.length||a.buy.length-b.buy.length).slice(0,24);
+  $('#useupResults').innerHTML=scored.map(x=>card(x.r,`<div class="meta"><b style="color:var(--green)">Uses ${x.hit.length}</b> from home: ${x.hit.map(i=>(fresh.has(i)?'🧊 ':'')+esc(i)).join(', ')}<br><b>Everything else is At Home</b> (herbs and spices optional)</div>`)).join('')||'<div class="empty">No recipe in the box can be made with just what\'s At Home.</div>';
 }
 // ---- Use it up: search the web (links only) ----
 let web=LS.get('web',null), webBusy=false;
 function useupInputs(){
-  const on=S.pantry.filter(p=>+p.q>0&&!STAPLES.has(p.ingredient)).map(p=>p.ingredient);
+  const on=S.pantry.filter(p=>+p.q>0&&!optional(p.ingredient)).map(p=>p.ingredient);
   const fresh=on.filter(i=>storeOf(i)==='fridge');
   return {have:on,fresh,key:[...on].sort().join('|')};
 }
@@ -715,7 +721,7 @@ async function findOnline(force){
   if(!have.length){ web=null; renderWeb(); return; }
   if(webBusy||(!force&&web&&web.key===key)){ renderWeb(); return; }
   webBusy=true; renderWeb();
-  const {data,error}=await sb.functions.invoke('find-recipes',{body:{have,fresh,staples:[...STAPLES],exclude:S.recipes.map(r=>r.url)}});
+  const {data,error}=await sb.functions.invoke('find-recipes',{body:{have:S.pantry.filter(p=>+p.q>0).map(p=>p.ingredient),main:have,fresh,staples:[...STAPLES,...HERBS],exclude:S.recipes.map(r=>r.url)}});
   webBusy=false;
   web={key,at:Date.now(),results:data?.results||[],error:error?'The search didn\'t go through. Try again in a minute.':data?.error||null};
   LS.set('web',web); renderWeb();
@@ -726,15 +732,16 @@ function renderWeb(){
   if(!have.length){ $('#webStatus').textContent=''; $('#webResults').innerHTML=''; return; }
   if(!web){ $('#webStatus').textContent=''; $('#webResults').innerHTML=''; return; }
   const inBox=new Set(S.recipes.map(r=>r.url));
-  const list=web.results.filter(x=>!inBox.has(x.url));
+  const atHome=new Set(S.pantry.filter(p=>+p.q>0).map(p=>p.ingredient));
+  const list=web.results.filter(x=>!inBox.has(x.url)&&x.need.every(i=>atHome.has(i)||optional(i)));
   $('#webStatus').innerHTML=web.error?esc(web.error):`${list.length} recipe${list.length===1?'':'s'} found ${ago(web.at)}${web.key!==key?' · At Home has changed since, so <b>Search again</b>':''}`;
   $('#webResults').innerHTML=list.map(x=>`<div class="card">
     ${x.image?`<a href="${esc(x.url)}" target="_blank" rel="noopener"><img class="thumb" src="${esc(x.image)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()"></a>`:''}
     <h3><a href="${esc(x.url)}" target="_blank" rel="noopener">${esc(x.title)}</a></h3>
     <div class="meta">${esc(x.site)}</div>
-    <div class="meta"><b style="color:var(--green)">Uses ${x.uses.length}</b> from home: ${x.uses.map(i=>(x.fresh.includes(i)?'🧊 ':'')+esc(i)).join(', ')}<br>${x.need.length?'Still need: '+x.need.map(esc).join(', '):'<b>Nothing else to buy</b>'}</div>
+    <div class="meta"><b style="color:var(--green)">Uses ${x.uses.length}</b> from home: ${x.uses.map(i=>(x.fresh.includes(i)?'🧊 ':'')+esc(i)).join(', ')}<br><b>Everything else is At Home</b> (herbs and spices optional)</div>
     <div class="actions"><a class="btn small" href="${esc(x.url)}" target="_blank" rel="noopener">Open recipe</a><button class="btn small primary" data-webadd="${esc(x.url)}" type="button">Add to recipe box</button></div></div>`).join('')
-    ||(web.error?'':'<div class="empty">No matching recipes found online this time.</div>');
+    ||(web.error?'':'<div class="empty">Nothing online can be made with just what\'s At Home right now. Add more of what you have (scan a receipt) and search again.</div>');
 }
 document.addEventListener('click',e=>{
   const t=e.target.closest('#webAgain,[data-webadd],[data-p="useup"]'); if(!t) return;

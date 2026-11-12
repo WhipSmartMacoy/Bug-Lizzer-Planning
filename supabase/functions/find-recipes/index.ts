@@ -123,25 +123,27 @@ Deno.serve(async (req) => {
 
     const body = await req.json();
     const have: string[] = (body.have || []).map((s: string) => String(s).toLowerCase()).slice(0, 40);
-    const fresh: string[] = (body.fresh || []).map((s: string) => String(s).toLowerCase()).filter((s: string) => have.includes(s));
+    const main: string[] = (body.main || have).map((s: string) => String(s).toLowerCase());
+    const fresh: string[] = (body.fresh || []).map((s: string) => String(s).toLowerCase()).filter((s: string) => main.includes(s));
     const staples = new Set<string>((body.staples || []).map((s: string) => String(s).toLowerCase()));
     const skip = new Set<string>(body.exclude || []);
     if (!have.length) return json({ results: [], searched: [] });
 
     // Searches: the fridge items (they spoil first) in pairs, then on their own, then the rest.
-    const lead = [...fresh, ...have.filter((h) => !fresh.includes(h))];
+    const lead = [...fresh, ...main.filter((h) => !fresh.includes(h))];
     const qs: string[] = [];
     if (lead.length >= 2) qs.push(`${lead[0]} ${lead[1]}`);
     if (lead.length >= 3) qs.push(`${lead[0]} ${lead[2]}`, `${lead[1]} ${lead[2]}`);
-    for (const x of lead.slice(0, 3)) qs.push(x);
-    const queries = [...new Set(qs)].slice(0, 5);
+    if (lead.length >= 4) qs.push(`${lead[0]} ${lead[3]}`, `${lead[2]} ${lead[3]}`);
+    for (const x of lead.slice(0, 4)) qs.push(x);
+    const queries = [...new Set(qs)].slice(0, 8);
 
     const pages = await Promise.all(queries.flatMap((q) => SITES.map(async (s) => ({ s, html: await get(s.search(q)) }))));
     const cand: string[] = [], seen = new Set<string>(), perSite: Record<string, number> = {};
     // Interleave sites so one site doesn't crowd out the others.
     const lists = pages.map(({ s, html }) => [...html.matchAll(s.link)].map((m) => ((s as any).base || "") + m[1].replace(/\/$/, "")));
-    for (let k = 0; k < 12; k++) for (const l of lists) { const u = l[k]; if (u && !seen.has(u) && !skip.has(u)) { seen.add(u); cand.push(u); } }
-    const pick = cand.slice(0, 24);
+    for (let k = 0; k < 15; k++) for (const l of lists) { const u = l[k]; if (u && !seen.has(u) && !skip.has(u)) { seen.add(u); cand.push(u); } }
+    const pick = cand.slice(0, 48);
 
     const results = (await Promise.all(pick.map(async (url) => {
       const html = await get(url, 8000); if (!html) return null;
@@ -153,8 +155,9 @@ Deno.serve(async (req) => {
       const lines: string[] = Array.isArray(recipe?.recipeIngredient) ? recipe.recipeIngredient.map(String) : [];
       if (!lines.length) return null;
       const ings = names(lines).filter((i) => !staples.has(i));
-      const uses = ings.filter((i) => have.includes(i));
-      if (!uses.length) return null;
+      const uses = ings.filter((i) => main.includes(i));
+      // Only recipes whose main ingredients are ALL at home (herbs, spices, staples are optional).
+      if (!uses.length || ings.some((i) => !have.includes(i))) return null;
       let image = recipe.image; if (Array.isArray(image)) image = image[0]; if (image && typeof image === "object") image = image.url || image.contentUrl;
       const host = new URL(url).hostname.replace(/^www\./, "");
       perSite[host] = (perSite[host] || 0) + 1;
@@ -162,8 +165,8 @@ Deno.serve(async (req) => {
         site: meta(html, "og:site_name") ? decode(meta(html, "og:site_name")) : host,
         uses, fresh: uses.filter((i) => fresh.includes(i)), need: ings.filter((i) => !have.includes(i)) };
     }))).filter(Boolean) as any[];
-    results.sort((a, b) => b.fresh.length - a.fresh.length || b.uses.length - a.uses.length || a.need.length - b.need.length);
-    return json({ results: results.slice(0, 15), searched: queries, candidates: cand.length, perSite });
+    results.sort((a, b) => b.fresh.length - a.fresh.length || b.uses.length - a.uses.length);
+    return json({ results: results.slice(0, 20), searched: queries, candidates: cand.length, perSite });
   } catch (e) {
     return json({ error: "Search failed: " + (e as Error).message }, 200);
   }
