@@ -396,7 +396,7 @@ const ING_SYN = {'chicken stock':'broth','vegetable stock':'broth','beef stock':
   'edamame':'edamame','corn':'corn','squash':'zucchini','butternut':'butternut squash','eggplant':'eggplant','garlic':'garlic','blueberries':'berries','apples':'apples','bread':'bread',
   'clam juice':'clam juice','almond butter':'almond butter','peanut butter':'peanut butter','garlic aioli':'mayonnaise','lupini':'lupini','nutritional yeast':'nutritional yeast','green chiles':'green chiles','salsa':'salsa','guacamole':'guacamole','hummus':'hummus'};
 // Things on a usual / receipt that are never recipe ingredients, so they're never suggested.
-const NOT_FOOD = /\b(shopping bag|hair|roller|filters?|supplement|ipa|beer|seltzer|sparkling|water|soda|kombucha|energy drink|juice(?! company)|gummy|candy|chips|crackers|pretzel|bar|coffee|tea bags|oats|shake|dumplings?|burek|cutlets|dip|jello|gelatin|cheezit|sunpopped|snacks?|seaweed|noodle soup|cookie|brownie|baking soda)\b/i;
+const NOT_FOOD = /\b(?:shopping bag|hair|roller|filters?|supplement|ipa|beer|seltzer|sparkling|water|soda|kombucha|energy drink|juice(?! company)|gummy|candy|chips|crackers|pretzel|bar|coffee|tea bags|oats|shake|dumplings?|burek|cutlets|dip|jello|gelatin|cheezit|sunpopped|snacks?|seaweed|noodle soup|cookie|brownie|baking soda)s?\b/i;
 const SYN_KEYS = Object.keys(ING_SYN).sort((a,b)=>b.length-a.length);
 function ingFrom(text){
   const t=' '+String(text).toLowerCase().replace(/[^a-z0-9 ]+/g,' ').replace(/\s+/g,' ')+' ';
@@ -409,6 +409,8 @@ function ingFrom(text){
 function sizeFrom(text,i){
   const s=String(text).toLowerCase();
   let m=s.match(/([\d.]+)\s*(fl oz|oz|lbs?|count|ct|pint|quart|half gallon|gallon)\b/);
+  // Fairway's product links drop the decimal point: "338 fl oz" is 33.8, "155 oz" is 15.5, "992 lb" is 0.992.
+  if(m&&!m[1].includes('.')){ const n=+m[1]; if(/oz/.test(m[2])&&n>=100) m[1]=String(n/10); else if(/lb/.test(m[2])&&n>=50) m[1]=String(n/1000); }
   if(/half gallon/.test(s)) return {q:1893,u:'ml',label:'half gallon'};
   if(m){ const n=+m[1], u=m[2];
     if(u==='count'||u==='ct') return {q:n,u:'each',label:`${n} ct`};
