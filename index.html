@@ -267,7 +267,7 @@ table{border-radius:14px}
 .pick:hover{border-color:var(--green)}
 .pick img{width:48px;height:48px;border-radius:10px;object-fit:cover;flex:none}
 .pick b{display:block;font-size:15px}.pick .meta{font-size:12.5px}
-#addQ{width:100%}
+#addQ,#addR{width:100%}
 .sheet input{font:inherit;padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:#fff;min-width:0}
 .hometop{display:flex;gap:8px;margin:4px 0 10px}
 #homeQ{flex:1;min-width:0;font:inherit;padding:11px 14px;border:1px solid var(--line);border-radius:14px;background:#fff}
@@ -937,10 +937,16 @@ function priceCell(i){
   return `<a href="${esc(p.link||FAIRWAY(i))}" target="_blank" rel="noopener">${esc(p.price)}</a>${p.available===false?' <span class="needprice">out of stock</span>':''} <a href="#" class="meta" data-editprice="${esc(i)}">edit</a><div class="meta">${esc([p.item,p.size].filter(Boolean).join(', '))}${p.source==='Household'&&p.updated_by?((p.item||p.size)?' · ':'')+'set by '+esc(nameOf(p.updated_by)):''}</div>`;
 }
 // "Scrunge": a dinner of whatever's around, no recipe. Stored as a dinner row with no recipe, note "Scrunge" or "Scrunge: what we had".
-const isScr = m => m.meal==='dinner'&&!m.recipe_id;
+const isScr = m => m.meal==='dinner'&&!m.recipe_id&&/^Scrunge/i.test(m.note||'');
+const isRest = m => !m.recipe_id&&/ —( |$)/.test(m.note||'');          // a restaurant pick: "Name — dish"
+const restName = m => (m.note||'').split(' —')[0];
+const restDish = m => (m.note||'').split(' —').slice(1).join(' —').trim();
+const isOutDin = m => m.meal==='dinner'&&!m.recipe_id&&!isScr(m);
+const mapsUrl = n => 'https://maps.apple.com/?q='+encodeURIComponent(n);
+const outLabel = m => isRest(m)?`🍽️ <a href="${mapsUrl(restName(m))}" target="_blank" rel="noopener">${esc(restName(m))}</a>${restDish(m)?' · '+esc(restDish(m)):''}`:`🥡 ${esc(m.note||'')}`;
 const scrDesc = m => (m.note||'').replace(/^Scrunge:?\s*/i,'');
-const dTitle = m => isScr(m)?'Scrunge'+(scrDesc(m)?': '+scrDesc(m):''):rec(m.recipe_id)?.title||'';
-const isDin = m => m.meal==='dinner'&&(rec(m.recipe_id)||isScr(m));
+const dTitle = m => isScr(m)?'Scrunge'+(scrDesc(m)?': '+scrDesc(m):''):isOutDin(m)?(isRest(m)?restName(m)+(restDish(m)?' · '+restDish(m):''):m.note||'Out'):rec(m.recipe_id)?.title||'';
+const isDin = m => m.meal==='dinner'&&(rec(m.recipe_id)||!m.recipe_id);
 const hasDinner = d => S.meals.some(m=>m.planned_for===d&&isDin(m));
 function dayOptions(){ return weekDays().map(d=>`<option value="${d}" ${hasDinner(d)?'disabled':''}>${dayName(d)} ${shortDate(d)}${hasDinner(d)?' · dinner set':''}</option>`).join(''); }
 function card(r, extra=''){
@@ -1063,8 +1069,8 @@ function renderToday(){
   const line=p=>{ const ms=personMeals(p,TODAY).filter(m=>m.when!=='Dinner');
     return `<div class="trow"><b>${p}</b><span>${ms.length?ms.map(m=>`<span class="tchip">${m.when==='Snackies'?'🍪':m.when==='Breakfast'?'☀️':'🥪'} ${esc(m.scan||m.out?(m.note||'out'):m.r?.title||'')}</span>`).join(''):'<span class="meta">nothing logged yet</span>'}</span></div>`; };
   el.innerHTML=`<div class="today">
-    <div class="tdin"><span class="meta">Tonight</span>${tonight?`<b>${tonight.leftover_of?'🍱 ':isScr(tonight)?'🫙 ':''}${esc(dTitle(tonight))}</b>
-        <span class="${missing.length&&!isScr(tonight)?'needprice':'okline'}">${isScr(tonight)?'Whatever’s at home':tonight.leftover_of?'Leftovers, nothing to buy':missing.length?`Still need ${missing.slice(0,4).map(esc).join(', ')}${missing.length>4?'…':''}`:'Everything is at home ✓'}</span>`
+    <div class="tdin"><span class="meta">Tonight</span>${tonight?`<b>${tonight.leftover_of?'🍱 ':isScr(tonight)?'🫙 ':isOutDin(tonight)?'🍽️ ':''}${esc(dTitle(tonight))}</b>
+        <span class="${missing.length&&rec(tonight.recipe_id)?'needprice':'okline'}">${isOutDin(tonight)?(isRest(tonight)?`<a href="${mapsUrl(restName(tonight))}" target="_blank" rel="noopener">Eating out · map</a>`:'Eating out'):isScr(tonight)?'Whatever’s at home':tonight.leftover_of?'Leftovers, nothing to buy':missing.length?`Still need ${missing.slice(0,4).map(esc).join(', ')}${missing.length>4?'…':''}`:'Everything is at home ✓'}</span>`
       :`<b>Nothing planned</b><button class="btn small" data-add="${TODAY}||dinner" type="button">＋ Add dinner</button>`}</div>
     <div class="tmeals">${PEOPLE.map(line).join('')}</div>
     <div class="tnext"><span class="meta">Next up</span><span>${schedSummary().replace(/^Next: /,'')}</span></div>
@@ -1167,7 +1173,12 @@ function renderPlan(){
       <div class="lunch"><div class="lh">Breakfast</div>${PEOPLE.map(p=>lunchRow(d,p,opts,'breakfast')).join('')}</div>
       <div class="lunch"><div class="lh">Lunch</div>${PEOPLE.map(p=>lunchRow(d,p,opts,'lunch')).join('')}</div>
       <div class="lh">Dinner</div>
-      ${ms.map(m=>{const r=rec(m.recipe_id); if(isScr(m)) return `<div class="meal scr">
+      ${ms.map(m=>{const r=rec(m.recipe_id); if(isOutDin(m)) return `<div class="meal scr">
+        <div class="scrt">${isRest(m)?`🍽️ <a href="${mapsUrl(restName(m))}" target="_blank" rel="noopener">${esc(restName(m))}</a>`:'🥡 '+esc(m.note||'Out')}</div>
+        ${isRest(m)?(restDish(m)?`<div>${esc(restDish(m))}</div>`:`<input class="outnote" data-dish="${m.id}" placeholder="What are we getting? (optional)" enterkeyhint="done">`):''}
+        <div class="meta">eating out · added by ${esc(nameOf(m.added_by))}</div>
+        <div class="mrow"><select data-move="${m.id}" style="font-size:11.5px;padding:2px 4px;width:auto;margin:0"><option value="">Move…</option>${days.filter(x=>x!==d&&!hasDinner(x)).map(x=>`<option value="${x}">${dayName(x)}</option>`).join('')}</select>
+          <button data-unplan="${m.id}" title="Remove">✕</button></div></div>`; if(isScr(m)) return `<div class="meal scr">
         <div class="scrt">🫙 Scrunge</div>${scrDesc(m)?`<div>${esc(scrDesc(m))}</div>`:`<input class="outnote" data-scrnote="${m.id}" placeholder="What did you scrunge? (optional)" enterkeyhint="done">`}
         <div class="meta">whatever’s at home · added by ${esc(nameOf(m.added_by))}</div>
         <div class="mrow"><select data-move="${m.id}" style="font-size:11.5px;padding:2px 4px;width:auto;margin:0"><option value="">Move…</option>${days.filter(x=>x!==d&&!hasDinner(x)).map(x=>`<option value="${x}">${dayName(x)}</option>`).join('')}</select>
@@ -1224,7 +1235,8 @@ async function estimateFood(text){
 async function saveOutNote(id,note){
   note=note.trim(); if(!note) return;
   await DB.run(sb.from('meal_plan').update({note}).eq('id',id)); renderAll();
-  const n=await estimateFood(note); if(n) await DB.run(sb.from('meal_plan').update({nutrition:n}).eq('id',id)); renderAll();
+  const food=/ —( |$)/.test(note)?note.split(' —').slice(1).join(' ').trim():note; if(!food) return;
+  const n=await estimateFood(food); if(n) await DB.run(sb.from('meal_plan').update({nutrition:n}).eq('id',id)); renderAll();
 }
 document.addEventListener('keydown',e=>{ if(e.key==='Enter'&&e.target.dataset.outnote){ e.preventDefault(); saveOutNote(e.target.dataset.outnote,e.target.value); } });
 document.addEventListener('focusout',e=>{ if(e.target.dataset?.outnote&&e.target.value.trim()) saveOutNote(e.target.dataset.outnote,e.target.value); });
@@ -1330,7 +1342,7 @@ document.addEventListener('submit',e=>{ if(e.target.dataset?.scan==='codeform'){
 function snackRows(d,p,opts){
   const items=S.meals.filter(m=>m.planned_for===d&&m.person===p&&isSnack(m));
   const lo=leftoverMeals(d,1).filter(x=>!(isLunch(x)&&x.planned_for===d));
-  const label=m=>{ if(isScan(m)) return `📷 ${esc(m.note||'')}`; if(!m.recipe_id) return m.note?`🥡 ${esc(m.note)}`:null; const r=rec(m.recipe_id); return m.leftover_of?`🍱 ${esc(r?.title||'')}`:esc(r?.title||''); };
+  const label=m=>{ if(isScan(m)) return `📷 ${esc(m.note||'')}`; if(!m.recipe_id) return m.note?outLabel(m):null; const r=rec(m.recipe_id); return m.leftover_of?`🍱 ${esc(r?.title||'')}`:esc(r?.title||''); };
   return `<div class="snacks"><b>${p}</b>${items.map(m=>{ const l=label(m);
       return l==null?`<div class="lrow"><input class="outnote" data-outnote="${m.id}" placeholder="🥡 What did you have?" enterkeyhint="done"><button data-unplan="${m.id}" title="Remove">✕</button></div>`
         :`<div class="lrow"><span class="lwhat">${l}${m.nutrition?.calories!=null&&isScan(m)?` <span class="meta">· ${Math.round(m.nutrition.calories)} cal</span>`:''}</span><button data-unplan="${m.id}" title="Remove">✕</button></div>`;}).join('')}
@@ -1347,7 +1359,8 @@ function lunchRow1(d,p,opts,meal='lunch'){
   const m=S.meals.find(x=>x.meal===meal&&x.planned_for===d&&x.person===p);
   if(m){ const r=rec(m.recipe_id);
     if(!m.recipe_id&&!m.note) return `<div class="lrow"><b>${p}</b> <input class="outnote" data-outnote="${m.id}" placeholder="🥡 What did you have?" enterkeyhint="done"><button data-unplan="${m.id}" title="Clear">✕</button></div>`;
-    const what=!m.recipe_id?`🥡 ${esc(m.note)}`:m.leftover_of?`🍱 ${esc(r?.title||'Leftovers')}`:`<a href="${esc(r?.url)}" target="_blank" rel="noopener">${esc(r?.title||'')}</a>`;
+    if(isRest(m)&&!restDish(m)) return `<div class="lrow"><b>${p}</b> <span class="lwhat">${outLabel(m)}</span><input class="outnote dish" data-dish="${m.id}" placeholder="What did you get?" enterkeyhint="done">${scanBtn(d,p,meal)}<button data-unplan="${m.id}" title="Clear">✕</button></div>`;
+    const what=!m.recipe_id?outLabel(m):m.leftover_of?`🍱 ${esc(r?.title||'Leftovers')}`:`<a href="${esc(r?.url)}" target="_blank" rel="noopener">${esc(r?.title||'')}</a>`;
     return `<div class="lrow ${m.cooked_at?'cooked':''}"><b>${p}</b> <span class="lwhat">${what}</span>
       ${m.recipe_id&&!m.leftover_of?`<button data-cook="${m.id}" data-v="${m.cooked_at?0:1}" title="${m.cooked_at?'Undo cooked':'Mark cooked'}">${m.cooked_at?'↶':'✓'}</button>`:''}${scanBtn(d,p,meal)}<button data-unplan="${m.id}" title="Clear">✕</button></div>`; }
   const lo=leftoverMeals(d,1).filter(x=>!(isLunch(x)&&x.planned_for===d));
@@ -1355,7 +1368,7 @@ function lunchRow1(d,p,opts,meal='lunch'){
 }
 // ---- Add sheet: one place to add any meal (leftovers · out · a recipe · scan) ----
 let addS=null;
-function openAdd(key){ const [d,p,meal]=key.split('|'); addS={d,p:p||null,meal,q:''}; renderAdd(); setTimeout(()=>$('#addQ')?.focus({preventScroll:true}),60); }
+function openAdd(key){ const [d,p,meal]=key.split('|'); addS={d,p:p||null,meal,q:''}; restLive=[]; restQ=''; renderAdd(); setTimeout(()=>$('#addQ')?.focus({preventScroll:true}),60); }
 function closeAdd(){ addS=null; renderAdd(); }
 function renderAdd(){
   let el=$('#addSheet'); if(!addS){ el?.remove(); return; }
@@ -1369,7 +1382,7 @@ function renderAdd(){
     <div class="sheethead"><b>${p?esc(p)+"'s ":''}${SLOT_LABEL[meal].toLowerCase()} · ${dayName(d,'long')}</b><button class="btn small" data-addx type="button">Close</button></div>
     ${lo.length?`<h3>🍱 Leftovers</h3><div class="picks">${lo.map(x=>`<button type="button" class="pick" data-addpick="lo:${x.id}"><b>${esc(rec(x.recipe_id).title)}</b><span class="meta">${leftoversOf(x)} serving${leftoversOf(x)>1?'s':''} left · from ${dayName(x.planned_for,'long')}</span></button>`).join('')}</div>`:''}
     ${dinner?`<h3>🫙 Scrunge</h3><form class="row" data-addscr style="margin:0"><input id="addScr" placeholder="What's around? (optional)" enterkeyhint="done" style="flex:1"><button class="btn primary">Scrunge</button></form>`:''}
-    ${dinner?'':`<h3>🥡 Out, picked up or delivered</h3><form class="row" data-addout style="margin:0"><input id="addOut" placeholder="What did you have? e.g. Sweetgreen bowl" enterkeyhint="done" style="flex:1"><button class="btn">Add</button></form>`}
+    <h3>🍽️ Restaurant or takeout</h3><input id="addR" type="search" placeholder="Search restaurants near us" autocomplete="off" enterkeyhint="search"><div class="picks" id="addRres">${restPicks('')}</div>
     <h3>🍳 Make something</h3>
     <input id="addQ" type="search" placeholder="Search recipes or an ingredient" value="${esc(q)}">
     <div class="picks">${recs.map(r=>`<button type="button" class="pick" data-addpick="r:${r.id}">${r.image_url?`<img src="${esc(r.image_url)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">`:''}<span><b>${esc(r.title)}</b><span class="meta">${r.status==='past'?(lastCooked(r.id)?'made '+ago(lastCooked(r.id).cooked_at):'in the recipe box'):'new to try'}</span></span></button>`).join('')||'<p class="meta">No recipes match.</p>'}</div>
@@ -1393,6 +1406,48 @@ document.addEventListener('submit',async e=>{ if(!e.target.matches?.('[data-addo
   const {data}=await sb.from('meal_plan').insert({planned_for:d,meal,person:p,recipe_id:null,note}).select('id').single();
   toast(`Added: ${note}`); await DB.load(); renderAll(); if(data?.id) saveOutNote(data.id,note); },true);
 document.addEventListener('keydown',e=>{ if(e.key==='Escape'&&addS) closeAdd(); });
+// ---- Restaurants: places we've picked before, then live search near us (OpenStreetMap via Photon, no key) ----
+const FOOD_TAGS=['restaurant','fast_food','cafe','bar','pub','ice_cream','food_court','biergarten','bakery','deli'];
+let restLive=[], restT=null, restQ='';
+function pastRestaurants(){ const seen=new Map();
+  for(const m of [...S.meals].sort((a,b)=>(b.planned_for||'').localeCompare(a.planned_for||''))) if(isRest(m)){ const n=restName(m); if(!seen.has(n.toLowerCase())) seen.set(n.toLowerCase(),{name:n,n:0,last:m.planned_for}); seen.get(n.toLowerCase()).n++; }
+  return [...seen.values()]; }
+function restPicks(q){ const ql=q.trim().toLowerCase();
+  const past=pastRestaurants().filter(x=>!ql||x.name.toLowerCase().includes(ql)).slice(0,ql?5:6);
+  const pastSet=new Set(past.map(x=>x.name.toLowerCase()));
+  const live=restLive.filter(x=>!pastSet.has(x.name.toLowerCase()));
+  const btn=(name,sub,ic='🍽️')=>`<button type="button" class="pick" data-rest="${esc(name)}"><span class="pickic">${ic}</span><span><b>${esc(name)}</b><span class="meta">${sub}</span></span></button>`;
+  let h=past.map(x=>btn(x.name,`been ${x.n}× · last ${shortDate(x.last)}`,'⭐')).join('')+live.map(x=>btn(x.name,esc(x.sub))).join('');
+  if(ql&&restT) h+='<p class="meta">Searching nearby…</p>';
+  if(ql) h+=btn(q.trim(),'Use exactly what I typed','✏️');
+  return h||'<p class="meta">Type a restaurant name, e.g. Sweetgreen.</p>'; }
+function homeLoc_(){ try{ const v=JSON.parse(localStorage.getItem('bl_loc')||'null'); if(v) return v; }catch(e){}
+  if(navigator.geolocation&&!window.__askedLoc){ window.__askedLoc=1; navigator.geolocation.getCurrentPosition(p=>{ try{localStorage.setItem('bl_loc',JSON.stringify({lat:+p.coords.latitude.toFixed(3),lon:+p.coords.longitude.toFixed(3)}));}catch(e){} },()=>{},{timeout:8000,maximumAge:864e5}); }
+  return {lat:40.75,lon:-73.98}; }   // until we know: New York (Fairway country)
+async function searchRest(q){
+  const {lat,lon}=homeLoc_();
+  const u=`https://photon.komoot.io/api/?q=${encodeURIComponent(q)}&lat=${lat}&lon=${lon}&limit=15&location_bias_scale=0.5`+FOOD_TAGS.map(t=>`&osm_tag=amenity:${t}`).join('')+'&osm_tag=shop:bakery&osm_tag=shop:deli';
+  try{ const j=await (await fetch(u)).json();
+    const dist=(a,b)=>{const R=3959,toR=x=>x*Math.PI/180,dl=toR(b[1]-a.lat),dn=toR(b[0]-a.lon);return 2*R*Math.asin(Math.sqrt(Math.sin(dl/2)**2+Math.cos(toR(a.lat))*Math.cos(toR(b[1]))*Math.sin(dn/2)**2));};
+    return (j.features||[]).filter(f=>f.properties?.name).map(f=>{const p=f.properties, mi=f.geometry?dist({lat,lon},f.geometry.coordinates):null;
+      return {name:p.name, mi, sub:[(p.osm_value||'').replace(/_/g,' '),[p.housenumber,p.street].filter(Boolean).join(' '),p.city||p.district||'',mi!=null?(mi<10?mi.toFixed(1):Math.round(mi))+' mi':''].filter(Boolean).join(' · ')};})
+      .filter(x=>x.mi==null||x.mi<40).sort((a,b)=>(a.mi??99)-(b.mi??99)).slice(0,8);
+  }catch(e){ return []; } }
+document.addEventListener('focusin',e=>{ if(e.target.id==='addR') homeLoc_(); });
+document.addEventListener('input',e=>{ if(e.target.id!=='addR') return; restQ=e.target.value; clearTimeout(restT); restLive=[];
+  if(restQ.trim().length<2){ restT=null; $('#addRres').innerHTML=restPicks(restQ); return; }
+  restT=setTimeout(async()=>{ const q=restQ, r=await searchRest(q); if(q!==restQ) return; restT=null; restLive=r; if($('#addRres')) $('#addRres').innerHTML=restPicks(restQ); },400);
+  $('#addRres').innerHTML=restPicks(restQ); });
+document.addEventListener('keydown',e=>{ if(e.target.id==='addR'&&e.key==='Enter'){ e.preventDefault(); const f=$('#addRres [data-rest]'); f?.click(); } });
+document.addEventListener('click',async e=>{ const b=e.target.closest('[data-rest]'); if(!b||!addS) return; e.preventDefault(); e.stopImmediatePropagation();
+  const {d,p,meal}=addS, name=b.dataset.rest.trim(); closeAdd(); restLive=[]; restQ='';
+  if(meal==='dinner'&&hasDinner(d)) return toast(`${dayName(d,'long')} already has a dinner`);
+  const {data}=await sb.from('meal_plan').insert({planned_for:d,meal,person:meal==='dinner'?null:p,recipe_id:null,note:name+' —'}).select('id').single();
+  toast(`${name} for ${p?p+"'s ":''}${SLOT_LABEL[meal].toLowerCase()}`); await DB.load(); renderAll();
+  if(data?.id) setTimeout(()=>document.querySelector(`.day.sel [data-dish="${data.id}"]`)?.focus({preventScroll:true}),80); },true);
+function saveDish(id,dish){ const m=S.meals.find(x=>String(x.id)===String(id)); dish=dish.trim(); if(!m||!dish) return; saveOutNote(id,restName(m)+' — '+dish); }
+document.addEventListener('keydown',e=>{ if(e.key==='Enter'&&e.target.dataset?.dish){ e.preventDefault(); e.target.dataset.done=1; saveDish(e.target.dataset.dish,e.target.value); } });
+document.addEventListener('focusout',e=>{ if(e.target.dataset?.dish&&!e.target.dataset.done&&e.target.value.trim()) saveDish(e.target.dataset.dish,e.target.value); });
 document.addEventListener('submit',async e=>{ if(!e.target.matches?.('[data-addscr]')) return; e.preventDefault(); e.stopImmediatePropagation();
   if(!addS) return; const {d}=addS, desc=$('#addScr').value.trim(); closeAdd();
   if(hasDinner(d)) return toast(`${dayName(d,'long')} already has a dinner`);
@@ -1421,9 +1476,10 @@ function personMeals(p,d){   // [{label, r}] eaten by p on day d
   const out=[];
   for(const m of S.meals.filter(x=>x.planned_for===d)){
     const r=rec(m.recipe_id);
-    if(isLunch(m)){ if(m.person!==p) continue; out.push({when:SLOT_LABEL[m.meal],r,out:!m.recipe_id,note:m.note,n:m.recipe_id?r?.nutrition:m.nutrition,left:!!m.leftover_of}); }
+    if(isLunch(m)){ if(m.person!==p) continue; out.push({when:SLOT_LABEL[m.meal],r,out:!m.recipe_id,note:isRest(m)?restName(m)+(restDish(m)?' · '+restDish(m):''):m.note,n:m.recipe_id?r?.nutrition:m.nutrition,left:!!m.leftover_of}); }
     else if(isScan(m)){ if(m.person!==p) continue; out.push({when:SLOT_LABEL[m.slot||'snack'],scan:true,note:m.note,n:m.nutrition}); }
     else if(isScr(m)) out.push({when:'Dinner',scr:true,note:dTitle(m),n:m.nutrition});
+    else if(isOutDin(m)) out.push({when:'Dinner',out:true,note:dTitle(m),n:m.nutrition});
     else if(r) out.push({when:'Dinner',r,n:r.nutrition,left:!!m.leftover_of});
   }
   const ORD={Breakfast:0,Lunch:1,Snackies:1.5,Dinner:2}; return out.sort((a,b)=>ORD[a.when]-ORD[b.when]);
@@ -1481,7 +1537,7 @@ function renderTomorrow(){
   const T=addDays(TODAY,1), planned=S.meals.filter(m=>m.planned_for===T&&isDin(m));
   const head=`<div class="row" style="justify-content:space-between;align-items:baseline"><h2 style="margin:0">Dinner tomorrow · ${dayName(T,'long')}</h2><span class="meta">dinners are for 2</span></div>`;
   let body;
-  if(planned.length) body=`<p class="meta" style="margin:6px 0 0">Planned: <b>${planned.map(m=>(m.leftover_of?'🍱 Leftovers: ':isScr(m)?'🫙 ':'')+esc(dTitle(m))).join(', ')}</b></p>`;
+  if(planned.length) body=`<p class="meta" style="margin:6px 0 0">Planned: <b>${planned.map(m=>(m.leftover_of?'🍱 Leftovers: ':isScr(m)?'🫙 ':isOutDin(m)?'🍽️ ':'')+esc(dTitle(m))).join(', ')}</b></p>`;
   else{
     const lo=leftoverMeals(T)[0];
     if(lo){ const r=rec(lo.recipe_id), n=leftoversOf(lo);
