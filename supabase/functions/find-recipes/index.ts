@@ -105,14 +105,11 @@ async function get(url: string, ms = 9000): Promise<string> {
   try { const r = await fetch(url, { headers: UA, redirect: "follow", signal: c.signal }); return r.ok ? await r.text() : ""; }
   catch { return ""; } finally { clearTimeout(t); }
 }
-// Each site's search page, and the pattern its recipe links follow.
+// Each site's search page, and the pattern its recipe links follow. (Serious Eats and Allrecipes
+// refuse server requests, so NYT Cooking is the one searched.)
 const SITES = [
-  { name: "Serious Eats", search: (q: string) => `https://www.seriouseats.com/search?q=${encodeURIComponent(q)}`,
-    link: /href="(https:\/\/www\.seriouseats\.com\/[a-z0-9-]+-recipe[a-z0-9-]*)"/g },
   { name: "NYT Cooking", search: (q: string) => `https://cooking.nytimes.com/search?q=${encodeURIComponent(q)}`,
     link: /href="(\/recipes\/\d+-[a-z0-9-]+)"/g, base: "https://cooking.nytimes.com" },
-  { name: "Allrecipes", search: (q: string) => `https://www.allrecipes.com/search?q=${encodeURIComponent(q)}`,
-    link: /href="(https:\/\/www\.allrecipes\.com\/recipe\/\d+\/[a-z0-9-]+\/?)"/g },
 ];
 
 Deno.serve(async (req) => {
@@ -166,9 +163,7 @@ Deno.serve(async (req) => {
         uses, fresh: uses.filter((i) => fresh.includes(i)), need: ings.filter((i) => !have.includes(i)) };
     }))).filter(Boolean) as any[];
     results.sort((a, b) => b.fresh.length - a.fresh.length || b.uses.length - a.uses.length || a.need.length - b.need.length);
-    const sites = pages.map(({ s, html }, k) => `${s.name}: ${html.length}b/${lists[k].length}`);
-    return json({ results: results.slice(0, 15), searched: queries, candidates: cand.length, perSite, sites,
-      sample: Object.fromEntries(pages.slice(0, SITES.length).map(({ s, html }) => [s.name, (html.match(/href="[^"]*recipe[^"]*"/g) || []).slice(0, 4)])) });
+    return json({ results: results.slice(0, 15), searched: queries, candidates: cand.length, perSite });
   } catch (e) {
     return json({ error: "Search failed: " + (e as Error).message }, 200);
   }
