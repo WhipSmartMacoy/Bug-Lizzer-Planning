@@ -1424,19 +1424,30 @@ function restPicks(q){ const ql=q.trim().toLowerCase();
 function homeLoc_(){ try{ const v=JSON.parse(localStorage.getItem('bl_loc')||'null'); if(v) return v; }catch(e){}
   if(navigator.geolocation&&!window.__askedLoc){ window.__askedLoc=1; navigator.geolocation.getCurrentPosition(p=>{ try{localStorage.setItem('bl_loc',JSON.stringify({lat:+p.coords.latitude.toFixed(3),lon:+p.coords.longitude.toFixed(3)}));}catch(e){} },()=>{},{timeout:8000,maximumAge:864e5}); }
   return {lat:40.75,lon:-73.98}; }   // until we know: New York (Fairway country)
+let photonDown=false;
+const milesTo=(a,lat,lon)=>{const R=3959,toR=x=>x*Math.PI/180,dl=toR(lat-a.lat),dn=toR(lon-a.lon);return 2*R*Math.asin(Math.sqrt(Math.sin(dl/2)**2+Math.cos(toR(a.lat))*Math.cos(toR(lat))*Math.sin(dn/2)**2));};
+const fetchT=(u,ms)=>{const c=new AbortController(); const t=setTimeout(()=>c.abort(),ms); return fetch(u,{signal:c.signal}).finally(()=>clearTimeout(t));};
+const restRow=(here,name,kind,street,area,lat,lon)=>{const mi=lat!=null?milesTo(here,lat,lon):null;
+  return {name,mi,sub:[(kind||'').replace(/_/g,' '),street,area,mi!=null?(mi<10?mi.toFixed(1):Math.round(mi))+' mi':''].filter(Boolean).join(' · ')};};
 async function searchRest(q){
-  const {lat,lon}=homeLoc_();
-  const u=`https://photon.komoot.io/api/?q=${encodeURIComponent(q)}&lat=${lat}&lon=${lon}&limit=15&location_bias_scale=0.5`+FOOD_TAGS.map(t=>`&osm_tag=amenity:${t}`).join('')+'&osm_tag=shop:bakery&osm_tag=shop:deli';
-  try{ const j=await (await fetch(u)).json();
-    const dist=(a,b)=>{const R=3959,toR=x=>x*Math.PI/180,dl=toR(b[1]-a.lat),dn=toR(b[0]-a.lon);return 2*R*Math.asin(Math.sqrt(Math.sin(dl/2)**2+Math.cos(toR(a.lat))*Math.cos(toR(b[1]))*Math.sin(dn/2)**2));};
-    return (j.features||[]).filter(f=>f.properties?.name).map(f=>{const p=f.properties, mi=f.geometry?dist({lat,lon},f.geometry.coordinates):null;
-      return {name:p.name, mi, sub:[(p.osm_value||'').replace(/_/g,' '),[p.housenumber,p.street].filter(Boolean).join(' '),p.city||p.district||'',mi!=null?(mi<10?mi.toFixed(1):Math.round(mi))+' mi':''].filter(Boolean).join(' · ')};})
-      .filter(x=>x.mi==null||x.mi<40).sort((a,b)=>(a.mi??99)-(b.mi??99)).slice(0,8);
-  }catch(e){ return []; } }
+  const here=homeLoc_(), {lat,lon}=here; let rows=[];
+  if(!photonDown){ try{   // fast, made for search-as-you-type
+    const u=`https://photon.komoot.io/api/?q=${encodeURIComponent(q)}&lat=${lat}&lon=${lon}&limit=15&location_bias_scale=0.5`+FOOD_TAGS.map(t=>`&osm_tag=amenity:${t}`).join('')+'&osm_tag=shop:bakery&osm_tag=shop:deli';
+    const j=await (await fetchT(u,3000)).json();
+    rows=(j.features||[]).filter(f=>f.properties?.name).map(f=>{const p=f.properties,c=f.geometry?.coordinates||[];return restRow(here,p.name,p.osm_value,[p.housenumber,p.street].filter(Boolean).join(' '),p.city||p.district,c[1],c[0]);});
+  }catch(e){ photonDown=true; } }
+  if(!rows.length){ try{   // fallback: OpenStreetMap's own search, limited to ~20 miles around us
+    const d=0.3, u=`https://nominatim.openstreetmap.org/search?format=jsonv2&q=${encodeURIComponent(q)}&viewbox=${lon-d},${lat+d},${lon+d},${lat-d}&bounded=1&limit=20&addressdetails=1`;
+    const j=await (await fetchT(u,12000)).json();
+    rows=j.filter(x=>(x.category==='amenity'&&FOOD_TAGS.includes(x.type))||(x.category==='shop'&&/bakery|deli/.test(x.type))).map(x=>{const a=x.address||{};
+      return restRow(here,x.name||a.amenity||q,x.type,[a.house_number,a.road].filter(Boolean).join(' '),a.suburb||a.neighbourhood||a.city||a.town,+x.lat,+x.lon);});
+  }catch(e){} }
+  return rows.filter(x=>x.mi==null||x.mi<40).sort((a,b)=>(a.mi??99)-(b.mi??99)).slice(0,8);
+}
 document.addEventListener('focusin',e=>{ if(e.target.id==='addR') homeLoc_(); });
 document.addEventListener('input',e=>{ if(e.target.id!=='addR') return; restQ=e.target.value; clearTimeout(restT); restLive=[];
   if(restQ.trim().length<2){ restT=null; $('#addRres').innerHTML=restPicks(restQ); return; }
-  restT=setTimeout(async()=>{ const q=restQ, r=await searchRest(q); if(q!==restQ) return; restT=null; restLive=r; if($('#addRres')) $('#addRres').innerHTML=restPicks(restQ); },400);
+  restT=setTimeout(async()=>{ const q=restQ, r=await searchRest(q); if(q!==restQ) return; restT=null; restLive=r; if($('#addRres')) $('#addRres').innerHTML=restPicks(restQ); },600);
   $('#addRres').innerHTML=restPicks(restQ); });
 document.addEventListener('keydown',e=>{ if(e.target.id==='addR'&&e.key==='Enter'){ e.preventDefault(); const f=$('#addRres [data-rest]'); f?.click(); } });
 document.addEventListener('click',async e=>{ const b=e.target.closest('[data-rest]'); if(!b||!addS) return; e.preventDefault(); e.stopImmediatePropagation();
