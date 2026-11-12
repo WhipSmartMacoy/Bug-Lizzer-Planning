@@ -85,6 +85,9 @@ h2{font:700 18px Georgia,serif;margin:6px 0 10px}
 .day.past{opacity:.75}
 .day h4{margin:0;font-size:13px;display:flex;justify-content:space-between;color:var(--muted)}
 .day h4 b{color:var(--ink)}
+.leftpick{display:flex;flex-wrap:wrap;gap:3px;align-items:center;font-size:11.5px;color:var(--muted);margin-top:3px}
+.leftpick button{font:inherit;font-size:11.5px;padding:1px 7px;border-radius:99px;border:1px solid var(--line);background:var(--card);cursor:pointer}
+.leftpick button.on{background:var(--green);border-color:var(--green);color:#fff}
 .lunch{border-bottom:1px dashed var(--line);padding-bottom:6px;display:flex;flex-direction:column;gap:4px}
 .day .lh{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
 .lrow{display:flex;align-items:center;gap:4px;font-size:12.5px;flex-wrap:wrap}
@@ -529,7 +532,7 @@ const DB = {
     if(ok&&r&&!m.leftover_of){ const used=await DB.usePantry(r, v?-1:1);   // cooking uses ingredients up; undo puts them back
       const names=used.map(x=>x.ingredient), skipped=Object.keys(r.amounts||{}).filter(i=>!names.includes(i)&&pantryOf(i));
       toast(!names.length?(v?'Cooked ✓ (none of its ingredients are tracked in At Home)':'Un-cooked'):
-        (v?'Cooked ✓ · used from At Home: ':'Put back in At Home: ')+names.slice(0,6).join(', ')+(names.length>6?` +${names.length-6} more`:'')+(skipped.length?` · couldn't measure ${skipped.join(', ')}`:''),5000); }
+        (v?'Cooked ✓ · used from At Home: ':'Put back in At Home: ')+names.slice(0,6).join(', ')+(names.length>6?` +${names.length-6} more`:'')+(skipped.length?` · couldn't measure ${skipped.join(', ')}`:'')+(v&&servingsNum(r)>eaten(m)?' · tap how much is left on the card':''),6000); }
     return ok;
   },
   // Add (sign=1) or remove (sign=-1) a recipe's amounts from the pantry, for items the pantry tracks.
@@ -602,10 +605,12 @@ const PEOPLE=['Amy','Parker'];   // who lunch is planned for (1 serving each)
 const isLunch = m => m.meal==='lunch';
 const eaten = m => isLunch(m)?1:EAT;
 const servingsNum = r => { const m=String(r?.servings||'').match(/\d+/); return m?+m[0]:null; };   // "4 to 6" -> 4 (the safe end)
+const servingsRange = r => { const n=String(r?.servings||'').match(/\d+/g)?.map(Number)||[]; return n.length?[n[0],Math.max(n[0],n[1]&&n[1]<=24?n[1]:n[0])]:null; };
 function leftoversOf(m){
-  const n=servingsNum(rec(m.recipe_id)); if(!n||m.leftover_of) return 0;
+  if(m.leftover_of) return 0;
+  const n=servingsNum(rec(m.recipe_id)); const start=m.left_after!=null?+m.left_after:(n?n-eaten(m):0);   // what was left right after the meal
   const later=S.meals.filter(x=>String(x.leftover_of)===String(m.id)).reduce((t,x)=>t+eaten(x),0);
-  return Math.max(0, n-eaten(m)-EAT*(+m.lunches||0)-later);
+  return Math.max(0, start-EAT*(+m.lunches||0)-later);
 }
 function leftoverMeals(day,min=EAT){   // meals cooked (or on the menu) before `day` with at least `min` servings left
   return S.meals.filter(m=>!m.leftover_of&&m.planned_for<day&&m.planned_for>=addDays(day,-KEEP_DAYS)&&rec(m.recipe_id)&&leftoversOf(m)>=min)
@@ -658,7 +663,8 @@ function renderPlan(){
       ${ms.map(m=>{const r=rec(m.recipe_id); if(!r) return ''; const n=servingsNum(r), left=leftoversOf(m); return `<div class="meal ${m.cooked_at?'cooked':''}">
         ${m.leftover_of?'<div class="meta">🍱 Leftovers</div>':''}<a href="${esc(r.url)}" target="_blank" rel="noopener">${esc(r.title)}</a>
         <div class="meta">${m.leftover_of?'nothing to buy or cook':`${r.servings?'Serves '+esc(r.servings.replace(/^serves\s*/i,''))+' · ':''}added by ${esc(nameOf(m.added_by))}`}</div>
-        ${!m.leftover_of&&n>EAT?`<div class="meta">${left?`<b>${left} serving${left>1?'s':''} left over</b>`:'No leftovers left'}${+m.lunches?` · ${m.lunches} lunch${m.lunches>1?'es':''} taken`:''}</div>`:''}
+        ${!m.leftover_of&&(n>EAT||m.left_after!=null)?`<div class="meta">${left?`<b>${left} serving${left>1?'s':''} left over</b>`:'No leftovers left'}${m.left_after==null&&m.cooked_at?' (guess)':''}</div>`:''}
+        ${!m.leftover_of&&m.cooked_at&&(n>EAT||m.left_after!=null)?leftPicker(m):''}
         ${m.cooked_at?`<div class="meta" style="color:var(--green)">✓ Cooked by ${esc(nameOf(m.cooked_by))}</div>`:''}
         <div class="mrow">
           <button data-cook="${m.id}" data-v="${m.cooked_at?0:1}">${m.cooked_at?'Undo cooked':m.leftover_of?'Eaten ✓':'Cooked ✓'}</button>
@@ -673,6 +679,14 @@ function renderPlan(){
   renderTomorrow(); renderShop();
 }
 // ---- what's for dinner tomorrow? leftovers first, then something we can make from what's At Home ----
+// After cooking: tap how many servings are actually left. "Serves 4 to 6" for 2 offers 2 · 3 · 4.
+function leftPicker(m){
+  const [lo,hi]=servingsRange(rec(m.recipe_id))||[EAT,EAT], e=eaten(m);
+  const choices=[...new Set([0,...Array.from({length:Math.max(0,hi-lo)+1},(_,k)=>lo+k-e).filter(x=>x>0),...(m.left_after!=null?[+m.left_after]:[])])].sort((a,b)=>a-b);
+  const cur=m.left_after!=null?+m.left_after:null;
+  return `<div class="leftpick"><span>${cur==null?'How much is left?':'Left after dinner:'}</span>${choices.map(c=>`<button data-left="${m.id}" data-n="${c}" class="${cur===c?'on':''}" title="${c?c+' servings left':'nothing left'}">${c||'None'}</button>`).join('')}
+    <button data-left="${m.id}" data-n="${Math.max(...choices)+1}" title="More than that">+</button></div>`;
+}
 function lunchRow(d,p,opts){
   const m=S.meals.find(x=>isLunch(x)&&x.planned_for===d&&x.person===p);
   if(m){ const r=rec(m.recipe_id);
@@ -982,6 +996,7 @@ document.addEventListener('click',async e=>{
   else if(t.id==='wkToday'){ week=mondayOf(TODAY); }
   else if(t.dataset.cook){ await DB.setCooked(t.dataset.cook,t.dataset.v==='1'); }
   else if(t.dataset.unplan){ await DB.unplan(t.dataset.unplan); }
+  else if(t.dataset.left){ await DB.run(sb.from('meal_plan').update({left_after:+t.dataset.n}).eq('id',t.dataset.left)); const m=S.meals.find(x=>String(x.id)===t.dataset.left); toast(+t.dataset.n?`${t.dataset.n} servings of ${rec(m.recipe_id).title} saved as leftovers`:'No leftovers'); }
   else if(t.dataset.lunch){ const m=S.meals.find(x=>String(x.id)===t.dataset.lunch); await DB.lunch(m,+t.dataset.d); if(+t.dataset.d>0) toast(`Lunch logged: ${leftoversOf(S.meals.find(x=>x.id===m.id))} servings of ${rec(m.recipe_id).title} left`); }
   else if(t.dataset.lo){ const m=S.meals.find(x=>String(x.id)===t.dataset.lo); await DB.planLeftovers(m,addDays(TODAY,1)); toast('Leftovers planned for tomorrow'); }
   else if(t.dataset.tmr){ await DB.plan(t.dataset.tmr,addDays(TODAY,1)); toast('Planned for tomorrow'); }
