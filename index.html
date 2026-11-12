@@ -652,7 +652,7 @@ function renderPlan(){
           <select data-move="${m.id}" style="font-size:11.5px;padding:2px 4px;width:auto;margin:0"><option value="">Move…</option>${days.filter(x=>x!==d).map(x=>`<option value="${x}">${dayName(x)}</option>`).join('')}</select>
           <button data-unplan="${m.id}" title="Remove">✕</button>
         </div></div>`}).join('')}
-      ${S.recipes.length?`<select data-addday="${d}"><option value="">+ Add dinner</option>${opts}</select>`:''}
+      ${S.recipes.length&&!ms.some(m=>rec(m.recipe_id))?`<select data-addday="${d}"><option value="">+ Add dinner</option>${opts}</select>`:''}
 
     </div>`}).join('');
   if(!S.recipes.length) $('#week').insertAdjacentHTML('afterend','');
