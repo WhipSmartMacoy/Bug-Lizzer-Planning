@@ -10,7 +10,7 @@ Live: https://whipsmartmacoy.github.io/Bug-Lizzer-Planning/ (sign in by email; a
 - **Scan a receipt / our usuals:** photograph a Fairway receipt (read on the phone, no upload) or pick from our most-bought Fairway items; review, then add to At Home. Marking a meal cooked subtracts its ingredients and says what it took.
 - **Plan & shop:** plan one week at a time by putting recipes on days. The shopping list covers just that week, grouped by the day each ingredient is first needed, with Fairway prices.
 - **What we use most:** ingredients counted only from meals that were planned or cooked.
-- **Use it up / Discover:** recipes in the box that use what's in the fridge or what you already buy.
+- **Make it now:** recipes (from the box and NYT Cooking) whose main ingredients are all At Home. **Discover:** recipes that reuse what you already buy.
 - **Who did what:** activity feed and members.
 
 ### Rules

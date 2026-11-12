@@ -137,7 +137,7 @@ a{color:var(--green)}
   <nav class="tabs" id="tabs">
     <button data-p="plan" class="on">Plan &amp; shop</button>
     <button data-p="pantry">At Home</button>
-    <button data-p="useup">Use it up</button>
+    <button data-p="useup">Make it now</button>
     <button data-p="recipes">Recipe box</button>
     <button data-p="ingredients">What we use most</button>
     <button data-p="discover">Discover</button>
@@ -198,7 +198,7 @@ a{color:var(--green)}
   <section class="panel" id="recipes">
     <div class="addbox">
       <h2 style="margin-top:0">Add a recipe we've cooked</h2>
-      <p class="meta" style="margin:0 0 10px">The recipe box only holds recipes we've actually made. Paste the link to one from NYT Cooking, Serious Eats or any other site; the box saves the title, photo and ingredient names, and links back to the original. Something new to try? Plan it from <b>Use it up</b>, and it joins the box once it's cooked.</p>
+      <p class="meta" style="margin:0 0 10px">The recipe box only holds recipes we've actually made. Paste the link to one from NYT Cooking, Serious Eats or any other site; the box saves the title, photo and ingredient names, and links back to the original. Something new to try? Plan it from <b>Make it now</b>, and it joins the box once it's cooked.</p>
       <form id="importForm" class="row" style="margin:0"><input type="url" id="importUrl" required placeholder="https://cooking.nytimes.com/recipes/…" style="flex:1 1 320px"><button class="btn primary" id="importBtn">Get recipe</button></form>
       <div id="importPreview"></div>
     </div>
@@ -270,7 +270,7 @@ const CFG = window.BLP_CONFIG || {};
 const ONLINE = !!(CFG.url && CFG.key && window.supabase);
 const sb = ONLINE ? window.supabase.createClient(CFG.url, CFG.key) : null;
 const STAPLES = new Set(["water","salt","pepper","black pepper","rice","vegetable oil","canola oil","chili powder","smoked paprika","garam masala","curry powder","cardamom","cloves","allspice","fennel seeds","mustard seeds","red pepper","olive oil","garlic","butter","sugar","brown sugar","flour","neutral oil","soy sauce","red pepper flakes","cumin","paprika","cayenne","oregano","turmeric","cinnamon","nutmeg","honey","mustard","rice vinegar","sesame oil","baking soda","baking powder","vanilla","coriander","cornstarch","bay leaves"]);
-// Herbs and spices: optional for "Use it up" (pick them up or leave them out).
+// Herbs and spices: optional for "Make it now" (pick them up or leave them out).
 const HERBS = new Set(["basil","parsley","cilantro","dill","mint","thyme","rosemary","sage","chives","tarragon","oregano","bay leaves","marjoram","lemongrass",
   "cumin","paprika","smoked paprika","cayenne","cinnamon","nutmeg","coriander","turmeric","garam masala","curry powder","chili powder","cardamom","cloves","allspice",
   "fennel seeds","mustard seeds","red pepper flakes","sesame seeds","star anise","saffron","za'atar","sumac","five-spice","vanilla","fresh chiles","jalapeño","serrano peppers"]);
@@ -715,7 +715,7 @@ function renderTomorrow(){
           <button class="btn small primary" data-tmr="${box.id}" type="button">Plan for tomorrow</button></div>`
         :webPick?`<div class="row" style="margin-top:6px;align-items:center"><span>Online, all At Home: <a href="${esc(webPick.url)}" target="_blank" rel="noopener"><b>${esc(webPick.title)}</b></a> <span class="meta">${esc(webPick.site)}</span></span>
           <button class="btn small primary" data-webplan="${esc(webPick.url)}" data-day="${addDays(TODAY,1)}" type="button">Plan for tomorrow</button></div>`
-        :`<p class="meta" style="margin:6px 0 0">No leftovers and nothing that can be made from just what's At Home. Pick something below, or see <b>Use it up</b> after the next shop.</p>`;
+        :`<p class="meta" style="margin:6px 0 0">No leftovers and nothing that can be made from just what's At Home. Pick something below, or see <b>Make it now</b> after the next shop.</p>`;
     }
   }
   $('#tomorrow').innerHTML=`<div class="card" style="margin:10px 0 14px">${head}${body}</div>`;
@@ -799,7 +799,7 @@ async function planFromWeb(url,day){
   await DB.plan(r.id,day); toast(`${r.title} planned for ${dayName(day,'long')}`); renderAll();
 }
 document.addEventListener('change',e=>{ const el=e.target; if(el.dataset.webplanSel!==undefined&&el.value){ planFromWeb(el.dataset.webplanSel,el.value); } });
-// ---- Use it up: search the web (links only) ----
+// ---- Make it now: search the web (links only) ----
 let web=LS.get('web',null), webBusy=false;
 function useupInputs(){
   const on=S.pantry.filter(p=>+p.q>0&&!optional(p.ingredient)).map(p=>p.ingredient);
