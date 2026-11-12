@@ -705,7 +705,7 @@ const AREAS=[
     {id:'jeopardy',ic:'🎯',name:'JEOPARDY!',steps:['Lights: game-night scene','LG TV: on, open Disney+','Play the newest JEOPARDY! episode we haven\'t watched']},
     {id:'rest',ic:'🌙',name:'Rest Mode',steps:['Lights: dim and warm','LG TV: off']}],subs:[
     {id:'entertainment',ic:'📺',name:'Entertainment',blurb:'The LG TV: power, volume, inputs and apps'},
-    {id:'lights',ic:'💡',name:'Lights',blurb:'Philips Hue: rooms, scenes and brightness',hue:true}]},
+    {id:'lights',ic:'💡',name:'Lights',blurb:'Philips Hue scenes',hue:true}]},
   {id:'schedule',ic:'📅',name:'Schedule',blurb:'Our shared iCloud calendar',cal:true},
   {id:'finance',ic:'💵',name:'Finance',blurb:'Bills and spending'}];
 let area='launch', sub=null;
@@ -758,22 +758,19 @@ function renderLights(){
     el.innerHTML=`<h2 style="margin-top:0">💡 Lights</h2>${hue.error?`<p class="needprice">${esc(hue.error)}</p>`:''}
       <p class="meta">Connect your Philips Hue account to control the lights from here. You'll sign in to Hue and approve it once; then everyone in the household can use the lights.</p>
       <button class="btn primary" id="hueConnect" type="button">Connect Hue</button>`; return; }
-  const rooms=hue.rooms||[];
-  el.innerHTML=`<div class="row" style="justify-content:space-between;align-items:baseline"><h2 style="margin:0">💡 Lights</h2><a href="#" id="hueReload" class="meta">refresh</a></div>
+  const rooms=(hue.rooms||[]).filter(r=>r.scenes.length).sort((x,y)=>(y.kind==='zone')-(x.kind==='zone')||y.scenes.length-x.scenes.length);
+  el.innerHTML=`<div class="row" style="justify-content:space-between;align-items:baseline"><h2 style="margin:0">💡 Scenes</h2><a href="#" id="hueReload" class="meta">refresh</a></div>
     ${hue.error?`<p class="needprice">${esc(hue.error)}</p>`:''}
-    ${rooms.length?rooms.map(r=>`<div class="room ${r.on?'on':''}">
-      <div class="row" style="justify-content:space-between;align-items:center;margin:0"><b>${esc(r.name)}${r.kind==='zone'?' <span class="meta">zone</span>':''}</b>
-        <button class="sw ${r.on?'on':''}" data-hueon="${r.grouped_light}" data-v="${r.on?0:1}" type="button" aria-label="${r.on?'Turn off':'Turn on'}"><span></span></button></div>
-      <input type="range" min="1" max="100" value="${Math.round(r.brightness||0)}" data-huebri="${r.grouped_light}" ${r.on?'':'disabled'} style="width:100%">
-      ${r.scenes.length?`<div class="chips">${r.scenes.map(x=>`<button type="button" class="chip ${x.active?'on':''}" data-huescene="${x.id}">${esc(x.name)}</button>`).join('')}</div>`:''}
-    </div>`).join(''):'<p class="meta">No rooms found on the Hue bridge.</p>'}`;
+    ${rooms.length?rooms.map(r=>`<div class="room"><b>${esc(r.name)}</b>
+      <div class="chips">${r.scenes.sort((x,y)=>x.name.localeCompare(y.name)).map(x=>`<button type="button" class="chip ${x.active?'on':''}" data-huescene="${x.id}">${esc(x.name)}</button>`).join('')}</div></div>`).join('')
+      :'<p class="meta">No scenes found. Make scenes in the Hue app and they show up here.</p>'}`;
 }
 document.addEventListener('click',async e=>{
   const t=e.target.closest('#hueConnect,#hueReload,[data-hueon],[data-huescene]'); if(!t) return; e.preventDefault();
   if(t.id==='hueConnect'){ const r=await hueCall({action:'start'}); if(r.url) location.href=r.url; return; }
   if(t.id==='hueReload') return hueCall({action:'rooms'});
   if(t.dataset.hueon){ t.classList.toggle('on'); return hueCall({action:'set',grouped_light:t.dataset.hueon,on:t.dataset.v==='1'}); }
-  if(t.dataset.huescene) return hueCall({action:'scene',scene:t.dataset.huescene});
+  if(t.dataset.huescene){ toast('Scene on: '+t.textContent); return hueCall({action:'scene',scene:t.dataset.huescene}); }
 });
 document.addEventListener('change',e=>{ if(e.target.dataset?.huebri) hueCall({action:'set',grouped_light:e.target.dataset.huebri,brightness:+e.target.value}); });
 // Back from Hue sign-in
