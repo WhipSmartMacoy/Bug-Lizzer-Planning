@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#f6f3ec">
+<meta name="theme-color" content="#f3f5f1">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
@@ -11,12 +11,16 @@
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="icon" href="icon-180.png">
 <link rel="manifest" href="manifest.json">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500..800&display=swap" rel="stylesheet">
 <title>Bug-Lizzer Planning · Kitchen</title>
 <style>
 :root{
-  --bg:#f6f3ec; --card:#fffdf8; --ink:#23261f; --muted:#6b6e63; --line:#e3ddd0;
-  --green:#3f6b4a; --green-soft:#e3ece3; --amber:#b9772b; --amber-soft:#f6ead9; --red:#a6463a;
-  --r:12px; --shadow:0 1px 2px rgba(35,38,31,.06),0 4px 14px rgba(35,38,31,.05);
+  /* Bug-Lizzer: cool garden-paper ground, deep leaf ink, a ladybug red kept for small moments */
+  --bg:#f3f5f1; --card:#ffffff; --ink:#17211c; --muted:#66706a; --line:#dfe4dd;
+  --green:#2f6b4f; --green-soft:#e4efe8; --amber:#b9862b; --amber-soft:#f8efd8; --red:#c23b2b; --bug:#d8432f;
+  --r:16px; --shadow:0 1px 1px rgba(23,33,28,.04),0 10px 30px -12px rgba(23,33,28,.18);
+  --display:"Bricolage Grotesque",ui-sans-serif,system-ui,sans-serif;
 }
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif}
@@ -184,15 +188,77 @@ h2{font:700 18px Georgia,serif;margin:6px 0 10px}
 footer{max-width:1080px;margin:auto;padding:0 20px 40px;color:var(--muted);font-size:12.5px}
 a{color:var(--green)}
 
+/* ===== Elevated theme ===== */
+body{font:15px/1.5 -apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI Variable","Segoe UI",system-ui,sans-serif;letter-spacing:-.003em;-webkit-font-smoothing:antialiased}
+h1,h2,h3,.hello h2,.tile b,.scene b,.day h4 b,.weeknav .label{font-family:var(--display);letter-spacing:-.02em}
+h2{font-weight:700;font-size:20px;margin:8px 0 12px}
+.brand{align-items:center;gap:10px;cursor:pointer}
+.brand .mark{width:34px;height:34px;border-radius:10px;box-shadow:0 2px 6px rgba(23,33,28,.18)}
+.brand h1{font:800 25px/1 var(--display);letter-spacing:-.035em}
+.areas .homebtn{background:transparent;border-color:transparent;color:var(--muted);padding:6px 10px;font-weight:600}
+.areas .homebtn:hover{background:var(--card);border-color:var(--line)}
+#areaName{font-family:var(--display);font-size:15px}
+/* surfaces: flat cards, hairline edges; shadows only on things that float */
+.card,.day,.schedwrap,.room{box-shadow:none;border-color:var(--line);border-radius:var(--r)}
+.meal{background:#f7f9f6;border-radius:12px;border-color:#e6ebe4}
+table{border-radius:14px}
+.btn{border-radius:12px;padding:10px 16px;transition:background .15s,border-color .15s}
+.btn:hover{border-color:#c9d1c8}
+.btn.primary{background:var(--green);border-color:var(--green);box-shadow:inset 0 1px 0 rgba(255,255,255,.18),0 1px 2px rgba(23,33,28,.2)}
+.btn.primary:hover{background:#285c44}
+.chip{border-radius:99px;padding:6px 12px}
+:focus-visible{outline:2px solid var(--green);outline-offset:2px}
+.day .lh,.lunch .lh{text-transform:none;letter-spacing:0;font-size:12.5px;font-weight:700;color:var(--muted)}
+.tile .soonTag{text-transform:none;letter-spacing:0;font-size:12px;font-weight:600}
+.day.today{border-color:var(--ink);box-shadow:inset 3px 0 0 var(--bug)}
+.daystrip button.today b{color:var(--bug)}
+.daystrip button.on{background:var(--ink)}
+/* home screen: the one bold move, a dark Meals block with tonight's dinner */
+.hello h2{font-size:clamp(30px,5vw,44px);font-weight:800;line-height:1.05;margin:30px 0 4px;letter-spacing:-.04em}
+.tiles{gap:12px;grid-template-columns:repeat(3,1fr)}
+#subTiles.tiles{grid-template-columns:repeat(auto-fit,minmax(220px,1fr))}
+.tile{border-radius:22px;box-shadow:none;border-color:var(--line);padding:20px;gap:8px}
+.tile:hover{transform:none;border-color:#c9d1c8;box-shadow:var(--shadow)}
+.tile .ic{width:46px;height:46px;border-radius:14px;display:grid;place-items:center;font-size:24px;background:var(--green-soft)}
+.tile b{font-size:21px;font-weight:700}
+.tile[data-area=meals]{grid-column:1/-1;background:var(--ink);border-color:var(--ink);color:#f3f5f1;min-height:190px;position:relative;overflow:hidden}
+.tile[data-area=meals] .ic{background:rgba(255,255,255,.1)}
+.tile[data-area=meals] .meta{color:rgba(243,245,241,.75);font-size:15px}
+.tile[data-area=meals]::after{content:"";position:absolute;right:-48px;bottom:-78px;width:230px;height:230px;border-radius:50%;background:radial-gradient(circle at 35% 35%,#e0563f,#b8321f);box-shadow:inset 0 0 0 0 transparent}
+.tile[data-area=meals] .meta{max-width:min(60%,520px)}
+.tile[data-area=meals]>*{position:relative;z-index:1}
+.tile.later{opacity:1;background:transparent;border-style:dashed}
+.tile.later .ic{background:#eceee9;filter:grayscale(.4)}
+.scene{border-radius:22px;background:#1b2a24}
+.scene[data-scene=jeopardy]{background:#14213d}
+.scene[data-scene=rest]{background:#2b2238}
+.toast{border-radius:14px!important;box-shadow:0 12px 30px -8px rgba(23,33,28,.35)}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+/* Plan: a week strip and one generous day at a time, on every screen */
+.daystrip{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;margin:16px 0 12px;max-width:760px}
+.daystrip button{all:unset;cursor:pointer;display:flex;flex-direction:column;align-items:center;padding:8px 0;border-radius:14px;font-size:12px;color:var(--muted)}
+.daystrip button:hover{background:var(--card)}
+.daystrip button b{font:700 20px/1.1 var(--display);color:var(--ink)}
+.daystrip button i{font-style:normal;height:8px;line-height:8px;color:var(--bug)}
+.daystrip button.today b{color:var(--bug)}
+.daystrip button.on{background:var(--ink);color:#d9ded9}.daystrip button.on b,.daystrip button.on i{color:#fff}
+.week{display:block;max-width:760px}
+.week .day{display:none;padding:18px 20px;gap:12px;min-height:0}
+.week .day.sel{display:flex}
+.week .day h4{font-size:19px}
+.week .lrow{font-size:14.5px}.week .lrow b{min-width:58px}
+.week .lrow select{flex:1;font-size:14px;padding:6px 8px}
+.week .meal{font-size:14px;padding:10px 12px}
+
 /* ===== iPhone (15 Pro 393pt, Air 420pt) ===== */
-.daystrip{display:none}
 nav.tabs button i{font-style:normal;display:none}
 :root{--safe-top:env(safe-area-inset-top,0px);--safe-bot:env(safe-area-inset-bottom,0px)}
 @media (max-width:640px){
   body{font-size:16px;-webkit-text-size-adjust:100%;padding-bottom:calc(74px + var(--safe-bot))}
   header{padding:calc(12px + var(--safe-top)) 14px 0}
   main{padding:0 12px}
-  .brand h1{font-size:22px}.brand .sub{display:none}
+  .brand h1{font-size:22px}.brand .mark{width:30px;height:30px;border-radius:9px}
+  .tile[data-area=meals]{min-height:170px}.tile[data-area=meals]::after{width:120px;height:120px;right:-34px;top:-34px;bottom:auto}.tile[data-area=meals] .meta{max-width:none}
   .who span{display:none}
   input,select,textarea{font-size:16px!important}          /* stops iOS zooming into fields */
   .btn,button.chip,.lrow button,.lrow select{min-height:36px}
@@ -207,12 +273,13 @@ nav.tabs button i{font-style:normal;display:none}
   body.launch nav.tabs,body.soon nav.tabs{display:none!important}
   body.launch,body.soon{padding-bottom:var(--safe-bot)}
   /* Plan: one day at a time, swipe-free day strip */
+  .tiles{grid-template-columns:1fr 1fr!important}
   .daystrip{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin:10px 0;position:sticky;top:0;z-index:5;background:var(--bg);padding:6px 0}
   .daystrip button{all:unset;cursor:pointer;display:flex;flex-direction:column;align-items:center;padding:6px 0;border-radius:12px;font-size:11px;color:var(--muted)}
   .daystrip button b{font-size:18px;color:var(--ink)}
   .daystrip button i{font-style:normal;height:8px;line-height:8px;color:var(--green)}
   .daystrip button.today b{color:var(--green)}
-  .daystrip button.on{background:var(--green);color:#fff}.daystrip button.on b,.daystrip button.on i{color:#fff}
+  .daystrip button.on{background:var(--ink);color:#fff}.daystrip button.on b,.daystrip button.on i{color:#fff}
   .week{display:block}
   .week .day{display:none;padding:14px;gap:10px}
   .week .day.sel{display:flex}
@@ -251,7 +318,7 @@ html.standalone header{padding-top:calc(6px + var(--safe-top))}
 
 <header>
   <div class="top">
-    <div class="brand"><h1 data-area="launch" style="cursor:pointer">Bug-Lizzer Planning</h1><span class="sub">Household hub</span></div>
+    <div class="brand" data-area="launch" role="button" tabindex="0" aria-label="Home screen"><img src="icon-180.png" alt="" class="mark"><h1>Bug-Lizzer</h1></div>
     <div class="who" id="who"></div>
   </div>
   <div class="areas" id="areas"><button type="button" data-area="launch" class="homebtn">⌂ Home screen</button><span id="areaName"></span></div>
