@@ -142,9 +142,7 @@ a{color:var(--green)}
     <button data-p="pantry">At Home</button>
     <button data-p="useup">Make it now</button>
     <button data-p="recipes">Recipe box</button>
-    <button data-p="ingredients">What we use most</button>
     <button data-p="discover">Discover</button>
-    <button data-p="activity">Who did what</button>
     <button data-p="settings">Settings</button>
   </nav>
 </header>
@@ -220,33 +218,15 @@ a{color:var(--green)}
     <div id="recGrid" class="grid"></div>
   </section>
 
-  <section class="panel" id="ingredients">
-    <p class="intro">Counts come only from meals you've put on the calendar: "Planned" is every time a recipe using it was scheduled, and "Cooked" is how many of those actually got made. Ingredients near the top are worth keeping stocked. If you keep buying something that rarely gets cooked, it's probably going to waste.</p>
-    <div class="row"><input type="search" id="ingSearch" placeholder="Search ingredients…"><label class="meta"><input type="checkbox" id="needPriceOnly"> Only ones that need a price</label></div>
-    <div id="ingTable"></div>
-  </section>
 
   <section class="panel" id="discover">
     <p class="intro">New recipes in the box you haven't planned yet, ranked by how many ingredients they share with what you plan most. They use what you already buy, so less goes to waste.</p>
     <div id="discGrid" class="grid"></div>
   </section>
 
-  <section class="panel" id="activity">
-    <div class="two">
-      <div>
-        <h2>Recent activity</h2>
-        <ul class="feed" id="feed"></ul>
-      </div>
-      <div>
-        <h2>Household</h2>
-        <div id="people"></div>
-        <h2 style="margin-top:20px">Who cooks what</h2>
-        <div id="cookStats"></div>
-      </div>
-    </div>
-  </section>
 
   <section class="panel" id="settings">
+    <div class="card" style="max-width:760px;margin-bottom:16px"><h2 style="margin-top:0">Household</h2><div id="people"></div></div>
     <div class="card" style="max-width:760px">
       <h2 style="margin:0">Prices</h2>
       <p class="meta" style="margin:0">Each ingredient is linked to one product on <a href="https://shop.fairwaymarket.com/store/fairway/storefront" target="_blank" rel="noopener">shop.fairwaymarket.com</a>. Refreshing re-checks every linked product page for today's price and flags anything out of stock.</p>
@@ -855,16 +835,6 @@ document.addEventListener('click',e=>{
   else if(t.dataset.p==='useup') setTimeout(()=>findOnline(),0);
   else if(t.dataset.webadd){ document.querySelector('[data-p="recipes"]').click(); $('#importUrl').value=t.dataset.webadd; $('#importForm').requestSubmit(); window.scrollTo(0,0); }
 });
-function renderIngredients(){
-  const q=$('#ingSearch').value.toLowerCase(), only=$('#needPriceOnly').checked, u=usage();
-  let rows=allIngredients().filter(i=>(!q||i.includes(q))&&(!only||!S.prices[i]?.price));
-  rows.sort((a,b)=>(u[b]?.p||0)-(u[a]?.p||0)||(u[b]?.c||0)-(u[a]?.c||0)||a.localeCompare(b));
-  if(!rows.length){ $('#ingTable').innerHTML=`<div class="empty">${S.recipes.length?'Nothing matches.':'Add recipes to the box and their ingredients show up here.'}</div>`; return; }
-  const max=Math.max(1,...rows.map(i=>u[i]?.p||0));
-  $('#ingTable').innerHTML=`<table><tr><th>Ingredient</th><th>Planned</th><th>Cooked</th><th style="width:24%"></th><th>Price</th></tr>${rows.map(i=>`<tr>
-    <td>${esc(cap(i))}${STAPLES.has(i)?' <span class="tag">staple</span>':''}</td><td class="num">${u[i]?.p||0}</td><td class="num">${u[i]?.c||0}</td>
-    <td><div class="bar" style="width:${((u[i]?.p||0)/max*100).toFixed(0)}%;opacity:${u[i]?1:.12}"></div></td><td>${priceCell(i)}</td></tr>`).join('')}</table>`;
-}
 function renderDiscover(){
   const u=usage(); const ranked=Object.keys(u).filter(i=>!STAPLES.has(i)).sort((a,b)=>u[b].p-u[a].p).slice(0,25);
   if(!ranked.length){ $('#discGrid').innerHTML='<div class="empty">Plan a few meals first. Then this shows recipes in the box that reuse what you already buy.</div>'; return; }
@@ -874,13 +844,9 @@ function renderDiscover(){
   $('#discGrid').innerHTML=list.map(x=>card(x.r,`<div class="meta">Shares <b style="color:var(--green)">${x.shared.length}</b> ingredients with your plans${x.extra.length?' · new to buy: '+x.extra.map(esc).join(', '):''}</div>`)).join('')||'<div class="empty">Every recipe in the box has been planned. Add more!</div>';
 }
 function renderActivity(){
-  $('#feed').innerHTML=S.activity.length?S.activity.map(a=>`<li>${av(a.user_id)}<div><b>${esc(nameOf(a.user_id))}</b> ${esc(a.action)} <b>${esc(a.action.includes('home')||a.action.includes('buy')?cap(a.item):a.item)}</b><div class="meta">${ago(a.created_at)}</div></div></li>`).join('')
-    :'<li class="meta">Nothing yet. Add a recipe or plan a meal.</li>';
   $('#people').innerHTML=`<table>${S.members.map(m=>`<tr><td style="display:flex;gap:8px;align-items:center">${av(m.user_id)}<span>${esc(m.name)}${m.is_admin?' <span class="tag">admin</span>':''}${m.user_id===me.user_id?' <span class="tag">you</span>':''}</span></td>
     <td class="num">${m.approved?'<span class="meta">member</span>':(me.is_admin?`<button class="btn small primary" data-approve="${m.user_id}">Approve</button> `:'<span class="meta">waiting for approval</span>')}
     ${me.is_admin&&m.user_id!==me.user_id?` <button class="btn small danger" data-remove="${m.user_id}">Remove</button>`:''}</td></tr>`).join('')}</table>`;
-  const rows=S.members.filter(m=>m.approved).map(m=>[m,S.recipes.filter(r=>r.added_by===m.user_id).length,S.meals.filter(x=>x.added_by===m.user_id).length,S.meals.filter(x=>x.cooked_by===m.user_id)]).sort((a,b)=>b[3].length-a[3].length);
-  $('#cookStats').innerHTML=`<table><tr><th>Person</th><th>Recipes added</th><th>Meals planned</th><th>Cooked</th></tr>${rows.map(([m,ad,pl,ck])=>`<tr><td>${esc(m.name)}</td><td class="num">${ad}</td><td class="num">${pl}</td><td class="num">${ck.length}</td></tr>`).join('')}</table>`;
 }
 const isFair = l => /^https:\/\/shop\.fairwaymarket\.com\/store\/fairway\/products\//.test(l||'');
 let lastRefresh=null;
@@ -916,7 +882,7 @@ function renderPantry(){
     :'<div class="empty">Nothing tracked yet. Tap <b>Got it ✓</b> on the shopping list after shopping, or add what you already have above.</div>';
 }
 function renderAll(){
-  renderWho();renderSettings();renderPantry();renderPlan();renderUseup();renderRecipes();renderIngredients();renderDiscover();renderActivity();
+  renderWho();renderSettings();renderPantry();renderPlan();renderUseup();renderRecipes();renderDiscover();renderActivity();
   $('#shareList').style.display='none';
   $('#syncNote').innerHTML=`<b>Live:</b> everything you add, plan, tick or cook shows up for the whole household right away, with your name on it.`;
 }
@@ -974,8 +940,8 @@ document.addEventListener('click',async e=>{
   if(t.id==='backToSignIn') return showSignIn();
   if(t.closest('form')&&!t.dataset.cancelprice&&t.type!=='button') return; // let forms submit
   if(t.dataset.p){document.querySelectorAll('#tabs button').forEach(b=>b.classList.toggle('on',b===t));document.querySelectorAll('.panel').forEach(p=>p.classList.toggle('on',p.id===t.dataset.p));return;}
-  if(t.dataset.editprice!==undefined){ e.preventDefault(); editingPrice=t.dataset.editprice; renderShop(); renderIngredients(); renderSettings(); return; }
-  if(t.dataset.cancelprice!==undefined){ editingPrice=null; renderShop(); renderIngredients(); renderSettings(); return; }
+  if(t.dataset.editprice!==undefined){ e.preventDefault(); editingPrice=t.dataset.editprice; renderShop(); renderSettings(); return; }
+  if(t.dataset.cancelprice!==undefined){ editingPrice=null; renderShop(); renderSettings(); return; }
   if(t.dataset.droping){ draft.title=$('#draftTitle').value; draft.servings=$('#draftServings').value; draft.ingredients=draft.ingredients.filter(i=>i!==t.dataset.droping); renderImport(); return; }
   if(t.id==='cancelDraft'){ draft=null; $('#importUrl').value=''; renderImport(); return; }
   if(t.id==='saveDraft'){
@@ -1020,10 +986,9 @@ document.addEventListener('change',async e=>{
   if(el.dataset.moveto!==undefined){ await DB.moveTo(el.dataset.moveto,el.value); toast('Moved to '+STORE_LABEL[el.value]); renderAll(); return; }
   if(el.id==='hideStaples') renderShop();
   if(el.id==='recList'||el.id==='recSort') renderRecipes();
-  if(el.id==='needPriceOnly') renderIngredients();
   if(el.name==='kind') renderImport();
 });
-['recSearch','ingSearch'].forEach(id=>$('#'+id).addEventListener('input',()=>({recSearch:renderRecipes,ingSearch:renderIngredients})[id]()));
+$('#recSearch').addEventListener('input',renderRecipes);
 
 // ---------------- scan a receipt / add from usuals ----------------
 function renderUsuals(){
