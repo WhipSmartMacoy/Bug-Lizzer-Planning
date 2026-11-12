@@ -147,6 +147,7 @@ a{color:var(--green)}
       <button class="btn small" id="wkNext">Next ›</button>
       <button class="btn small" id="wkToday">This week</button>
     </div>
+    <div id="tomorrow"></div>
     <div class="week" id="week"></div>
     <h2>Shopping list for this week</h2>
     <div class="row">
@@ -177,7 +178,7 @@ a{color:var(--green)}
   </section>
 
   <section class="panel" id="useup">
-    <p class="intro">Recipes that use up what's <b>At Home</b>, found on NYT Cooking. Fridge items count first because they spoil soonest. Only recipes whose main ingredients are <b>all</b> At Home are shown. Herbs, spices and pantry staples (flour, oil, salt, pepper, rice) don't count, since you can pick those up or leave them out. These are links to the original sites; tap <b>Add to recipe box</b> on any you want to keep.</p>
+    <p class="intro">Recipes that use up what's <b>At Home</b>, found on NYT Cooking. Plan one for a day and it joins the recipe box once it's cooked. Fridge items count first because they spoil soonest. Only recipes whose main ingredients are <b>all</b> At Home are shown. Herbs, spices and pantry staples (flour, oil, salt, pepper, rice) don't count, since you can pick those up or leave them out. These are links to the original sites; pick a day under <b>Plan for…</b> to try one.</p>
     <div id="useupHave" style="margin-bottom:12px"></div>
     <div class="row" style="justify-content:space-between;align-items:center"><h2 style="margin:0">Ideas from the web</h2><button class="btn small" id="webAgain" type="button">Search again</button></div>
     <div id="webStatus" class="meta" style="margin:6px 0 10px"></div>
@@ -188,12 +189,8 @@ a{color:var(--green)}
 
   <section class="panel" id="recipes">
     <div class="addbox">
-      <h2 style="margin-top:0">Add a recipe</h2>
-      <div class="seg" role="radiogroup" aria-label="Recipe type">
-        <label><input type="radio" name="kind" value="new" checked><span><b>New recipe</b><small>Haven't cooked it yet</small></span></label>
-        <label><input type="radio" name="kind" value="past"><span><b>Past recipe</b><small>Cooked it before</small></span></label>
-      </div>
-      <p class="meta" style="margin:0 0 10px">Paste the link to a recipe from NYT Cooking, Serious Eats or any other site. The box saves the title, photo and ingredient names, and links back to the original.</p>
+      <h2 style="margin-top:0">Add a recipe we've cooked</h2>
+      <p class="meta" style="margin:0 0 10px">The recipe box only holds recipes we've actually made. Paste the link to one from NYT Cooking, Serious Eats or any other site; the box saves the title, photo and ingredient names, and links back to the original. Something new to try? Plan it from <b>Use it up</b>, and it joins the box once it's cooked.</p>
       <form id="importForm" class="row" style="margin:0"><input type="url" id="importUrl" required placeholder="https://cooking.nytimes.com/recipes/…" style="flex:1 1 320px"><button class="btn primary" id="importBtn">Get recipe</button></form>
       <div id="importPreview"></div>
     </div>
@@ -201,8 +198,6 @@ a{color:var(--green)}
       <input type="search" id="recSearch" placeholder="Search the recipe box…">
       <select id="recList">
         <option value="">All recipes</option>
-        <option value="past">Past recipes (cooked before)</option>
-        <option value="new">New recipes (to try)</option>
         <option value="planned">Planned before</option>
       </select>
       <select id="recSort">
@@ -469,7 +464,7 @@ let usualsOpen=false, usualsPick=new Set();
 // pantry first and buying whole packages only when it runs out. Leftovers carry to the next meal.
 function shopPlan(){
   const end=addDays(week,6);
-  const meals=S.meals.filter(m=>!m.cooked_at&&m.planned_for<=end&&rec(m.recipe_id)).sort((a,b)=>a.planned_for.localeCompare(b.planned_for));
+  const meals=S.meals.filter(m=>!m.cooked_at&&!m.leftover_of&&m.planned_for<=end&&rec(m.recipe_id)).sort((a,b)=>a.planned_for.localeCompare(b.planned_for));
   const stock={}, out={};
   for(const m of meals){
     const r=rec(m.recipe_id), inWeek=m.planned_for>=week;
@@ -513,12 +508,17 @@ const DB = {
   },
   async run(q){ const {error}=await q; if(error) toast('Could not save: '+error.message); await DB.load(); return !error; },
   plan:(recipe_id,day)=>DB.run(sb.from('meal_plan').insert({recipe_id,planned_for:day})),
-  unplan:id=>DB.run(sb.from('meal_plan').delete().eq('id',id)),
+  async unplan(id){
+    const m=S.meals.find(x=>String(x.id)===String(id)), r=m&&rec(m.recipe_id);
+    const ok=await DB.run(sb.from('meal_plan').delete().eq('id',id));
+    if(ok&&r&&r.status!=='past'&&!S.meals.some(x=>String(x.recipe_id)===String(r.id))) await DB.run(sb.from('recipes').delete().eq('id',r.id));
+    return ok;
+  },
   move:(id,day)=>DB.run(sb.from('meal_plan').update({planned_for:day}).eq('id',id)),
   async setCooked(id,v){
     const m=S.meals.find(x=>String(x.id)===String(id)); const r=m&&rec(m.recipe_id);
     const ok=await DB.run(sb.from('meal_plan').update(v?{cooked_at:new Date().toISOString(),cooked_by:me.user_id}:{cooked_at:null,cooked_by:null}).eq('id',id));
-    if(ok&&r){ const used=await DB.usePantry(r, v?-1:1);   // cooking uses ingredients up; undo puts them back
+    if(ok&&r&&!m.leftover_of){ const used=await DB.usePantry(r, v?-1:1);   // cooking uses ingredients up; undo puts them back
       const names=used.map(x=>x.ingredient), skipped=Object.keys(r.amounts||{}).filter(i=>!names.includes(i)&&pantryOf(i));
       toast(!names.length?(v?'Cooked ✓ (none of its ingredients are tracked in At Home)':'Un-cooked'):
         (v?'Cooked ✓ · used from At Home: ':'Put back in At Home: ')+names.slice(0,6).join(', ')+(names.length>6?` +${names.length-6} more`:'')+(skipped.length?` · couldn't measure ${skipped.join(', ')}`:''),5000); }
@@ -553,6 +553,8 @@ const DB = {
     if(error) return toast(error.message);
     return DB.setCooked(data.id,true);
   },
+  planLeftovers:(m,day)=>DB.run(sb.from('meal_plan').insert({recipe_id:m.recipe_id,planned_for:day,leftover_of:m.id})),
+  lunch:(m,d)=>DB.run(sb.from('meal_plan').update({lunches:Math.max(0,(+m.lunches||0)+d)}).eq('id',m.id)),
   setHave:(i,v)=>DB.run(v?sb.from('week_have').insert({week_start:week,ingredient:i}):sb.from('week_have').delete().eq('week_start',week).eq('ingredient',i)),
   setPrice:(ingredient,price,item,link)=>DB.run(sb.from('prices').upsert({ingredient,price:price||null,item:item||null,source:'Household',link:link||FAIRWAY(ingredient),updated_by:me.user_id,updated_at:new Date().toISOString()})),
   refresh:async(ingredient)=>{const {data,error}=await sb.functions.invoke('refresh-prices',{body:ingredient?{ingredient}:{}}); let b=data; if(error&&error.context){try{b=await error.context.json()}catch(e){}} await DB.load(); return b||{error:error?.message||'Refresh failed'};},
@@ -585,8 +587,20 @@ function showNamePrompt(email){
 function watchApproval(uid){ sb.channel('me').on('postgres_changes',{event:'UPDATE',schema:'public',table:'members',filter:'user_id=eq.'+uid},()=>startAuth()).subscribe(); }
 
 // ---------------- counting (only meals put on the calendar) ----------------
-const timesPlanned = id => S.meals.filter(m=>String(m.recipe_id)===String(id)).length;
-function usage(){ const u={}; for(const m of S.meals){ const r=rec(m.recipe_id); if(!r) continue; for(const i of r.ingredients){ u[i]=u[i]||{p:0,c:0}; u[i].p++; if(m.cooked_at) u[i].c++; } } return u; }
+const timesPlanned = id => S.meals.filter(m=>String(m.recipe_id)===String(id)&&!m.leftover_of).length;
+// ---- leftovers: we eat 2 servings a dinner; lunches take 2 each ----
+const EAT=2, KEEP_DAYS=4;   // leftovers are offered for up to 4 days after cooking
+const servingsNum = r => { const m=String(r?.servings||'').match(/\d+/); return m?+m[0]:null; };   // "4 to 6" -> 4 (the safe end)
+function leftoversOf(m){
+  const n=servingsNum(rec(m.recipe_id)); if(!n||m.leftover_of) return 0;
+  const later=S.meals.filter(x=>String(x.leftover_of)===String(m.id)).length;
+  return Math.max(0, n-EAT-EAT*(+m.lunches||0)-EAT*later);
+}
+function leftoverMeals(day){   // meals cooked (or on the menu) up to `day` with at least one more dinner left
+  return S.meals.filter(m=>!m.leftover_of&&m.planned_for<day&&m.planned_for>=addDays(day,-KEEP_DAYS)&&rec(m.recipe_id)&&leftoversOf(m)>=EAT)
+    .sort((a,b)=>b.planned_for.localeCompare(a.planned_for));
+}
+function usage(){ const u={}; for(const m of S.meals){ const r=rec(m.recipe_id); if(!r||m.leftover_of) continue; for(const i of r.ingredients){ u[i]=u[i]||{p:0,c:0}; u[i].p++; if(m.cooked_at) u[i].c++; } } return u; }
 const allIngredients = () => [...new Set(S.recipes.flatMap(r=>r.ingredients))].sort();
 const weekMeals = () => S.meals.filter(m=>m.planned_for>=week&&m.planned_for<=addDays(week,6));
 const haveIt = i => S.have.find(h=>h.week_start===week&&h.ingredient===i);
@@ -607,13 +621,12 @@ function card(r, extra=''){
     ${r.image_url?`<a href="${esc(r.url)}" target="_blank" rel="noopener"><img class="thumb" src="${esc(r.image_url)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()"></a>`:''}
     <h3><a href="${esc(r.url)}" target="_blank" rel="noopener">${esc(r.title)}</a></h3>
     <div class="meta">${r.servings?`<b>Serves ${esc(r.servings.replace(/^serves\s*/i,''))}</b> · `:''}${esc(r.site||'')} · added by ${esc(nameOf(r.added_by))}${lc?` · last cooked ${shortDate(lc.cooked_at.slice(0,10))}`:''}</div>
-    <div class="tags">${r.status==='past'?'<span class="tag past">Past · cooked before</span>':'<span class="tag new">New · to try</span>'}${n?`<span class="tag">Planned ${n}×</span>`:''}</div>
+    <div class="tags">${r.status==='past'?'':'<span class="tag new">New · not cooked yet</span>'}${n?`<span class="tag">Planned ${n}×</span>`:''}</div>
     ${extra}
     <div class="ings">${r.ingredients.map(i=>fridge.includes(i)?`<b>${esc(i)}</b>`:esc(i)).join(' · ')||'<i>No ingredients listed</i>'}</div>
     <div class="actions">
       <select class="btn small" data-planfor="${r.id}"><option value="">+ Plan for…</option>${dayOptions()}</select>
       <button class="btn small" data-made="${r.id}">Made it today</button>
-      <button class="btn small" data-status="${r.id}" data-to="${r.status==='past'?'new':'past'}" title="Change whether this counts as cooked before">${r.status==='past'?'Mark as new':'Mark as past'}</button>
       <button class="btn small danger" data-delrecipe="${r.id}">Remove</button>
     </div></div>`;
 }
@@ -629,19 +642,47 @@ function renderPlan(){
     const ms=S.meals.filter(m=>m.planned_for===d);
     return `<div class="day ${d===TODAY?'today':''} ${d<TODAY?'past':''}">
       <h4><b>${dayName(d)}</b><span>${shortDate(d)}</span></h4>
-      ${ms.map(m=>{const r=rec(m.recipe_id); if(!r) return ''; return `<div class="meal ${m.cooked_at?'cooked':''}">
-        <a href="${esc(r.url)}" target="_blank" rel="noopener">${esc(r.title)}</a>
-        <div class="meta">${r.servings?'Serves '+esc(r.servings.replace(/^serves\s*/i,''))+' · ':''}added by ${esc(nameOf(m.added_by))}</div>
+      ${ms.map(m=>{const r=rec(m.recipe_id); if(!r) return ''; const n=servingsNum(r), left=leftoversOf(m); return `<div class="meal ${m.cooked_at?'cooked':''}">
+        ${m.leftover_of?'<div class="meta">🍱 Leftovers</div>':''}<a href="${esc(r.url)}" target="_blank" rel="noopener">${esc(r.title)}</a>
+        <div class="meta">${m.leftover_of?'nothing to buy or cook':`${r.servings?'Serves '+esc(r.servings.replace(/^serves\s*/i,''))+' · ':''}added by ${esc(nameOf(m.added_by))}`}</div>
+        ${!m.leftover_of&&n>EAT?`<div class="meta">${left?`<b>${left} serving${left>1?'s':''} left over</b>`:'No leftovers left'}${+m.lunches?` · ${m.lunches} lunch${m.lunches>1?'es':''} taken`:''}</div>`:''}
         ${m.cooked_at?`<div class="meta" style="color:var(--green)">✓ Cooked by ${esc(nameOf(m.cooked_by))}</div>`:''}
         <div class="mrow">
-          <button data-cook="${m.id}" data-v="${m.cooked_at?0:1}">${m.cooked_at?'Undo cooked':'Cooked ✓'}</button>
+          <button data-cook="${m.id}" data-v="${m.cooked_at?0:1}">${m.cooked_at?'Undo cooked':m.leftover_of?'Eaten ✓':'Cooked ✓'}</button>
+          ${!m.leftover_of&&left>=EAT?`<button data-lunch="${m.id}" data-d="1" title="Someone took leftovers for lunch (2 servings)">🥪 Lunch</button>`:''}${+m.lunches?`<button data-lunch="${m.id}" data-d="-1" title="Undo a lunch">↶</button>`:''}
           <select data-move="${m.id}" style="font-size:11.5px;padding:2px 4px;width:auto;margin:0"><option value="">Move…</option>${days.filter(x=>x!==d).map(x=>`<option value="${x}">${dayName(x)}</option>`).join('')}</select>
           <button data-unplan="${m.id}" title="Remove">✕</button>
         </div></div>`}).join('')}
       ${S.recipes.length?`<select data-addday="${d}"><option value="">+ Add a recipe</option>${opts}</select>`:''}
     </div>`}).join('');
   if(!S.recipes.length) $('#week').insertAdjacentHTML('afterend','');
-  renderShop();
+  renderTomorrow(); renderShop();
+}
+// ---- what's for dinner tomorrow? leftovers first, then something we can make from what's At Home ----
+function renderTomorrow(){
+  const T=addDays(TODAY,1), planned=S.meals.filter(m=>m.planned_for===T&&rec(m.recipe_id));
+  const head=`<div class="row" style="justify-content:space-between;align-items:baseline"><h2 style="margin:0">Dinner tomorrow · ${dayName(T,'long')}</h2><span class="meta">dinners are for 2</span></div>`;
+  let body;
+  if(planned.length) body=`<p class="meta" style="margin:6px 0 0">Planned: <b>${planned.map(m=>(m.leftover_of?'🍱 Leftovers: ':'')+esc(rec(m.recipe_id).title)).join(', ')}</b></p>`;
+  else{
+    const lo=leftoverMeals(T)[0];
+    if(lo){ const r=rec(lo.recipe_id), n=leftoversOf(lo);
+      body=`<div class="row" style="margin-top:6px;align-items:center"><span>🍱 <b>Leftovers: ${esc(r.title)}</b> <span class="meta">${n} servings left from ${dayName(lo.planned_for,'long')}</span></span>
+        <button class="btn small primary" data-lo="${lo.id}" type="button">Plan leftovers for tomorrow</button></div>`;
+    } else {
+      const atHome=new Set(S.pantry.filter(p=>+p.q>0).map(p=>p.ingredient));
+      const box=S.recipes.filter(r=>r.status==='past').filter(r=>r.ingredients.some(i=>atHome.has(i)&&!optional(i))&&r.ingredients.every(i=>atHome.has(i)||optional(i)))
+        .sort((a,b)=>b.ingredients.filter(i=>atHome.has(i)&&storeOf(i)==='fridge').length-a.ingredients.filter(i=>atHome.has(i)&&storeOf(i)==='fridge').length||(lastCooked(a.id)?.cooked_at||'').localeCompare(lastCooked(b.id)?.cooked_at||''))[0];
+      const inBox=new Set(S.recipes.map(r=>r.url));
+      const webPick=(web?.results||[]).find(x=>!inBox.has(x.url)&&x.need.every(i=>atHome.has(i)||optional(i)));
+      body=box?`<div class="row" style="margin-top:6px;align-items:center"><span>From the box, all At Home: <a href="${esc(box.url)}" target="_blank" rel="noopener"><b>${esc(box.title)}</b></a>${servingsNum(box)>EAT?` <span class="meta">(serves ${servingsNum(box)}, so leftovers)</span>`:''}</span>
+          <button class="btn small primary" data-tmr="${box.id}" type="button">Plan for tomorrow</button></div>`
+        :webPick?`<div class="row" style="margin-top:6px;align-items:center"><span>Online, all At Home: <a href="${esc(webPick.url)}" target="_blank" rel="noopener"><b>${esc(webPick.title)}</b></a> <span class="meta">${esc(webPick.site)}</span></span>
+          <button class="btn small primary" data-webplan="${esc(webPick.url)}" data-day="${addDays(TODAY,1)}" type="button">Plan for tomorrow</button></div>`
+        :`<p class="meta" style="margin:6px 0 0">No leftovers and nothing that can be made from just what's At Home. Pick something below, or see <b>Use it up</b> after the next shop.</p>`;
+    }
+  }
+  $('#tomorrow').innerHTML=`<div class="card" style="margin:10px 0 14px">${head}${body}</div>`;
 }
 function renderShop(){
   if(!S.recipes.length){ $('#shopList').innerHTML='<div class="empty">The recipe box is empty. Add a recipe by pasting its link under <b>Recipe box</b>, then put it on a day.</div>'; return; }
@@ -679,7 +720,7 @@ function renderImport(){
       <input type="text" id="draftTitle" value="${esc(draft.title||'')}" style="width:100%;margin:2px 0 10px">
       <label class="meta">Servings (from the recipe page)</label>
       <input type="text" id="draftServings" value="${esc(draft.servings||'')}" placeholder="e.g. 4 servings" style="width:100%;margin:2px 0 10px">
-      <div class="meta">From ${esc(draft.site||'')} · <a href="${esc(draft.url)}" target="_blank" rel="noopener">open original ↗</a> · saving as a <b>${document.querySelector('input[name=kind]:checked')?.value==='past'?'past':'new'} recipe</b> (switch above)</div>
+      <div class="meta">From ${esc(draft.site||'')} · <a href="${esc(draft.url)}" target="_blank" rel="noopener">open original ↗</a></div>
       <div class="meta" style="margin:10px 0 4px">Ingredients (tap × to drop one, or add any that were missed). ${Object.keys(draft.amounts||{}).length} have amounts, used to track leftovers.</div>
       <div class="chips" id="draftIngs">${draft.ingredients.map(i=>`<span class="chip on" data-droping="${esc(i)}">${esc(i)}${draft.amounts?.[i]?` · ${esc(fmtAmt(+draft.amounts[i].q,draft.amounts[i].u))}`:''}<span class="x">×</span></span>`).join('')||'<span class="meta">None found yet</span>'}</div>
       <form id="addIngForm" class="row" style="margin:8px 0"><input type="text" id="newIng" placeholder="add an ingredient, e.g. leeks" style="flex:1 1 200px"><button class="btn small">Add</button></form>
@@ -689,13 +730,11 @@ function renderImport(){
 function renderRecipes(){
   renderImport();
   const q=$('#recSearch').value.toLowerCase(), f=$('#recList').value, s=$('#recSort').value;
-  let list=S.recipes.filter(r=>!q||r.title.toLowerCase().includes(q)||r.ingredients.some(i=>i.includes(q)));
-  if(f==='past') list=list.filter(r=>r.status==='past');
-  if(f==='new') list=list.filter(r=>r.status!=='past');
+  let list=S.recipes.filter(r=>r.status==='past').filter(r=>!q||r.title.toLowerCase().includes(q)||r.ingredients.some(i=>i.includes(q)));
   if(f==='planned') list=list.filter(r=>timesPlanned(r.id));
   if(s==='made') list.sort((a,b)=>timesPlanned(b.id)-timesPlanned(a.id)||a.title.localeCompare(b.title));
   if(s==='name') list.sort((a,b)=>a.title.localeCompare(b.title));
-  $('#recGrid').innerHTML=list.map(r=>card(r)).join('')||`<div class="empty">${S.recipes.length?'No matches.':'The recipe box is empty. Paste a recipe link above to add the first one.'}</div>`;
+  $('#recGrid').innerHTML=list.map(r=>card(r)).join('')||`<div class="empty">${S.recipes.some(r=>r.status==='past')?'No matches.':'The recipe box is empty. Paste the link to a recipe you\'ve cooked above.'}</div>`;
 }
 function renderUseup(){
   const on=S.pantry.filter(p=>+p.q>0&&!optional(p.ingredient));
@@ -704,10 +743,26 @@ function renderUseup(){
   findOnline();
   if(!on.length){$('#useupResults').innerHTML='<div class="empty">Nothing is tracked At Home yet. Scan a receipt, add from your usual Fairway items, or tap <b>Got it ✓</b> after shopping, and ideas show up here.</div>';return;}
   const haveAll=new Set(S.pantry.filter(p=>+p.q>0).map(p=>p.ingredient));
-  const scored=S.recipes.map(r=>{const hit=r.ingredients.filter(i=>have.has(i)), f=hit.filter(i=>fresh.has(i)), buy=r.ingredients.filter(i=>!haveAll.has(i)&&!optional(i)); return {r,hit,f,buy}})
+  const scored=S.recipes.filter(r=>r.status==='past').map(r=>{const hit=r.ingredients.filter(i=>have.has(i)), f=hit.filter(i=>fresh.has(i)), buy=r.ingredients.filter(i=>!haveAll.has(i)&&!optional(i)); return {r,hit,f,buy}})
     .filter(x=>x.hit.length&&!x.buy.length).sort((a,b)=>b.f.length-a.f.length||b.hit.length-a.hit.length||a.buy.length-b.buy.length).slice(0,24);
   $('#useupResults').innerHTML=scored.map(x=>card(x.r,`<div class="meta"><b style="color:var(--green)">Uses ${x.hit.length}</b> from home: ${x.hit.map(i=>(fresh.has(i)?'🧊 ':'')+esc(i)).join(', ')}<br><b>Everything else is At Home</b> (herbs and spices optional)</div>`)).join('')||'<div class="empty">No recipe in the box can be made with just what\'s At Home.</div>';
 }
+// A recipe found online goes on the plan as "new"; it joins the recipe box once it's cooked.
+async function planFromWeb(url,day){
+  let r=S.recipes.find(x=>x.url===url);
+  if(!r){
+    toast('Reading the recipe page…',8000);
+    const {data,error}=await sb.functions.invoke('import-recipe',{body:{url}});
+    if(error||data?.error||!data?.title) return toast("Couldn't read that recipe page. Try again in a minute.");
+    const hit=web?.results?.find(x=>x.url===url);
+    const {data:row,error:e2}=await sb.from('recipes').insert({url,title:data.title,image_url:data.image||hit?.image||null,site:data.site||hit?.site||null,servings:data.servings||null,
+      ingredients:data.ingredients,amounts:Object.fromEntries(Object.entries(data.amounts||{}).filter(([k])=>data.ingredients.includes(k))),status:'new'}).select().single();
+    if(e2) return toast('Could not save: '+e2.message);
+    r=row;
+  }
+  await DB.plan(r.id,day); toast(`${r.title} planned for ${dayName(day,'long')}`); renderAll();
+}
+document.addEventListener('change',e=>{ const el=e.target; if(el.dataset.webplanSel!==undefined&&el.value){ planFromWeb(el.dataset.webplanSel,el.value); } });
 // ---- Use it up: search the web (links only) ----
 let web=LS.get('web',null), webBusy=false;
 function useupInputs(){
@@ -740,11 +795,12 @@ function renderWeb(){
     <h3><a href="${esc(x.url)}" target="_blank" rel="noopener">${esc(x.title)}</a></h3>
     <div class="meta">${esc(x.site)}</div>
     <div class="meta"><b style="color:var(--green)">Uses ${x.uses.length}</b> from home: ${x.uses.map(i=>(x.fresh.includes(i)?'🧊 ':'')+esc(i)).join(', ')}<br><b>Everything else is At Home</b> (herbs and spices optional)</div>
-    <div class="actions"><a class="btn small" href="${esc(x.url)}" target="_blank" rel="noopener">Open recipe</a><button class="btn small primary" data-webadd="${esc(x.url)}" type="button">Add to recipe box</button></div></div>`).join('')
+    <div class="actions"><a class="btn small" href="${esc(x.url)}" target="_blank" rel="noopener">Open recipe</a><select class="btn small" data-webplan-sel="${esc(x.url)}"><option value="">+ Plan for…</option>${dayOptions()}</select></div></div>`).join('')
     ||(web.error?'':'<div class="empty">Nothing online can be made with just what\'s At Home right now. Add more of what you have (scan a receipt) and search again.</div>');
 }
 document.addEventListener('click',e=>{
-  const t=e.target.closest('#webAgain,[data-webadd],[data-p="useup"]'); if(!t) return;
+  const t=e.target.closest('#webAgain,[data-webadd],[data-webplan],[data-p="useup"]'); if(!t) return;
+  if(t.dataset.webplan){ planFromWeb(t.dataset.webplan,t.dataset.day); return; }
   if(t.id==='webAgain') findOnline(true);
   else if(t.dataset.p==='useup') setTimeout(()=>findOnline(),0);
   else if(t.dataset.webadd){ document.querySelector('[data-p="recipes"]').click(); $('#importUrl').value=t.dataset.webadd; $('#importForm').requestSubmit(); window.scrollTo(0,0); }
@@ -874,8 +930,8 @@ document.addEventListener('click',async e=>{
   if(t.id==='cancelDraft'){ draft=null; $('#importUrl').value=''; renderImport(); return; }
   if(t.id==='saveDraft'){
     draft.title=$('#draftTitle').value.trim(); draft.servings=$('#draftServings').value.trim(); if(!draft.title) return toast('Give it a title first');
-    draft.status=document.querySelector('input[name=kind]:checked').value;
-    if(await DB.saveRecipe(draft)){ toast(draft.status==='past'?'Added as a past recipe':'Added as a new recipe'); draft=null; $('#importUrl').value=''; }
+    draft.status='past';
+    if(await DB.saveRecipe(draft)){ toast('Added to the recipe box'); draft=null; $('#importUrl').value=''; }
   }
   else if(t.dataset.bought){ const o=window._shop?.[t.dataset.bought]; if(o){ await DB.bought(o,true); toast(`Added to At Home: ${o.buy} × ${o.pk.label}`);} }
   else if(t.dataset.unbuy){ e.preventDefault(); const o=window._shop?.[t.dataset.unbuy]; const pk=pkgOf(t.dataset.unbuy); await DB.bought(o||{i:t.dataset.unbuy,buy:1,pk,D:pk.u},false); }
@@ -890,6 +946,9 @@ document.addEventListener('click',async e=>{
   else if(t.id==='wkToday'){ week=mondayOf(TODAY); }
   else if(t.dataset.cook){ await DB.setCooked(t.dataset.cook,t.dataset.v==='1'); }
   else if(t.dataset.unplan){ await DB.unplan(t.dataset.unplan); }
+  else if(t.dataset.lunch){ const m=S.meals.find(x=>String(x.id)===t.dataset.lunch); await DB.lunch(m,+t.dataset.d); if(+t.dataset.d>0) toast(`Lunch logged: ${leftoversOf(S.meals.find(x=>x.id===m.id))} servings of ${rec(m.recipe_id).title} left`); }
+  else if(t.dataset.lo){ const m=S.meals.find(x=>String(x.id)===t.dataset.lo); await DB.planLeftovers(m,addDays(TODAY,1)); toast('Leftovers planned for tomorrow'); }
+  else if(t.dataset.tmr){ await DB.plan(t.dataset.tmr,addDays(TODAY,1)); toast('Planned for tomorrow'); }
   else if(t.dataset.made){ await DB.madeToday(t.dataset.made); }
   else if(t.dataset.status){ await DB.setStatus(t.dataset.status,t.dataset.to); toast(t.dataset.to==='past'?'Moved to past recipes':'Moved to new recipes'); }
   else if(t.dataset.delrecipe){ if(!twoTap(t)) return; await DB.deleteRecipe(t.dataset.delrecipe); toast('Removed'); }
