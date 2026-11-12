@@ -943,7 +943,7 @@ const restName = m => (m.note||'').split(' —')[0];
 const restDish = m => (m.note||'').split(' —').slice(1).join(' —').trim();
 const isOutDin = m => m.meal==='dinner'&&!m.recipe_id&&!isScr(m);
 const mapsUrl = n => 'https://maps.apple.com/?q='+encodeURIComponent(n);
-const outLabel = m => isRest(m)?`🍽️ <a href="${mapsUrl(restName(m))}" target="_blank" rel="noopener">${esc(restName(m))}</a>${restDish(m)?' · '+esc(restDish(m)):''}`:`🥡 ${esc(m.note||'')}`;
+const outLabel = m => isRest(m)?`🍽️ <a href="${mapsUrl(restName(m))}" target="_blank" rel="noopener">${esc(restName(m))}</a>${restDish(m)?' · '+esc(restDish(m)):''}`:`🍴 ${esc(m.note||'')}`;
 const scrDesc = m => (m.note||'').replace(/^Scrunge:?\s*/i,'');
 const dTitle = m => isScr(m)?'Scrunge'+(scrDesc(m)?': '+scrDesc(m):''):isOutDin(m)?(isRest(m)?restName(m)+(restDish(m)?' · '+restDish(m):''):m.note||'Out'):rec(m.recipe_id)?.title||'';
 const isDin = m => m.meal==='dinner'&&(rec(m.recipe_id)||!m.recipe_id);
@@ -1382,6 +1382,7 @@ function renderAdd(){
     <div class="sheethead"><b>${p?esc(p)+"'s ":''}${SLOT_LABEL[meal].toLowerCase()} · ${dayName(d,'long')}</b><button class="btn small" data-addx type="button">Close</button></div>
     ${lo.length?`<h3>🍱 Leftovers</h3><div class="picks">${lo.map(x=>`<button type="button" class="pick" data-addpick="lo:${x.id}"><b>${esc(rec(x.recipe_id).title)}</b><span class="meta">${leftoversOf(x)} serving${leftoversOf(x)>1?'s':''} left · from ${dayName(x.planned_for,'long')}</span></button>`).join('')}</div>`:''}
     ${dinner?`<h3>🫙 Scrunge</h3><form class="row" data-addscr style="margin:0"><input id="addScr" placeholder="What's around? (optional)" enterkeyhint="done" style="flex:1"><button class="btn primary">Scrunge</button></form>`:''}
+    ${dinner?'':`<h3>✏️ Type what you ate</h3><form class="row" data-addout style="margin:0"><input id="addOut" placeholder="e.g. a banana, protein bar, 2 eggs" enterkeyhint="done" style="flex:1" autocomplete="off"><button class="btn primary">Add</button></form>`}
     <h3>🍽️ Restaurant or takeout</h3><input id="addR" type="search" placeholder="Search restaurants near us" autocomplete="off" enterkeyhint="search"><div class="picks" id="addRres">${restPicks('')}</div>
     <h3>🍳 Make something</h3>
     <input id="addQ" type="search" placeholder="Search recipes or an ingredient" value="${esc(q)}">
@@ -1535,7 +1536,7 @@ function renderNutrition(){
 
       <div style="overflow:auto"><table><tr><th>Day</th><th>Meals</th>${MAC.map(([k,l])=>`<th class="num">${l}</th>`).join('')}</tr>
       ${perDay.map(x=>`<tr class="${x.d>TODAY?'have':''} ${x.ms.length?'':'noday'}"><td><b>${dayName(x.d)}</b> <span class="meta">${shortDate(x.d)}${x.d>TODAY?' · planned':''}</span></td>
-        <td>${x.ms.length?x.ms.map(m=>`<div class="meta"><b>${m.when}:</b> ${m.scan?`📷 ${esc(m.note||'')}`:m.scr?`🫙 ${esc(m.note)}${m.n?' <span class="meta">(est.)</span>':''}`:m.out?`🥡 ${esc(m.note||'out')}${m.n?' <span class="meta">(est.)</span>':''}`:(m.left?'🍱 ':'')+esc(m.r?.title||'')+(m.r&&!m.r.nutrition?' <span class="needprice">· no info</span>':'')}</div>`).join(''):'<span class="meta">—</span>'}</td>
+        <td>${x.ms.length?x.ms.map(m=>`<div class="meta"><b>${m.when}:</b> ${m.scan?`📷 ${esc(m.note||'')}`:m.scr?`🫙 ${esc(m.note)}${m.n?' <span class="meta">(est.)</span>':''}`:m.out?`${/^[^·]+ · /.test(m.note||'')&&m.when==='Dinner'?'🍽️':'🍴'} ${esc(m.note||'out')}${m.n?' <span class="meta">(est.)</span>':''}`:(m.left?'🍱 ':'')+esc(m.r?.title||'')+(m.r&&!m.r.nutrition?' <span class="needprice">· no info</span>':'')}</div>`).join(''):'<span class="meta">—</span>'}</td>
         ${MAC.map(([k,,u])=>{ const st=T&&T[k]&&x.t[k]!=null&&x.d<=TODAY?status(x.t[k],T[k],k):'';
           return `<td class="num"><span class="dot ${st}">${x.t[k]!=null?fmtN(x.t[k],u):'<span class="meta">—</span>'}</span></td>`}).join('')}</tr>`).join('')}
       <tr><td><b>Week</b></td><td></td>${MAC.map(([k,,u])=>`<td class="num"><b class="dot ${T&&T[k]?status(tot[k]||0,T[k]*soFar,k):''}">${fmtN(tot[k],u)}</b></td>`).join('')}</tr>
