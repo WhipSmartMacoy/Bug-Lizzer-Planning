@@ -19,7 +19,25 @@ header{padding:22px 20px 0;max-width:1080px;margin:auto}
 .brand .sub{color:var(--muted);font-size:13px}
 .who{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--muted)}
 .avatar{display:inline-grid;place-items:center;width:28px;height:28px;border-radius:50%;color:#fff;font-weight:700;font-size:12px;flex:none}
-.areas{display:flex;gap:6px;margin:14px 0 0;font-size:13px}
+.areas{display:flex;gap:8px;margin:14px 0 0;font-size:13px;align-items:center}
+.areas .homebtn{font:inherit;font-size:13px;padding:4px 12px;border-radius:99px;border:1px solid var(--line);background:var(--card);cursor:pointer}
+#areaName{font-weight:700}
+/* home screen */
+#launcher,#soon{display:none}
+body.launch #launcher{display:block}
+body.launch nav.tabs, body.launch .areas, body.launch main>.panel, body.launch #syncNote{display:none!important}
+body.soon #soon{display:block}
+body.soon nav.tabs, body.soon main>.panel{display:none!important}
+.hello h2{font-size:30px;margin:26px 0 2px}
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px;margin:22px 0 10px}
+.tile{display:flex;flex-direction:column;gap:6px;text-align:left;font:inherit;color:inherit;background:var(--card);border:1px solid var(--line);border-radius:18px;padding:20px;cursor:pointer;box-shadow:var(--shadow);transition:transform .12s,box-shadow .12s;min-height:150px}
+.tile:hover{transform:translateY(-2px);box-shadow:0 10px 24px rgba(0,0,0,.08)}
+.tile .ic{font-size:34px;line-height:1}
+.tile b{font-size:20px}
+.tile .meta{font-size:13px}
+.tile.later{opacity:.7}
+@media (max-width:640px){.tiles{grid-template-columns:1fr 1fr;gap:10px}.tile{min-height:118px;padding:14px;border-radius:14px}.tile[data-area=meals]{grid-column:1/-1}.tile .ic{font-size:28px}.tile b{font-size:17px}.hello h2{font-size:25px;margin-top:16px}}
+.tile .soonTag{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
 .areas span{padding:4px 10px;border-radius:99px;border:1px solid var(--line);color:var(--muted)}
 .areas span.on{background:var(--ink);color:#fff;border-color:var(--ink)}
 nav.tabs{display:flex;gap:4px;overflow-x:auto;margin:18px 0 0;border-bottom:1px solid var(--line)}
@@ -147,10 +165,10 @@ a{color:var(--green)}
 
 <header>
   <div class="top">
-    <div class="brand"><h1>Bug-Lizzer Planning</h1><span class="sub">Household hub</span></div>
+    <div class="brand"><h1 data-area="launch" style="cursor:pointer">Bug-Lizzer Planning</h1><span class="sub">Household hub</span></div>
     <div class="who" id="who"></div>
   </div>
-  <div class="areas"><span class="on">Kitchen</span><span title="Coming later">Tasks</span><span title="Coming later">Bills</span></div>
+  <div class="areas" id="areas"><button type="button" data-area="launch" class="homebtn">⌂ Home screen</button><span id="areaName"></span></div>
   <nav class="tabs" id="tabs">
     <button data-p="plan" class="on">Plan &amp; shop</button>
     <button data-p="pantry">At Home</button>
@@ -163,6 +181,11 @@ a{color:var(--green)}
 </header>
 
 <main>
+  <section id="launcher">
+    <div class="hello"><h2 id="helloText">Hello</h2><p class="meta" id="helloDate"></p></div>
+    <div class="tiles" id="tiles"></div>
+  </section>
+  <section id="soon"><div class="empty" id="soonText"></div></section>
   <section class="panel on" id="plan">
     <p class="intro">Plan one week at a time. Put recipes on the days you'll cook them. The shopping list works out how much each meal needs, uses up what's already At Home first (leftovers included), and tells you how many packages to buy. Tap <b>Got it ✓</b> after shopping and it's added to At Home.</p>
     <div class="weeknav">
@@ -656,6 +679,33 @@ function card(r, extra=''){
 }
 
 // ---------------- panels ----------------
+// ---- Home screen: the app opens here ----
+const AREAS=[
+  {id:'meals',ic:'🍽️',name:'Meals',live:true},
+  {id:'home',ic:'🏠',name:'Home',blurb:'Chores, upkeep and what\'s in the house'},
+  {id:'travel',ic:'✈️',name:'Travel',blurb:'Trips, packing and plans'},
+  {id:'schedule',ic:'📅',name:'Schedule',blurb:'Who\'s doing what, when'},
+  {id:'finance',ic:'💵',name:'Finance',blurb:'Bills and spending'}];
+let area='launch';
+function mealsSummary(){
+  const tonight=S.meals.find(m=>m.planned_for===TODAY&&m.meal==='dinner'&&rec(m.recipe_id)&&!m.leftover_of)||S.meals.find(m=>m.planned_for===TODAY&&m.meal==='dinner'&&rec(m.recipe_id));
+  const buy=(()=>{try{const w=week;week=mondayOf(TODAY);const n=shopPlan().filter(o=>o.buy>0&&!STAPLES.has(o.i)).length;week=w;return n;}catch(e){return 0}})();
+  const home=S.pantry.filter(p=>+p.q>0).length;
+  return [tonight?`Tonight: ${esc(rec(tonight.recipe_id).title)}${tonight.leftover_of?' (leftovers)':''}`:'Nothing planned for tonight', `${buy} to buy this week · ${home} items at home`].join('<br>');
+}
+function renderLauncher(){
+  document.body.classList.toggle('launch',area==='launch'); document.body.classList.toggle('soon',area!=='launch'&&area!=='meals');
+  const a=AREAS.find(x=>x.id===area); $('#areaName').textContent=a?`${a.ic} ${a.name}`:'';
+  document.title='Bug-Lizzer Planning'+(a?` · ${a.name}`:'');
+  if(area==='launch'){
+    const h=new Date().getHours(), mine=S.members.find(x=>x.user_id===me?.user_id)?.name||me?.name||'';
+    $('#helloText').textContent=`${h<12?'Good morning':h<17?'Good afternoon':'Good evening'}${mine?', '+mine:''}`;
+    $('#helloDate').textContent=new Date().toLocaleDateString(undefined,{weekday:'long',month:'long',day:'numeric'});
+    $('#tiles').innerHTML=AREAS.map(x=>`<button class="tile ${x.live?'':'later'}" data-area="${x.id}" type="button"><span class="ic">${x.ic}</span><b>${x.name}</b>
+      <span class="meta">${x.live?mealsSummary():esc(x.blurb)}</span>${x.live?'':'<span class="soonTag">Coming soon</span>'}</button>`).join('');
+  } else if(!a?.live){ $('#soonText').innerHTML=`<div style="font-size:40px">${a.ic}</div><b>${a.name}</b> is coming soon.<br>${esc(a.blurb)}.`; }
+}
+document.addEventListener('click',e=>{ const t=e.target.closest('[data-area]'); if(!t) return; area=t.dataset.area; renderLauncher(); window.scrollTo(0,0); });
 function renderWho(){ $('#who').innerHTML=me?`${av(me.user_id)}<span>${esc(me.name)}</span><button class="btn small" id="signOut">Sign out</button>`:''; }
 
 function renderPlan(){
@@ -1123,6 +1173,7 @@ function renderPantry(){
     :'<div class="empty">Nothing tracked yet. Tap <b>Got it ✓</b> on the shopping list after shopping, or add what you already have above.</div>';
 }
 function renderAll(){
+  renderLauncher();
   renderWho();renderSettings();renderPantry();renderPlan();renderUseup();renderRecipes();renderNutrition();renderDiscover();renderActivity();
   $('#shareList').style.display='none';
   $('#syncNote').innerHTML=`<b>Live:</b> everything you add, plan, tick or cook shows up for the whole household right away, with your name on it.`;
