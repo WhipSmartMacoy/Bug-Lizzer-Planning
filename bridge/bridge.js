@@ -9,6 +9,9 @@ const save = () => fs.writeFileSync(CFG_FILE, JSON.stringify(cfg, null, 2));
 const log = (...a) => console.log(new Date().toLocaleTimeString(), ...a);
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const DISNEY = 'com.disney.disneyplus-prod';
+// JEOPARDY! on Disney+ (the 1984–today series). Its show page's main button is "Continue S__ E__",
+// which resumes the episode you were on or starts the next one. Change in config.json if needed.
+const JEOPARDY_URL = 'https://www.disneyplus.com/browse/entity-3ddd9f60-886c-4a43-a415-f065c2bf04c8';
 
 // ---- find the TV on the network (SSDP) ----
 function discover(ms = 4000) {
@@ -66,6 +69,9 @@ function connect() {
   });
   return connecting;
 }
+// Press a remote button (OK = 'ENTER', 'BACK', 'UP', 'DOWN', 'LEFT', 'RIGHT', 'HOME').
+const press = name => new Promise(res => tv.getSocket('ssap://com.webos.service.networkinput/getPointerInputSocket',
+  (e, sock) => { if (e || !sock) return res(false); sock.send('button', { name }); res(true); }));
 const req = (uri, payload = {}) => new Promise((res, rej) => tv.request(uri, payload, (e, r) => e ? rej(e) : res(r)));
 
 async function ensureOn() {
@@ -82,10 +88,23 @@ async function run(c) {
     case 'on': return (await ensureOn()) ? 'TV on' : 'Could not turn the TV on — check "Turn on via Wi-Fi" in the TV settings';
     case 'off': if (!(await connect())) return 'TV already off'; await req('ssap://system/turnOff'); tvUp = false; return 'TV off';
     case 'rest': if (!(await connect())) return 'TV already off'; await req('ssap://system/turnOff'); tvUp = false; return 'TV off';
-    case 'disney': case 'jeopardy':
+    case 'disney':
       if (!(await ensureOn())) return 'Could not reach the TV';
       await req('ssap://system.launcher/launch', { id: DISNEY });
-      return c.cmd === 'jeopardy' ? 'Disney+ open — pick up JEOPARDY! from Continue Watching' : 'Disney+ open';
+      return 'Disney+ open';
+    case 'jeopardy': {
+      if (!(await ensureOn())) return 'Could not reach the TV';
+      const url = cfg.jeopardyUrl || JEOPARDY_URL;
+      // Open Disney+ straight on the JEOPARDY! page…
+      await req('ssap://system.launcher/launch', { id: DISNEY, contentId: url, params: { contentTarget: url } })
+        .catch(() => req('ssap://system.launcher/launch', { id: DISNEY }));
+      // …give it time to load (a "Who's watching?" screen gets an OK first), then press OK on "Continue".
+      if (cfg.jeopardyPickProfile) { await sleep(8000); await press('ENTER'); await sleep(3000);
+        await req('ssap://system.launcher/launch', { id: DISNEY, contentId: url, params: { contentTarget: url } }).catch(() => {}); }
+      await sleep(cfg.jeopardyWaitMs || 15000);
+      if (cfg.jeopardyPressPlay !== false) await press('ENTER');
+      return 'Disney+ → JEOPARDY! → Continue';
+    }
     case 'volume_up': if (!(await connect())) return 'TV off'; await req('ssap://audio/volumeUp'); return 'Volume up';
     case 'volume_down': if (!(await connect())) return 'TV off'; await req('ssap://audio/volumeDown'); return 'Volume down';
     case 'mute': if (!(await connect())) return 'TV off'; { const s = await req('ssap://audio/getStatus'); await req('ssap://audio/setMute', { mute: !s?.mute }); } return 'Mute toggled';

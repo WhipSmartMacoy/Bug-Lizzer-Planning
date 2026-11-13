@@ -40,6 +40,35 @@ async function clip(l: any, path: string, method = "GET", body?: unknown) {
   return j.data || [];
 }
 
+// ---- Light show: chase a few colors around a room's lights, then put every light back how it was ----
+const PALETTE = [
+  { xy: { x: 0.1532, y: 0.0475 }, mirek: 153, bri: 100 },   // blue
+  { xy: { x: 0.2148, y: 0.2535 }, mirek: 153, bri: 80 },    // light blue
+  { xy: { x: 0.3227, y: 0.329 }, mirek: 250, bri: 100 },    // white
+];
+const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
+async function chase(l: any, lights: any[], seconds: number, stepMs = 1000) {
+  const snap = lights.map((x) => ({ id: x.id, on: !!x.on?.on, bri: x.dimming?.brightness, xy: x.color?.xy,
+    mirek: x.color_temperature?.mirek_valid ? x.color_temperature?.mirek : null }));
+  const end = Date.now() + seconds * 1000;
+  for (let step = 0; Date.now() < end; step++) {
+    const t0 = Date.now();
+    await Promise.all(lights.map((x, i) => {
+      const c = PALETTE[(i + step) % PALETTE.length];
+      const b: any = { on: { on: true }, dimming: { brightness: c.bri }, dynamics: { duration: Math.round(stepMs * 0.6) } };
+      if (x.color) b.color = { xy: c.xy };                          // color bulbs: real colors
+      else if (x.color_temperature) b.color_temperature = { mirek: c.mirek };   // white-only bulbs: cool/neutral pulse
+      return clip(l, `light/${x.id}`, "PUT", b).catch(() => {});
+    }));
+    await wait(Math.max(0, stepMs - (Date.now() - t0)));
+  }
+  await Promise.all(snap.map((s) => {
+    const b: any = { on: { on: s.on }, dynamics: { duration: 800 } };
+    if (s.on) { if (s.bri != null) b.dimming = { brightness: s.bri }; if (s.mirek) b.color_temperature = { mirek: s.mirek }; else if (s.xy) b.color = { xy: s.xy }; }
+    return clip(l, `light/${s.id}`, "PUT", b).catch(() => {});
+  }));
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
   const url = new URL(req.url), db = admin();
@@ -82,6 +111,21 @@ Deno.serve(async (req) => {
       await clip(l, `grouped_light/${body.grouped_light}`, "PUT", b);
     }
     if (body.action === "scene" && body.scene) await clip(l, `scene/${body.scene}`, "PUT", { recall: { action: "active" } });
+    if (body.action === "chase") {
+      const [rooms, lights] = await Promise.all([clip(l, "room"), clip(l, "light")]);
+      const want = String(body.room || "living");
+      const room = rooms.find((r: any) => (r.metadata?.name || "").toLowerCase() === want.toLowerCase())
+        || rooms.find((r: any) => (r.metadata?.name || "").toLowerCase().includes(want.toLowerCase()));
+      if (!room) return json({ error: `No Hue room called "${want}". Rooms: ${rooms.map((r: any) => r.metadata?.name).join(", ")}` });
+      const kids = new Set((room.children || []).map((c: any) => c.rid));
+      const ls = lights.filter((x: any) => kids.has(x.id) || kids.has(x.owner?.rid));
+      if (!ls.length) return json({ error: `No lights in ${room.metadata?.name}` });
+      const secs = Math.max(5, Math.min(120, +body.seconds || 30));
+      // Run the show in the background so the app gets an answer right away.
+      // @ts-ignore EdgeRuntime is provided by Supabase
+      EdgeRuntime.waitUntil(chase(l, ls, secs));
+      return json({ ok: true, room: room.metadata?.name, lights: ls.length, seconds: secs });
+    }
     // Rooms with their light group state and scenes.
     const [rooms, zones, groups, scenes] = await Promise.all([clip(l, "room"), clip(l, "zone"), clip(l, "grouped_light"), clip(l, "scene")]);
     const g = new Map(groups.map((x: any) => [x.id, x]));

@@ -994,7 +994,7 @@ function card(r, extra=''){
 const AREAS=[
   {id:'meals',ic:'🍽️',name:'Meals',live:true},
   {id:'home',ic:'🏠',name:'Home',blurb:'Scenes, entertainment and lights',scenes:[
-    {id:'jeopardy',ic:'🎯',name:'JEOPARDY!',hue:['Home','Movie'],tv:'jeopardy',steps:['Lights: Movie','LG TV: on, open Disney+']},
+    {id:'jeopardy',ic:'🎯',name:'JEOPARDY!',chase:{room:'Living',seconds:30},tv:'jeopardy',steps:['Living room lights: blue, light blue & white chase for 30 s','LG TV: on → Disney+ → JEOPARDY! → Continue where we left off']},
     {id:'rest',ic:'🌙',name:'Rest Mode',hue:['Home','Rest'],tv:'rest',steps:['Lights: Rest','LG TV: off']}],subs:[
     {id:'entertainment',ic:'📺',name:'Entertainment',blurb:'The LG TV: power, volume and Disney+',tv:true},
     {id:'lights',ic:'💡',name:'Lights',blurb:'Philips Hue scenes',hue:true}]},
@@ -1073,7 +1073,7 @@ let tvst=null, tvBusy=false;
 async function tvStatus(){ if(tvBusy) return; tvBusy=true; const {data}=await sb.functions.invoke('tv',{body:{action:'status'}}); tvBusy=false; tvst=data||{}; renderLauncher(); }
 async function tvSend(cmd){
   const {data}=await sb.functions.invoke('tv',{body:{action:'send',cmd}}); if(!data?.id) return null;
-  for(let i=0;i<25;i++){ await new Promise(r=>setTimeout(r,1500)); const {data:r}=await sb.functions.invoke('tv',{body:{action:'result',id:data.id}}); if(r?.done_at) return r.result; }
+  for(let i=0;i<45;i++){ await new Promise(r=>setTimeout(r,1500)); const {data:r}=await sb.functions.invoke('tv',{body:{action:'result',id:data.id}}); if(r?.done_at) return r.result; }
   return null;
 }
 function renderTV(){
@@ -1130,6 +1130,7 @@ function renderLauncher(){
 document.addEventListener('click',async e=>{ const t=e.target.closest('[data-scene]'); if(!t) return;
   const sc=AREAS.find(a=>a.id==='home').scenes.find(x=>x.id===t.dataset.scene); const done=[];
   t.classList.add('busy');
+  if(sc.chase){ const {data:r}=await sb.functions.invoke('hue',{body:{action:'chase',...sc.chase}}).catch(()=>({})); done.push(r?.ok?`${r.room} lights chasing for ${r.seconds}s`:'lights: '+(r?.error||'not reachable')); }
   if(sc.hue){ if(!hue?.rooms) await hueCall({action:'rooms'});
     const room=(hue?.rooms||[]).find(r=>r.name===sc.hue[0]), x=room?.scenes.find(z=>z.name===sc.hue[1]);
     if(x){ await hueCall({action:'scene',scene:x.id}); done.push('lights: '+sc.hue[1]); } }
