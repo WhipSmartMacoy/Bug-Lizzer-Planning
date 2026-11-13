@@ -148,29 +148,61 @@ script:
         data:
           scene_id: bug_lizzer_before_jeopardy
           snapshot_entities: "{{ room_lights }}"
+      - variables:
+          chase_end: "{{ as_timestamp(now()) + 10 }}"
       - repeat:
-          count: 10
           sequence:
             - variables:
                 step: "{{ repeat.index }}"
-            - repeat:
-                for_each: [0, 1, 2]
-                sequence:
-                  - variables:
-                      group: >-
-                        {% set ns = namespace(l=[]) %}
-                        {% for e in room_lights %}{% if (loop.index0 + step) % 3 == repeat.item %}{% set ns.l = ns.l + [e] %}{% endif %}{% endfor %}
-                        {{ ns.l }}
-                  - if: "{{ group | count > 0 }}"
-                    then:
-                      - action: light.turn_on
-                        target:
-                          entity_id: "{{ group }}"
-                        data:
-                          xy_color: "{{ colors[repeat.item] }}"
-                          brightness_pct: 100
-                          transition: 0.6
-            - delay: 1
+            - parallel:
+            - sequence:
+              - variables:
+                  g: >-
+                    {% set ns = namespace(l=[]) %}
+                    {% for e in room_lights %}{% if (loop.index0 + step) % 3 == 0 %}{% set ns.l = ns.l + [e] %}{% endif %}{% endfor %}
+                    {{ ns.l }}
+              - if: "{{ g | count > 0 }}"
+                then:
+                  - action: light.turn_on
+                    target:
+                      entity_id: "{{ g }}"
+                    data:
+                      xy_color: "{{ colors[0] }}"
+                      brightness_pct: 100
+                      transition: 0.5
+            - sequence:
+              - variables:
+                  g: >-
+                    {% set ns = namespace(l=[]) %}
+                    {% for e in room_lights %}{% if (loop.index0 + step) % 3 == 1 %}{% set ns.l = ns.l + [e] %}{% endif %}{% endfor %}
+                    {{ ns.l }}
+              - if: "{{ g | count > 0 }}"
+                then:
+                  - action: light.turn_on
+                    target:
+                      entity_id: "{{ g }}"
+                    data:
+                      xy_color: "{{ colors[1] }}"
+                      brightness_pct: 100
+                      transition: 0.5
+            - sequence:
+              - variables:
+                  g: >-
+                    {% set ns = namespace(l=[]) %}
+                    {% for e in room_lights %}{% if (loop.index0 + step) % 3 == 2 %}{% set ns.l = ns.l + [e] %}{% endif %}{% endfor %}
+                    {{ ns.l }}
+              - if: "{{ g | count > 0 }}"
+                then:
+                  - action: light.turn_on
+                    target:
+                      entity_id: "{{ g }}"
+                    data:
+                      xy_color: "{{ colors[2] }}"
+                      brightness_pct: 100
+                      transition: 0.5
+            - delay:
+                milliseconds: 700
+          until: "{{ as_timestamp(now()) >= chase_end }}"
       - action: scene.turn_on
         target:
           entity_id: scene.bug_lizzer_before_jeopardy
