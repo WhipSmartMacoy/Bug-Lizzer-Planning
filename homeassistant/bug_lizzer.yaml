@@ -60,7 +60,53 @@ rest_command:
     payload: '{"p_sender": {{ sender | to_json }}, "p_subject": {{ subject | to_json }}, "p_body": {{ body | to_json }}}'
     timeout: 15
 
+input_boolean:
+  bug_lizzer_jeopardy_parked:
+    name: JEOPARDY! parked on Disney+
+    icon: mdi:parking
+
 automation:
+  # After the TV is switched off, set Disney+ up on JEOPARDY! so the next JEOPARDY! tap is quick
+  # and dark. Not overnight: the screen does light up while it sets up.
+  - id: bug_lizzer_jeopardy_park_on_off
+    alias: Bug-Lizzer · park JEOPARDY! after the TV turns off
+    mode: single
+    triggers:
+      - trigger: state
+        entity_id: media_player.living_room_fish_s_tv
+        to: "off"
+        for: "00:00:20"
+      - trigger: time
+        at: "09:00:00"
+    conditions:
+      - condition: state
+        entity_id: input_boolean.bug_lizzer_jeopardy_parked
+        state: "off"
+      - condition: state
+        entity_id: media_player.living_room_fish_s_tv
+        state: "off"
+      - condition: time
+        after: "09:00:00"
+        before: "23:00:00"
+      - condition: template
+        value_template: "{{ not is_state('script.bug_lizzer_jeopardy', 'on') and not is_state('script.bug_lizzer_jeopardy_park', 'on') }}"
+    actions:
+      - action: script.bug_lizzer_jeopardy_park
+
+  # Anyone turning the TV on themselves may move Disney+ off the JEOPARDY! page: no longer parked.
+  - id: bug_lizzer_jeopardy_unpark
+    alias: Bug-Lizzer · JEOPARDY! no longer parked when the TV is used
+    triggers:
+      - trigger: state
+        entity_id: media_player.living_room_fish_s_tv
+        from: "off"
+    conditions:
+      - condition: template
+        value_template: "{{ not is_state('script.bug_lizzer_jeopardy', 'on') and not is_state('script.bug_lizzer_jeopardy_park', 'on') }}"
+    actions:
+      - action: input_boolean.turn_off
+        target:
+          entity_id: input_boolean.bug_lizzer_jeopardy_parked
   - id: bug_lizzer_fairway_receipt
     alias: Bug-Lizzer · Fairway receipt email → app
     mode: queued
@@ -131,6 +177,13 @@ script:
     mode: single            # a second tap while it runs is ignored (restarting mid-chase saved the chase colors)
     max_exceeded: silent
     sequence:
+      # Parked = Disney+ is already waiting on NELLY's JEOPARDY! page in the background (see
+      # bug_lizzer_jeopardy_park), so only Play is needed and the screen stays dark until then.
+      - variables:
+          parked: "{{ is_state('input_boolean.bug_lizzer_jeopardy_parked', 'on') and is_state('media_player.living_room_fish_s_tv', 'off') }}"
+      - action: input_boolean.turn_off
+        target:
+          entity_id: input_boolean.bug_lizzer_jeopardy_parked
       # Remember the room exactly as it is now, before anything changes.
       - variables:
           room_lights: >-
@@ -167,71 +220,40 @@ script:
               continue_on_error: true
               response_variable: scr
           until: "{{ (scr is defined and scr.get('media_player.living_room_fish_s_tv', {}).get('returnValue')) or repeat.index >= 4 }}"
-      - action: media_player.volume_mute
-        target:
-          entity_id: media_player.living_room_fish_s_tv
-        data:
-          is_volume_muted: true
-        continue_on_error: true
-      # Always restart Disney+: a TV that was switched off keeps it in the background on whatever
-      # screen it was left on, and the remote presses below must start from its home screen.
-      - action: webostv.command
-        data:
-          entity_id: media_player.living_room_fish_s_tv
-          command: system.launcher/close
-          payload:
-            id: com.disney.disneyplus-prod
-        continue_on_error: true
-      - delay: 0.8
-      - action: webostv.command
-        data:
-          entity_id: media_player.living_room_fish_s_tv
-          command: system.launcher/launch
-          payload:
-            id: com.disney.disneyplus-prod
-      - wait_template: "{{ state_attr('media_player.living_room_fish_s_tv', 'source') == 'Disney+' }}"
-        timeout: 15
-      - delay: 9   # Disney+ loading its home screen
-      # Disney+ opens on whoever watched last: always switch to NELLY (2nd on "Who's watching?").
-      # Top tabs → side menu → profile/SWITCH at its top.
-      - action: script.bug_lizzer_tv_keys
-        data:
-          keys: [UP, UP, LEFT, UP, UP, ENTER]
-          gap: 0.7
-      - delay: 1.5
-      # The picker opens on the current profile: go to the first, then one right = NELLY.
-      - action: script.bug_lizzer_tv_keys
-        data:
-          keys: [LEFT, LEFT, LEFT, RIGHT, ENTER]
-          gap: 0.6
-      - delay: 7   # NELLY's home screen loading
-      # Top tabs → side menu (opens on Home) → Search (keyboard opens with the cursor on the space bar)
-      - action: script.bug_lizzer_tv_keys
-        data:
-          keys: [UP, UP, LEFT, UP, ENTER]
-          gap: 0.7
-      - delay: 1
-      # space → e, then j-e-o-p
-      - action: script.bug_lizzer_tv_keys
-        data:
-          keys: [DOWN, DOWN, LEFT, ENTER, UP, RIGHT, ENTER, DOWN, DOWN, LEFT, LEFT, ENTER, RIGHT, ENTER]
-          gap: 0.35
-      - delay: 2
-      # keyboard → first result, Jeopardy! (1984) → its page → Play
-      - action: script.bug_lizzer_tv_keys
-        data:
-          keys: [UP, UP, RIGHT, RIGHT, RIGHT]
-          gap: 0.35
-      - delay: 0.8
-      - action: script.bug_lizzer_tv_keys
-        data:
-          keys: [ENTER]
-          gap: 0.1
-      - delay: 5   # the show's page loading; pressing earlier does nothing
-      - action: script.bug_lizzer_tv_keys
-        data:
-          keys: [ENTER]
-          gap: 0.1
+      - if: "{{ parked }}"
+        then:
+          # Bring Disney+ forward (it resumes on the JEOPARDY! page), light the screen, Play.
+          - action: webostv.command
+            data:
+              entity_id: media_player.living_room_fish_s_tv
+              command: system.launcher/launch
+              payload:
+                id: com.disney.disneyplus-prod
+          - wait_template: "{{ state_attr('media_player.living_room_fish_s_tv', 'source') == 'Disney+' }}"
+            timeout: 6
+          - delay: 0.8
+          - action: webostv.command
+            data:
+              entity_id: media_player.living_room_fish_s_tv
+              command: com.webos.service.tvpower/power/turnOnScreen
+            continue_on_error: true
+          - delay: 0.4
+          - action: script.bug_lizzer_tv_keys
+            data:
+              keys: [ENTER]
+              gap: 0.1
+        else:
+          - action: media_player.volume_mute
+            target:
+              entity_id: media_player.living_room_fish_s_tv
+            data:
+              is_volume_muted: true
+            continue_on_error: true
+          - action: script.bug_lizzer_disney_to_jeopardy
+          - action: script.bug_lizzer_tv_keys
+            data:
+              keys: [ENTER]
+              gap: 0.1
       - action: media_player.volume_mute
         target:
           entity_id: media_player.living_room_fish_s_tv
@@ -352,6 +374,111 @@ script:
               {% endif %}
             {% endfor %}
             {{ ns.bad == 0 or repeat.index >= 4 }}
+
+  bug_lizzer_disney_to_jeopardy:
+    alias: Bug-Lizzer · Disney+ → NELLY → JEOPARDY! page
+    mode: single
+    sequence:
+      # Always restart Disney+: a TV that was switched off keeps it in the background on whatever
+      # screen it was left on, and the remote presses below must start from its home screen.
+      - action: webostv.command
+        data:
+          entity_id: media_player.living_room_fish_s_tv
+          command: system.launcher/close
+          payload:
+            id: com.disney.disneyplus-prod
+        continue_on_error: true
+      - delay: 0.8
+      - action: webostv.command
+        data:
+          entity_id: media_player.living_room_fish_s_tv
+          command: system.launcher/launch
+          payload:
+            id: com.disney.disneyplus-prod
+      - wait_template: "{{ state_attr('media_player.living_room_fish_s_tv', 'source') == 'Disney+' }}"
+        timeout: 15
+      - delay: 9   # Disney+ loading its home screen
+      # Disney+ opens on whoever watched last: always switch to NELLY (2nd on "Who's watching?").
+      # Top tabs → side menu → profile/SWITCH at its top.
+      - action: script.bug_lizzer_tv_keys
+        data:
+          keys: [UP, UP, LEFT, UP, UP, ENTER]
+          gap: 0.7
+      - delay: 1.5
+      # The picker opens on the current profile: go to the first, then one right = NELLY.
+      - action: script.bug_lizzer_tv_keys
+        data:
+          keys: [LEFT, LEFT, LEFT, RIGHT, ENTER]
+          gap: 0.6
+      - delay: 7   # NELLY's home screen loading
+      # Top tabs → side menu (opens on Home) → Search (keyboard opens with the cursor on the space bar)
+      - action: script.bug_lizzer_tv_keys
+        data:
+          keys: [UP, UP, LEFT, UP, ENTER]
+          gap: 0.7
+      - delay: 1
+      # space → e, then j-e-o-p
+      - action: script.bug_lizzer_tv_keys
+        data:
+          keys: [DOWN, DOWN, LEFT, ENTER, UP, RIGHT, ENTER, DOWN, DOWN, LEFT, LEFT, ENTER, RIGHT, ENTER]
+          gap: 0.35
+      - delay: 2
+      # keyboard → first result, Jeopardy! (1984) → its page → Play
+      - action: script.bug_lizzer_tv_keys
+        data:
+          keys: [UP, UP, RIGHT, RIGHT, RIGHT]
+          gap: 0.35
+      - delay: 0.8
+      - action: script.bug_lizzer_tv_keys
+        data:
+          keys: [ENTER]
+          gap: 0.1
+      - delay: 5   # the show's page loading; pressing earlier does nothing
+
+  bug_lizzer_jeopardy_park:
+    alias: Bug-Lizzer · park Disney+ on JEOPARDY! (while the TV is off)
+    mode: single
+    max_exceeded: silent
+    sequence:
+      - condition: state
+        entity_id: media_player.living_room_fish_s_tv
+        state: "off"
+      - action: media_player.turn_on
+        target:
+          entity_id: media_player.living_room_fish_s_tv
+      - wait_template: "{{ states('media_player.living_room_fish_s_tv') not in ['off', 'unavailable', 'unknown'] }}"
+        timeout: 45
+        continue_on_timeout: false
+      - repeat:   # the TV refuses this for a moment right after it wakes: retry
+          sequence:
+            - delay: 1
+            - action: webostv.command
+              data:
+                entity_id: media_player.living_room_fish_s_tv
+                command: com.webos.service.tvpower/power/turnOffScreen
+              continue_on_error: true
+              response_variable: scr
+          until: "{{ (scr is defined and scr.get('media_player.living_room_fish_s_tv', {}).get('returnValue')) or repeat.index >= 4 }}"
+      - action: media_player.volume_mute
+        target:
+          entity_id: media_player.living_room_fish_s_tv
+        data:
+          is_volume_muted: true
+        continue_on_error: true
+      - action: script.bug_lizzer_disney_to_jeopardy
+      - action: media_player.volume_mute
+        target:
+          entity_id: media_player.living_room_fish_s_tv
+        data:
+          is_volume_muted: false
+        continue_on_error: true
+      - delay: 1
+      - action: media_player.turn_off
+        target:
+          entity_id: media_player.living_room_fish_s_tv
+      - action: input_boolean.turn_on
+        target:
+          entity_id: input_boolean.bug_lizzer_jeopardy_parked
 
   bug_lizzer_tv_keys:
     alias: Bug-Lizzer · press TV remote buttons
