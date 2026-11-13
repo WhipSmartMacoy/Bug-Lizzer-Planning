@@ -270,6 +270,7 @@ table{border-radius:14px}
 .sheetwrap[hidden]{display:none!important}
 .meal.scr{background:var(--warm)}.meal.scr .scrt{font:700 16px var(--display)}.meal.scr .outnote{width:100%;margin:6px 0}
 .pdin{margin-top:8px;text-align:left}
+.lunch .meal.shared{margin:6px 0;text-align:left}
 .whobar{display:flex;align-items:center;gap:6px;margin:2px 0 6px}.whobar .btn{margin:0}.whobar .btn.primary[data-who=Amy]{background:var(--amy,#b88a00);border-color:transparent}.whobar .btn.primary[data-who=Parker]{background:#c4382b;border-color:transparent}
 .lwhat{cursor:pointer}.lwhat:hover{text-decoration:underline dotted}.meal.scr .scrt{cursor:pointer}
 .editbox{background:var(--tint);border:1px solid var(--line);border-radius:14px;padding:12px;margin:4px 0 6px}.editbox input,.editbox select{font:inherit;padding:9px 10px;border:1px solid var(--line2);border-radius:10px;background:var(--card);color:var(--ink)}
@@ -1419,7 +1420,16 @@ function mealList(d,meal){
   const items=S.meals.filter(m=>m.planned_for===d&&m.person&&(m.meal===meal||(isScan(m)&&m.slot===meal)))
     .sort((a,b)=>PEOPLE.indexOf(a.person)-PEOPLE.indexOf(b.person)||a.id-b.id);
   const lo=leftoverMeals(d,1).filter(x=>!(isLunch(x)&&x.planned_for===d)).length;
-  return items.map(m=>mealRow(m,d,meal)).join('')+
+  // A recipe both of us are having (one entry cooks it, the other shares it) shows as one card, like dinner.
+  const shared=new Map(); for(const m of items) if(m.recipe_id&&!m.leftover_of){ const mate=items.find(x=>String(x.leftover_of)===String(m.id)&&x.person!==m.person); if(mate) shared.set(m.id,mate.id); }
+  const mates=new Set(shared.values());
+  const card=m=>{ const r=rec(m.recipe_id); if(!r) return '';
+    return `<div class="meal shared ${m.cooked_at?'cooked':''}">
+      <a href="${esc(r.url)}" target="_blank" rel="noopener">${esc(r.title)}</a>
+      <div class="meta">${PEOPLE.map(p=>`<b class="who" data-who="${p}" style="font-size:12.5px">${p}</b>`).join(' ')} · ${r.servings?'Serves '+esc(r.servings.replace(/^serves\s*/i,''))+' · ':''}added by ${esc(nameOf(m.added_by))}</div>
+      ${m.cooked_at?`<div class="meta" style="color:var(--green)">✓ Cooked by ${esc(nameOf(m.cooked_by))}</div>`:''}
+      <div class="mrow"><button data-cook="${m.id}" data-v="${m.cooked_at?0:1}">${m.cooked_at?'Undo cooked':'Cooked ✓'}</button><button data-unplan="${m.id}" title="Remove for both">✕</button></div></div>`; };
+  return items.filter(m=>!mates.has(m.id)).map(m=>shared.has(m.id)?card(m):mealRow(m,d,meal)).join('')+
     `<button class="addbtn big" data-add="${d}||${meal}" type="button">＋ Add ${meal==='snack'?(items.length?'another snackie':'a snackie'):SLOT_LABEL[meal].toLowerCase()}${lo?` <span class="meta">· ${lo} leftover${lo>1?'s':''}</span>`:''}</button>`;
 }
 function snackRows(d,p,opts){
