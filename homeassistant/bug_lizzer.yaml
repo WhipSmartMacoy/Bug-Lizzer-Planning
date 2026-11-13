@@ -227,6 +227,12 @@ script:
         data:
           is_volume_muted: false
         continue_on_error: true
+      - action: media_player.volume_set   # episode volume: 8
+        target:
+          entity_id: media_player.living_room_fish_s_tv
+        data:
+          volume_level: 0.08
+        continue_on_error: true
       # Episode starting: Living Room lights chase blue → light blue → white for 10 s, then go back.
       - delay: 2
       - variables:
