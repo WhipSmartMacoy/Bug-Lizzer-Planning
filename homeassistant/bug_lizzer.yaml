@@ -79,99 +79,103 @@ script:
     icon: mdi:television-classic
     mode: restart
     sequence:
+      # TV on → Disney+ (NELLY) → Search → type "jeop" → Jeopardy! (1984) → Play (next unwatched episode).
+      # Mapped from screenshots of this TV; Disney+ ignores page links on LG, so we use its own search.
+      - action: media_player.turn_on
+        target:
+          entity_id: media_player.living_room_fish_s_tv
+      - wait_template: "{{ states('media_player.living_room_fish_s_tv') not in ['off', 'unavailable', 'unknown'] }}"
+        timeout: 45
+        continue_on_timeout: false
+      # Only restart Disney+ if it's already open (so it starts from its home screen).
+      - if: "{{ state_attr('media_player.living_room_fish_s_tv', 'source') == 'Disney+' }}"
+        then:
+          - action: webostv.command
+            data:
+              entity_id: media_player.living_room_fish_s_tv
+              command: system.launcher/close
+              payload:
+                id: com.disney.disneyplus-prod
+            continue_on_error: true
+          - delay: 1.5
+        else:
+          - delay: 1
+      - action: webostv.command
+        data:
+          entity_id: media_player.living_room_fish_s_tv
+          command: system.launcher/launch
+          payload:
+            id: com.disney.disneyplus-prod
+      - wait_template: "{{ state_attr('media_player.living_room_fish_s_tv', 'source') == 'Disney+' }}"
+        timeout: 15
+      - delay: 9   # Disney+ loading its home screen
+      # Menu → Search (keyboard opens with the cursor on the space bar)
+      - action: script.bug_lizzer_tv_keys
+        data:
+          keys: [LEFT, UP, ENTER]
+          gap: 1
+      - delay: 1
+      # space → e, then j-e-o-p
+      - action: script.bug_lizzer_tv_keys
+        data:
+          keys: [DOWN, DOWN, LEFT, ENTER, UP, RIGHT, ENTER, DOWN, DOWN, LEFT, LEFT, ENTER, RIGHT, ENTER]
+          gap: 0.35
+      - delay: 2
+      # keyboard → first result, Jeopardy! (1984) → its page → Play
+      - action: script.bug_lizzer_tv_keys
+        data:
+          keys: [UP, UP, RIGHT, RIGHT, RIGHT]
+          gap: 0.35
+      - delay: 0.8
+      - action: script.bug_lizzer_tv_keys
+        data:
+          keys: [ENTER]
+          gap: 0.1
+      - delay: 3
+      - action: script.bug_lizzer_tv_keys
+        data:
+          keys: [ENTER]
+          gap: 0.1
+      # Episode starting: Living Room lights chase blue → light blue → white for 10 s, then go back.
+      - delay: 2
       - variables:
           room_lights: >-
             {{ area_entities('living_room') | select('match', 'light\\.')
                | reject('is_state_attr', 'is_hue_group', true)
                | reject('is_state', 'unavailable') | list }}
           colors: [[0.1532, 0.0475], [0.2148, 0.2535], [0.3227, 0.329]]
-      - parallel:
-          # Every light in the Living Room area chases blue → light blue → white for 30 s, then goes back to how it was.
-          - sequence:
-              - action: scene.create
-                data:
-                  scene_id: bug_lizzer_before_jeopardy
-                  snapshot_entities: "{{ room_lights }}"
-              - repeat:
-                  count: 30
-                  sequence:
-                    - variables:
-                        step: "{{ repeat.index }}"
-                    - repeat:
-                        for_each: [0, 1, 2]
-                        sequence:
-                          - variables:
-                              group: >-
-                                {% set ns = namespace(l=[]) %}
-                                {% for e in room_lights %}{% if (loop.index0 + step) % 3 == repeat.item %}{% set ns.l = ns.l + [e] %}{% endif %}{% endfor %}
-                                {{ ns.l }}
-                          - if: "{{ group | count > 0 }}"
-                            then:
-                              - action: light.turn_on
-                                target:
-                                  entity_id: "{{ group }}"
-                                data:
-                                  xy_color: "{{ colors[repeat.item] }}"
-                                  brightness_pct: 100
-                                  transition: 0.6
-                    - delay: 1
-              - action: scene.turn_on
-                target:
-                  entity_id: scene.bug_lizzer_before_jeopardy
-                data:
-                  transition: 1
-          # TV on → fresh Disney+ (NELLY) → Search → type "jeop" → Jeopardy! (1984) → Play (next unwatched episode).
-          # Mapped from screenshots of this TV; Disney+ ignores page links on LG, so we use its own search.
-          - sequence:
-              - action: media_player.turn_on
-                target:
-                  entity_id: media_player.living_room_fish_s_tv
-              - wait_template: "{{ states('media_player.living_room_fish_s_tv') not in ['off', 'unavailable', 'unknown'] }}"
-                timeout: 45
-                continue_on_timeout: false
-              - delay: 3
-              - action: webostv.command
-                data:
-                  entity_id: media_player.living_room_fish_s_tv
-                  command: system.launcher/close
-                  payload:
-                    id: com.disney.disneyplus-prod
-                continue_on_error: true
-              - delay: 2.5
-              - action: webostv.command
-                data:
-                  entity_id: media_player.living_room_fish_s_tv
-                  command: system.launcher/launch
-                  payload:
-                    id: com.disney.disneyplus-prod
-              - delay: 13
-              # Menu → Search (the keyboard opens with the cursor on the space bar)
-              - action: script.bug_lizzer_tv_keys
-                data:
-                  keys: [LEFT, UP, ENTER]
-                  gap: 1.3
-              - delay: 1.5
-              # space → e, then j-e-o-p
-              - action: script.bug_lizzer_tv_keys
-                data:
-                  keys: [DOWN, DOWN, LEFT, ENTER, UP, RIGHT, ENTER, DOWN, DOWN, LEFT, LEFT, ENTER, RIGHT, ENTER]
-                  gap: 0.45
-              - delay: 3
-              # keyboard → first result, Jeopardy! (1984) → its page → Play
-              - action: script.bug_lizzer_tv_keys
-                data:
-                  keys: [UP, UP, RIGHT, RIGHT, RIGHT]
-                  gap: 0.45
-              - delay: 1.2
-              - action: script.bug_lizzer_tv_keys
-                data:
-                  keys: [ENTER]
-                  gap: 0.1
-              - delay: 4
-              - action: script.bug_lizzer_tv_keys
-                data:
-                  keys: [ENTER]
-                  gap: 0.1
+      - action: scene.create
+        data:
+          scene_id: bug_lizzer_before_jeopardy
+          snapshot_entities: "{{ room_lights }}"
+      - repeat:
+          count: 10
+          sequence:
+            - variables:
+                step: "{{ repeat.index }}"
+            - repeat:
+                for_each: [0, 1, 2]
+                sequence:
+                  - variables:
+                      group: >-
+                        {% set ns = namespace(l=[]) %}
+                        {% for e in room_lights %}{% if (loop.index0 + step) % 3 == repeat.item %}{% set ns.l = ns.l + [e] %}{% endif %}{% endfor %}
+                        {{ ns.l }}
+                  - if: "{{ group | count > 0 }}"
+                    then:
+                      - action: light.turn_on
+                        target:
+                          entity_id: "{{ group }}"
+                        data:
+                          xy_color: "{{ colors[repeat.item] }}"
+                          brightness_pct: 100
+                          transition: 0.6
+            - delay: 1
+      - action: scene.turn_on
+        target:
+          entity_id: scene.bug_lizzer_before_jeopardy
+        data:
+          transition: 1
 
   bug_lizzer_tv_keys:
     alias: Bug-Lizzer · press TV remote buttons
