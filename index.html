@@ -1865,7 +1865,26 @@ document.addEventListener('click',e=>{
   else if(t.id==='homeAddClose'||(t.id==='homeAddSheet'&&e.target===sheet)){ sheet.hidden=true; }
   else if(t.id==='usualsToggle'||t.matches('label[for=receiptFile]')){ sheet.hidden=true; }
 });
+// The iPad Station (served by Home Assistant) can't run this app, so the app leaves it a small summary:
+// this week's dinners, what to buy, leftovers and what's at home. Saved a few seconds after anything changes.
+let stationT=null, stationLast='';
+function publishStation(){
+  if(!me||!S.members.length) return;
+  clearTimeout(stationT); stationT=setTimeout(async()=>{ try{
+    const w=week; week=mondayOf(TODAY);
+    const days=[0,1,2,3,4,5,6].map(i=>addDays(week,i));
+    const dinners=days.map(d=>{ const m=S.meals.find(x=>x.planned_for===d&&isDin(x));
+      return {d, day:dayName(d), what:m?dTitle(m):null, kind:m?(m.leftover_of?'leftovers':isScr(m)?'scrunge':isOutDin(m)?'out':'cook'):null, cooked:!!(m&&m.cooked_at)}; });
+    const plan=shopPlan(); week=w;
+    const buy=plan.filter(o=>o.buy>0&&!STAPLES.has(o.i)).map(o=>({i:o.i, aisle:aisleOf(o.i)[1], tonight:o.uses.some(m=>m.planned_for===TODAY)}));
+    const left=leftoverMeals(addDays(TODAY,1),1).map(m=>({what:rec(m.recipe_id).title, servings:leftoversOf(m), from:dayName(m.planned_for)}));
+    const snap={dinners, buy, left, home:S.pantry.filter(p=>+p.q>0).length};
+    const val=JSON.stringify(snap); if(val===stationLast) return; stationLast=val;
+    await sb.from('app_settings').upsert({key:'station', value:JSON.stringify({...snap, at:new Date().toISOString()}), updated_at:new Date().toISOString()});
+  }catch(e){ console.warn('station summary',e); } },4000);
+}
 function renderAll(){
+  publishStation();
   renderLauncher();
   if(!window.__devRec&&me&&S.members.length){ window.__devRec=1; recordDevice(); }
   renderWho();renderSettings();renderPantry();renderPlan();renderUseup();renderRecipes();renderNutrition();renderDiscover();renderActivity();

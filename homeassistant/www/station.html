@@ -25,27 +25,39 @@
   body.light .room.on{ background:#e6f1dc; border-color:#a9c98f; }
   body.light .room.on small{ color:#3f6b2a; }
   body.light .toast{ background:#17211c; }
-  button.clockcard{ display:block; width:100%; text-align:left; min-height:0; padding:16px 18px; border-radius:20px; background:var(--card); }
+  button.clockcard{ display:block; width:100%; text-align:left; min-height:0; padding:12px 14px; border-radius:18px; background:var(--card); }
   .themehint{ float:right; font-size:22px; opacity:.7; }
-  .wrap{ display:grid; grid-template-columns: 38% 1fr; grid-gap:18px; height:100%; padding:22px 24px; }
+  .wrap{ display:grid; grid-template-columns: 30% 34% 1fr; grid-gap:14px; height:100%; padding:16px 18px; }
   .col{ display:grid; grid-gap:14px; align-content:start; overflow:hidden; }
-  .card{ background:var(--card); border:1px solid var(--line); border-radius:20px; padding:16px 18px; }
+  .card{ background:var(--card); border:1px solid var(--line); border-radius:18px; padding:12px 14px; }
   h2{ margin:0 0 10px; font-size:13px; letter-spacing:.06em; text-transform:uppercase; color:var(--muted); font-weight:600; }
-  .clock{ font-size:84px; font-weight:200; letter-spacing:-2px; line-height:1; }
-  .date{ font-size:20px; color:var(--muted); margin-top:6px; }
-  .dinner{ font-size:24px; font-weight:600; }
+  .clock{ font-size:66px; font-weight:200; letter-spacing:-2px; line-height:1; }
+  .date{ font-size:17px; color:var(--muted); margin-top:4px; }
+  .wx{ font-size:15px; color:var(--ink); margin-top:6px; }
+  .row{ display:table; width:100%; font-size:15px; padding:5px 0; border-top:1px solid var(--line); }
+  .row:first-of-type{ border-top:0; }
+  .row > span{ display:table-cell; vertical-align:top; }
+  .row .k{ width:58px; color:var(--muted); font-weight:600; }
+  .row.today .k, .row.today .v{ color:var(--green); font-weight:700; }
+  .row .v.none{ color:var(--muted); }
+  .chips span{ display:inline-block; font-size:14px; background:var(--card2); border:1px solid var(--line); border-radius:99px; padding:3px 9px; margin:0 5px 5px 0; }
+  .chips span.now{ border-color:var(--amber); color:var(--amber); }
+  .ev{ font-size:15px; padding:5px 0; border-top:1px solid var(--line); }
+  .ev:first-of-type{ border-top:0; }
+  .ev b{ font-weight:600; } .ev small{ display:block; color:var(--muted); font-size:13px; }
+  .dinner{ font-size:21px; font-weight:600; }
   .sub{ color:var(--muted); font-size:15px; margin-top:4px; }
   .person{ border-left:4px solid; padding:6px 0 6px 12px; margin-top:10px; }
   .person b{ display:block; font-size:15px; }
   .person span{ display:block; font-size:16px; }
   .grid{ display:grid; grid-gap:10px; }
   .g2{ grid-template-columns:1fr 1fr; } .g3{ grid-template-columns:1fr 1fr 1fr; } .g4{ grid-template-columns:1fr 1fr 1fr 1fr; }
-  button{ font:inherit; color:var(--ink); background:var(--card2); border:1px solid var(--line); border-radius:16px;
-          padding:14px 10px; min-height:64px; cursor:pointer; text-align:center; }
+  button{ font:inherit; color:var(--ink); background:var(--card2); border:1px solid var(--line); border-radius:14px;
+          padding:12px 8px; min-height:56px; cursor:pointer; text-align:center; }
   button:active{ transform:scale(.97); opacity:.85; }
-  .scene{ font-size:20px; font-weight:600; min-height:84px; }
+  .scene{ font-size:18px; font-weight:600; min-height:74px; }
   .scene i{ display:block; font-style:normal; font-size:28px; margin-bottom:4px; }
-  .room{ text-align:left; min-height:78px; }
+  .room{ text-align:left; min-height:62px; padding:10px 12px; }
   .room b{ display:block; font-size:17px; }
   .room small{ color:var(--muted); font-size:14px; }
   .room.on{ background:#2b3a22; border-color:#4d6b33; }
@@ -68,11 +80,11 @@
 <script>
 (function(){
   'use strict';
-  var VERSION = 'station-4';   // bump when the page changes; open iPads reload themselves
+  var VERSION = 'station-5';   // bump when the page changes; open iPads reload themselves
   var TV = 'media_player.living_room_fish_s_tv';
   var HIDE_SCRIPTS = ['script.bug_lizzer_tv_keys'];
   var ICONS = { 'script.bug_lizzer_jeopardy':'🎯', 'script.bug_lizzer_rest':'🌙' };
-  var token = null, states = {}, rooms = [], food = null, lastErr = '';
+  var token = null, states = {}, rooms = [], food = null, lastErr = '', events = [], forecast = null;
 
   try { token = localStorage.getItem('station_token'); } catch(e) {}
   // If this iPad has signed in to Home Assistant in Safari, use that sign-in.
@@ -112,6 +124,28 @@
 
   function loadRooms(){ return api('POST', 'template', { template: ROOMS_TPL }).then(function(t){ rooms = typeof t === 'string' ? JSON.parse(t) : t; }); }
   function loadStates(){ return api('GET', 'states').then(function(list){ var m = {}; list.forEach(function(s){ m[s.entity_id] = s; }); states = m; }); }
+  var WX = { 'sunny':'☀️','clear-night':'🌙','partlycloudy':'⛅','cloudy':'☁️','rainy':'🌧️','pouring':'🌧️','snowy':'❄️','snowy-rainy':'🌨️',
+             'fog':'🌫️','hail':'🌨️','lightning':'🌩️','lightning-rainy':'⛈️','windy':'💨','windy-variant':'💨','exceptional':'⚠️' };
+  function weatherEntity(){ var k = Object.keys(states).filter(function(e){ return e.indexOf('weather.') === 0; }); return k[0]; }
+  function loadForecast(){
+    var w = weatherEntity(); if (!w) return Promise.resolve();
+    return api('POST', 'services/weather/get_forecasts?return_response', { entity_id: w, type: 'daily' })
+      .then(function(r){ var f = r && r.service_response && r.service_response[w]; forecast = f && f.forecast ? f.forecast : null; })
+      .catch(function(){});
+  }
+  function loadEvents(){
+    var cals = Object.keys(states).filter(function(e){ return e.indexOf('calendar.') === 0; });
+    if (!cals.length) { events = []; return Promise.resolve(); }
+    var start = new Date(), end = new Date(start.getTime() + 8 * 864e5);
+    return Promise.all(cals.map(function(c){
+      return api('GET', 'calendars/' + c + '?start=' + encodeURIComponent(start.toISOString()) + '&end=' + encodeURIComponent(end.toISOString())).catch(function(){ return []; });
+    })).then(function(lists){
+      var all = []; lists.forEach(function(l){ all = all.concat(l || []); });
+      all.forEach(function(e){ e._t = new Date(e.start.dateTime || (e.start.date + 'T00:00:00')).getTime(); e._allDay = !e.start.dateTime; });
+      all.sort(function(a, b){ return a._t - b._t; });
+      events = all;
+    });
+  }
   function loadFood(){
     return api('POST', 'services/rest_command/bug_lizzer_today?return_response', {})
       .then(function(r){ var sr = r && r.service_response; if (sr && sr.status === 200) food = sr.content; })
@@ -131,43 +165,80 @@
     var hh = h % 12 || 12;
 
     // The clock is a real button: tap it to switch dark ⇄ light.
-    var left = '<button class="card clockcard" data-theme-toggle="1"><div class="clock">' + hh + ':' + pad(now.getMinutes()) + '</div>' +
+    // ---- column 1: clock + weather, tonight, people, leftovers ----
+    var w = states[weatherEntity()], wx = '';
+    if (w) {
+      var t0 = forecast && forecast[0];
+      wx = '<div class="wx">' + (WX[w.state] || '') + ' ' + Math.round(w.attributes.temperature) + '°' +
+           (t0 ? ' · H ' + Math.round(t0.temperature) + '° L ' + Math.round(t0.templow) + '°' : '') + '</div>';
+    }
+    // The clock is a real button: tap it to switch dark ⇄ light.
+    var c1 = '<button class="card clockcard" data-theme-toggle="1"><div class="clock">' + hh + ':' + pad(now.getMinutes()) + '</div>' +
       '<div class="date">' + days[now.getDay()] + ', ' + months[now.getMonth()] + ' ' + now.getDate() +
-      '<span class="themehint">' + (light ? '🌙' : '☀️') + '</span></div></button>';
+      '<span class="themehint">' + (light ? '🌙' : '☀️') + '</span></div>' + wx + '</button>';
 
-    var din = food && food.dinner;
-    left += '<div class="card"><h2>Tonight</h2>' +
-      (din ? '<div class="dinner">' + (din.leftovers ? '🍱 ' : '') + esc(cleanWhat(din.what)) + '</div>' + (din.cooked ? '<div class="sub">✓ Cooked</div>' : '')
-           : '<div class="dinner" style="color:var(--muted)">Nothing planned</div>') +
-      (food && food.tomorrow ? '<div class="sub">Tomorrow: ' + esc(cleanWhat(food.tomorrow)) + '</div>' : '');
+    var sum = food && food.summary, din = food && food.dinner;
+    var missing = sum && sum.buy ? sum.buy.filter(function(x){ return x.tonight; }).map(function(x){ return x.i; }) : [];
+    c1 += '<div class="card"><h2>Tonight</h2>' +
+      (din ? '<div class="dinner">' + (din.leftovers ? '🍱 ' : '') + esc(cleanWhat(din.what)) + '</div>' +
+             (din.cooked ? '<div class="sub">✓ Cooked</div>' : missing.length ? '<div class="sub" style="color:var(--amber)">Still need: ' + esc(missing.join(', ')) + '</div>' : '')
+           : '<div class="dinner" style="color:var(--muted)">Nothing planned</div>');
     ['Amy', 'Parker'].forEach(function(p){
       var items = (food && food.meals || []).filter(function(m){ return m.person === p; });
-      left += '<div class="person" style="border-color:var(--' + p.toLowerCase() + ')"><b style="color:var(--' + p.toLowerCase() + ')">' + p + '</b>' +
-        (items.length ? items.map(function(m){ return '<span>' + esc(m.meal.charAt(0).toUpperCase() + m.meal.slice(1)) + ': ' + esc(cleanWhat(m.what)) + '</span>'; }).join('')
+      c1 += '<div class="person" style="border-color:var(--' + p.toLowerCase() + ')"><b style="color:var(--' + p.toLowerCase() + ')">' + p + '</b>' +
+        (items.length ? items.map(function(m){ return '<span>' + esc(m.meal === 'snack' ? 'Snack' : m.meal.charAt(0).toUpperCase() + m.meal.slice(1)) + ': ' + esc(cleanWhat(m.what)) + '</span>'; }).join('')
                       : '<span style="color:var(--muted)">Nothing logged yet</span>') + '</div>';
     });
-    left += '</div>';
+    c1 += '</div>';
+    if (sum && sum.left && sum.left.length) {
+      c1 += '<div class="card"><h2>Leftovers</h2>' + sum.left.slice(0, 4).map(function(l){
+        return '<div class="ev"><b>🍱 ' + esc(l.what) + '</b><small>' + l.servings + ' serving' + (l.servings === 1 ? '' : 's') + ' · from ' + esc(l.from) + '</small></div>'; }).join('') + '</div>';
+    }
 
-    // Scenes = Home Assistant scripts
+    // ---- column 2: this week's dinners, calendar, shopping ----
+    var todayIso = now.getFullYear() + '-' + pad(now.getMonth() + 1) + '-' + pad(now.getDate());
+    var c2 = '<div class="card"><h2>Dinners this week</h2>' + (sum && sum.dinners ? sum.dinners.map(function(d){
+      var ic = d.kind === 'leftovers' ? '🍱 ' : d.kind === 'scrunge' ? '🫙 ' : d.kind === 'out' ? '🍽️ ' : '';
+      return '<div class="row' + (d.d === todayIso ? ' today' : '') + '"><span class="k">' + esc(d.day) + '</span><span class="v' + (d.what ? '' : ' none') + '">' +
+        (d.what ? ic + esc(cleanWhat(d.what)) + (d.cooked ? ' ✓' : '') : '—') + '</span></div>'; }).join('')
+      : '<div class="sub">Open the Bug-Lizzer app once to fill this in.</div>') + '</div>';
+
+    if (events.length) {
+      var upcoming = events.filter(function(e){ return e._allDay ? e._t >= new Date(todayIso + 'T00:00:00').getTime() : e._t >= now.getTime() - 3600e3; }).slice(0, 5);
+      c2 += '<div class="card"><h2>Coming up</h2>' + (upcoming.length ? upcoming.map(function(e){
+        var d = new Date(e._t), isToday = d.toDateString() === now.toDateString();
+        var tomorrow = new Date(now.getTime() + 864e5).toDateString() === d.toDateString();
+        var when = isToday ? 'Today' : tomorrow ? 'Tomorrow' : days[d.getDay()].slice(0, 3) + ' ' + months[d.getMonth()].slice(0, 3) + ' ' + d.getDate();
+        if (!e._allDay) when += ' · ' + ((d.getHours() % 12) || 12) + ':' + pad(d.getMinutes()) + (d.getHours() < 12 ? ' AM' : ' PM');
+        return '<div class="ev"><b>' + esc(e.summary || 'Event') + '</b><small>' + when + '</small></div>'; }).join('')
+        : '<div class="sub">Nothing in the next week</div>') + '</div>';
+    }
+
+    if (sum && sum.buy) {
+      c2 += '<div class="card"><h2>Shopping · ' + (sum.buy.length ? sum.buy.length + ' to get' : 'all set') + '</h2><div class="chips">' +
+        sum.buy.slice(0, 14).map(function(x){ return '<span' + (x.tonight ? ' class="now"' : '') + '>' + esc(x.i) + '</span>'; }).join('') +
+        (sum.buy.length > 14 ? '<span>+' + (sum.buy.length - 14) + ' more</span>' : '') + '</div>' +
+        '<div class="sub">' + sum.home + ' things at home</div></div>';
+    }
+
+    // ---- column 3: scenes, lights, TV ----
     var scripts = Object.keys(states).filter(function(e){ return e.indexOf('script.') === 0 && HIDE_SCRIPTS.indexOf(e) < 0; });
     scripts.sort(function(a, b){ return (ICONS[b] ? 1 : 0) - (ICONS[a] ? 1 : 0) || a.localeCompare(b); });
-    var right = '<div class="card"><h2>Scenes</h2><div class="grid ' + (scripts.length > 2 ? 'g3' : 'g2') + '">' +
-      scripts.map(function(e){ var s = states[e]; return '<button class="scene" data-script="' + e + '"><i>' + (ICONS[e] || '✨') + '</i>' +
-        esc(s.attributes.friendly_name || e) + '</button>'; }).join('') + '</div></div>';
+    var c3 = '<div class="card"><h2>Scenes</h2><div class="grid g2">' +
+      scripts.map(function(e){ var st = states[e]; return '<button class="scene" data-script="' + e + '"><i>' + (ICONS[e] || '✨') + '</i>' +
+        esc(st.attributes.friendly_name || e) + '</button>'; }).join('') + '</div></div>';
 
-    // Rooms
-    right += '<div class="card"><h2>Lights</h2><div class="grid g3">' + rooms.map(function(r){
+    c3 += '<div class="card"><h2>Lights</h2><div class="grid g2">' + rooms.map(function(r){
       var on = r.lights.filter(function(l){ return states[l] && states[l].state === 'on'; }).length;
       return '<button class="room' + (on ? ' on' : '') + '" data-room="' + esc(r.id) + '"><b>' + esc(r.name) + '</b><small>' +
         (on ? on + ' of ' + r.lights.length + ' on' : 'Off') + '</small></button>';
     }).join('') + '</div></div>';
 
-    // TV
     var tv = states[TV], tvOn = tv && tv.state !== 'off' && tv.state !== 'unavailable';
-    right += '<div class="card tv"><h2>TV' + (tvOn && tv.attributes.source ? ' · ' + esc(tv.attributes.source) : '') + '</h2><div class="grid g4">' +
+    c3 += '<div class="card tv"><h2>TV' + (tvOn && tv.attributes.source ? ' · ' + esc(tv.attributes.source) : '') + '</h2><div class="grid g4">' +
       '<button data-tv="power">' + (tvOn ? '⏻ Off' : '⏻ On') + '</button><button data-tv="down">🔉</button><button data-tv="mute">🔇</button><button data-tv="up">🔊</button></div></div>';
 
-    $('app').innerHTML = '<div class="wrap"><div class="col">' + left + '</div><div class="col">' + right + '</div></div>' +
+    $('app').innerHTML = '<div class="wrap"><div class="col">' + c1 + '</div><div class="col">' + c2 + '</div><div class="col">' + c3 + '</div></div>' +
       (lastErr ? '<div style="position:fixed;top:6px;right:12px;color:var(--red);font-size:13px">' + esc(lastErr) + '</div>' : '');
   }
 
@@ -212,12 +283,13 @@
 
   function start(){
     if (!bearer()) return setup();
-    loadStates().then(function(){ return Promise.all([loadRooms(), loadFood()]); })
+    loadStates().then(function(){ return Promise.all([loadRooms(), loadFood(), loadForecast(), loadEvents()]); })
       .then(function(){ render();
         setInterval(refresh, 5000);                 // lights, TV, scenes
         setInterval(function(){ loadFood().then(render); }, 120000);   // meals
         setInterval(render, 20000);                 // clock
         setInterval(loadRooms, 600000);
+        setInterval(function(){ loadForecast(); loadEvents().then(render); }, 900000);
         setInterval(checkVersion, 300000); })
       .catch(function(err){ if (err.message === 'auth') { token = null; try { localStorage.removeItem('station_token'); } catch(e) {} setup('That access code didn’t work. Please paste a new one.'); }
                             else setup('Couldn’t reach Home Assistant: ' + err.message); });
