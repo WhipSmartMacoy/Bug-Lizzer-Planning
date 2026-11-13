@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Station">
+<title>Bug-Lizzer Station</title>
+<!--
+  Bug-Lizzer Station: a wall/counter panel for an old iPad (built for iOS 12 Safari).
+  Served by Home Assistant from /config/www, talks to Home Assistant directly on the home network.
+  Written without newer JavaScript (no ?. or ??) and without flexbox gap, which iOS 12 lacks.
+-->
+<style>
+  :root{ --bg:#0f1512; --card:#18201c; --card2:#1f2924; --ink:#e7ece8; --muted:#9ba69f; --line:#29332e;
+         --green:#4a9a72; --amber:#d7a64c; --red:#e2604f; --amy:#e6bd3f; --parker:#f06b5b; }
+  *{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html,body{ margin:0; height:100%; background:var(--bg); color:var(--ink);
+    font:17px/1.35 -apple-system, "Helvetica Neue", Helvetica, Arial, sans-serif; -webkit-user-select:none; user-select:none; overflow:hidden; }
+  body.night{ --ink:#8e9891; --muted:#5f6963; --card:#121815; --card2:#161d19; }
+  .wrap{ display:grid; grid-template-columns: 38% 1fr; grid-gap:18px; height:100%; padding:22px 24px; }
+  .col{ display:grid; grid-gap:14px; align-content:start; overflow:hidden; }
+  .card{ background:var(--card); border:1px solid var(--line); border-radius:20px; padding:16px 18px; }
+  h2{ margin:0 0 10px; font-size:13px; letter-spacing:.06em; text-transform:uppercase; color:var(--muted); font-weight:600; }
+  .clock{ font-size:84px; font-weight:200; letter-spacing:-2px; line-height:1; }
+  .date{ font-size:20px; color:var(--muted); margin-top:6px; }
+  .dinner{ font-size:24px; font-weight:600; }
+  .sub{ color:var(--muted); font-size:15px; margin-top:4px; }
+  .person{ border-left:4px solid; padding:6px 0 6px 12px; margin-top:10px; }
+  .person b{ display:block; font-size:15px; }
+  .person span{ display:block; font-size:16px; }
+  .grid{ display:grid; grid-gap:10px; }
+  .g2{ grid-template-columns:1fr 1fr; } .g3{ grid-template-columns:1fr 1fr 1fr; } .g4{ grid-template-columns:1fr 1fr 1fr 1fr; }
+  button{ font:inherit; color:var(--ink); background:var(--card2); border:1px solid var(--line); border-radius:16px;
+          padding:14px 10px; min-height:64px; cursor:pointer; text-align:center; }
+  button:active{ transform:scale(.97); opacity:.85; }
+  .scene{ font-size:20px; font-weight:600; min-height:84px; }
+  .scene i{ display:block; font-style:normal; font-size:28px; margin-bottom:4px; }
+  .room{ text-align:left; min-height:78px; }
+  .room b{ display:block; font-size:17px; }
+  .room small{ color:var(--muted); font-size:14px; }
+  .room.on{ background:#2b3a22; border-color:#4d6b33; }
+  .room.on small{ color:#c9e3a8; }
+  .tv button{ font-size:22px; }
+  .busy{ opacity:.5; }
+  .toast{ position:fixed; left:50%; bottom:24px; -webkit-transform:translateX(-50%); transform:translateX(-50%);
+          background:#2b3d34; color:#fff; padding:12px 20px; border-radius:14px; font-size:16px; opacity:0; -webkit-transition:opacity .3s; transition:opacity .3s; }
+  .toast.show{ opacity:1; }
+  .setup{ max-width:620px; margin:60px auto; padding:0 24px; }
+  .setup textarea{ width:100%; height:140px; font:14px Menlo, monospace; background:var(--card); color:var(--ink);
+                   border:1px solid var(--line); border-radius:12px; padding:12px; margin:12px 0; -webkit-user-select:text; user-select:text; }
+  .setup li{ margin:6px 0; }
+  .err{ color:var(--red); }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div class="toast" id="toast"></div>
+<script>
+(function(){
+  'use strict';
+  var TV = 'media_player.living_room_fish_s_tv';
+  var HIDE_SCRIPTS = ['script.bug_lizzer_tv_keys'];
+  var ICONS = { 'script.bug_lizzer_jeopardy':'🎯', 'script.bug_lizzer_rest':'🌙' };
+  var token = null, states = {}, rooms = [], food = null, lastErr = '';
+
+  try { token = localStorage.getItem('station_token'); } catch(e) {}
+  // If this iPad has signed in to Home Assistant in Safari, use that sign-in.
+  function haLogin(){ try { var t = JSON.parse(localStorage.getItem('hassTokens') || 'null'); return t && t.access_token ? t : null; } catch(e) { return null; } }
+
+  function $(id){ return document.getElementById(id); }
+  function esc(s){ return String(s == null ? '' : s).replace(/[&<>"]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+  function toast(msg){ var t = $('toast'); t.textContent = msg; t.className = 'toast show'; clearTimeout(toast.t); toast.t = setTimeout(function(){ t.className = 'toast'; }, 2500); }
+
+  function bearer(){ if (token) return token; var l = haLogin(); return l ? l.access_token : null; }
+  function api(method, path, body){
+    return fetch('/api/' + path, { method: method, headers: { 'Authorization': 'Bearer ' + bearer(), 'Content-Type': 'application/json' },
+      body: body ? JSON.stringify(body) : undefined })
+      .then(function(r){ if (r.status === 401) { throw new Error('auth'); } if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); });
+  }
+  function call(domain, service, data){ return api('POST', 'services/' + domain + '/' + service, data || {}); }
+
+  // ---------- first run: paste a Home Assistant access token ----------
+  function setup(msg){
+    $('app').innerHTML =
+      '<div class="setup"><h1>Bug-Lizzer Station</h1>' + (msg ? '<p class="err">' + esc(msg) + '</p>' : '') +
+      '<p>This iPad needs a Home Assistant access code once:</p><ol>' +
+      '<li>On your phone or PC, open Home Assistant → your name (bottom left) → <b>Security</b>.</li>' +
+      '<li>Under <b>Long-lived access tokens</b>, tap <b>Create token</b>, name it “iPad Station”, and copy it.</li>' +
+      '<li>Paste it below (with an iPhone nearby on the same Apple ID, copying on the phone lets you paste here).</li></ol>' +
+      '<textarea id="tok" placeholder="Paste the token here" autocapitalize="off" autocorrect="off" spellcheck="false"></textarea>' +
+      '<button id="save" style="width:100%">Save on this iPad</button></div>';
+    $('save').onclick = function(){ var v = $('tok').value.replace(/\s+/g, ''); if (!v) return;
+      token = v; try { localStorage.setItem('station_token', v); } catch(e) {} start(); };
+  }
+
+  // ---------- data ----------
+  var ROOMS_TPL = "{% set ns = namespace(o=[]) %}{% for a in areas() %}" +
+    "{% set ls = area_entities(a) | select('match','light\\.') | reject('is_state_attr','is_hue_group',true) | list %}" +
+    "{% set sc = area_entities(a) | select('match','scene\\.') | list %}" +
+    "{% if ls %}{% set ns.o = ns.o + [{'id':a,'name':area_name(a),'lights':ls,'scenes':sc[:4]}] %}{% endif %}{% endfor %}{{ ns.o | to_json }}";
+
+  function loadRooms(){ return api('POST', 'template', { template: ROOMS_TPL }).then(function(t){ rooms = typeof t === 'string' ? JSON.parse(t) : t; }); }
+  function loadStates(){ return api('GET', 'states').then(function(list){ var m = {}; list.forEach(function(s){ m[s.entity_id] = s; }); states = m; }); }
+  function loadFood(){
+    return api('POST', 'services/rest_command/bug_lizzer_today?return_response', {})
+      .then(function(r){ var sr = r && r.service_response; if (sr && sr.status === 200) food = sr.content; })
+      .catch(function(){});
+  }
+
+  // ---------- render ----------
+  function pad(n){ return (n < 10 ? '0' : '') + n; }
+  function cleanWhat(w){ return String(w || '').replace(/ —$/, '').replace(/ — /, ' · '); }
+
+  function render(){
+    var now = new Date(), h = now.getHours();
+    document.body.className = (h >= 22 || h < 6) ? 'night' : '';
+    var days = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+    var months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+    var hh = h % 12 || 12;
+
+    var left = '<div class="card"><div class="clock">' + hh + ':' + pad(now.getMinutes()) + '</div>' +
+      '<div class="date">' + days[now.getDay()] + ', ' + months[now.getMonth()] + ' ' + now.getDate() + '</div></div>';
+
+    var din = food && food.dinner;
+    left += '<div class="card"><h2>Tonight</h2>' +
+      (din ? '<div class="dinner">' + (din.leftovers ? '🍱 ' : '') + esc(cleanWhat(din.what)) + '</div>' + (din.cooked ? '<div class="sub">✓ Cooked</div>' : '')
+           : '<div class="dinner" style="color:var(--muted)">Nothing planned</div>') +
+      (food && food.tomorrow ? '<div class="sub">Tomorrow: ' + esc(cleanWhat(food.tomorrow)) + '</div>' : '');
+    ['Amy', 'Parker'].forEach(function(p){
+      var items = (food && food.meals || []).filter(function(m){ return m.person === p; });
+      left += '<div class="person" style="border-color:var(--' + p.toLowerCase() + ')"><b style="color:var(--' + p.toLowerCase() + ')">' + p + '</b>' +
+        (items.length ? items.map(function(m){ return '<span>' + esc(m.meal.charAt(0).toUpperCase() + m.meal.slice(1)) + ': ' + esc(cleanWhat(m.what)) + '</span>'; }).join('')
+                      : '<span style="color:var(--muted)">Nothing logged yet</span>') + '</div>';
+    });
+    left += '</div>';
+
+    // Scenes = Home Assistant scripts
+    var scripts = Object.keys(states).filter(function(e){ return e.indexOf('script.') === 0 && HIDE_SCRIPTS.indexOf(e) < 0; });
+    scripts.sort(function(a, b){ return (ICONS[b] ? 1 : 0) - (ICONS[a] ? 1 : 0) || a.localeCompare(b); });
+    var right = '<div class="card"><h2>Scenes</h2><div class="grid ' + (scripts.length > 2 ? 'g3' : 'g2') + '">' +
+      scripts.map(function(e){ var s = states[e]; return '<button class="scene" data-script="' + e + '"><i>' + (ICONS[e] || '✨') + '</i>' +
+        esc(s.attributes.friendly_name || e) + '</button>'; }).join('') + '</div></div>';
+
+    // Rooms
+    right += '<div class="card"><h2>Lights</h2><div class="grid g3">' + rooms.map(function(r){
+      var on = r.lights.filter(function(l){ return states[l] && states[l].state === 'on'; }).length;
+      return '<button class="room' + (on ? ' on' : '') + '" data-room="' + esc(r.id) + '"><b>' + esc(r.name) + '</b><small>' +
+        (on ? on + ' of ' + r.lights.length + ' on' : 'Off') + '</small></button>';
+    }).join('') + '</div></div>';
+
+    // TV
+    var tv = states[TV], tvOn = tv && tv.state !== 'off' && tv.state !== 'unavailable';
+    right += '<div class="card tv"><h2>TV' + (tvOn && tv.attributes.source ? ' · ' + esc(tv.attributes.source) : '') + '</h2><div class="grid g4">' +
+      '<button data-tv="power">' + (tvOn ? '⏻ Off' : '⏻ On') + '</button><button data-tv="down">🔉</button><button data-tv="mute">🔇</button><button data-tv="up">🔊</button></div></div>';
+
+    $('app').innerHTML = '<div class="wrap"><div class="col">' + left + '</div><div class="col">' + right + '</div></div>' +
+      (lastErr ? '<div style="position:fixed;top:6px;right:12px;color:var(--red);font-size:13px">' + esc(lastErr) + '</div>' : '');
+  }
+
+  // ---------- taps ----------
+  document.addEventListener('click', function(ev){
+    var b = ev.target; while (b && b.tagName !== 'BUTTON') b = b.parentNode; if (!b || !b.getAttribute) return;
+    var p;
+    if (b.getAttribute('data-script')) {
+      var e = b.getAttribute('data-script'); b.className += ' busy';
+      p = call('script', 'turn_on', { entity_id: e }).then(function(){ toast((states[e].attributes.friendly_name || 'Scene') + ' started'); });
+    } else if (b.getAttribute('data-room')) {
+      var r = rooms.filter(function(x){ return x.id === b.getAttribute('data-room'); })[0]; if (!r) return;
+      var anyOn = r.lights.some(function(l){ return states[l] && states[l].state === 'on'; });
+      p = call('light', anyOn ? 'turn_off' : 'turn_on', { entity_id: r.lights });
+      r.lights.forEach(function(l){ if (states[l]) states[l].state = anyOn ? 'off' : 'on'; }); render();
+    } else if (b.getAttribute('data-tv')) {
+      var a = b.getAttribute('data-tv'), tv = states[TV], tvOn = tv && tv.state !== 'off' && tv.state !== 'unavailable';
+      if (a === 'power') p = call('media_player', tvOn ? 'turn_off' : 'turn_on', { entity_id: TV });
+      if (a === 'up') p = call('media_player', 'volume_up', { entity_id: TV });
+      if (a === 'down') p = call('media_player', 'volume_down', { entity_id: TV });
+      if (a === 'mute') p = call('media_player', 'volume_mute', { entity_id: TV, is_volume_muted: !(tv && tv.attributes.is_volume_muted) });
+    }
+    if (p) p.then(function(){ setTimeout(refresh, 800); }, function(err){ toast(err.message === 'auth' ? 'Access code rejected' : 'Couldn’t reach Home Assistant'); });
+  });
+
+  function refresh(){
+    return loadStates().then(function(){ lastErr = ''; render(); }, function(err){
+      if (err.message === 'auth' && token) { token = null; try { localStorage.removeItem('station_token'); } catch(e) {} return setup('That access code didn’t work. Please paste a new one.'); }
+      lastErr = 'Home Assistant not reachable'; render(); });
+  }
+
+  function start(){
+    if (!bearer()) return setup();
+    loadStates().then(function(){ return Promise.all([loadRooms(), loadFood()]); })
+      .then(function(){ render();
+        setInterval(refresh, 5000);                 // lights, TV, scenes
+        setInterval(function(){ loadFood().then(render); }, 120000);   // meals
+        setInterval(render, 20000);                 // clock
+        setInterval(loadRooms, 600000); })
+      .catch(function(err){ if (err.message === 'auth') { token = null; try { localStorage.removeItem('station_token'); } catch(e) {} setup('That access code didn’t work. Please paste a new one.'); }
+                            else setup('Couldn’t reach Home Assistant: ' + err.message); });
+  }
+  start();
+})();
+</script>
+</body>
+</html>

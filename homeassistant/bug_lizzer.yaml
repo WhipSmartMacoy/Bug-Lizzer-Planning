@@ -23,6 +23,15 @@ rest_command:
       x-ha-token: !secret bug_lizzer_token
     content_type: application/json
     payload: '{"p_id": {{ id }}, "p_result": {{ result | to_json }}}'
+  bug_lizzer_today:   # food for the iPad Station (www/station.html)
+    url: https://ndbanzpiwhaqvtsepszf.supabase.co/rest/v1/rpc/station_today
+    method: POST
+    headers:
+      apikey: sb_publishable_ShdakQ72QP9DFFyTPcg0_g_IBZBdNcc
+      x-ha-token: !secret bug_lizzer_token
+    content_type: application/json
+    payload: "{}"
+    timeout: 8
 
 automation:
   - id: bug_lizzer_mailbox
