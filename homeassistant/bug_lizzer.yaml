@@ -128,8 +128,25 @@ script:
   bug_lizzer_jeopardy:
     alias: JEOPARDY!
     icon: mdi:television-classic
-    mode: restart
+    mode: single            # a second tap while it runs is ignored (restarting mid-chase saved the chase colors)
+    max_exceeded: silent
     sequence:
+      # Remember the room exactly as it is now, before anything changes.
+      - variables:
+          room_lights: >-
+            {{ area_entities('living_room') | select('match', 'light\\.')
+               | reject('is_state_attr', 'is_hue_group', true)
+               | reject('is_state', 'unavailable') | list }}
+          saved: >-
+            {% set ns = namespace(l=[]) %}
+            {% for e in room_lights %}
+              {% set ns.l = ns.l + [{'e': e, 'on': is_state(e, 'on'),
+                  'b': state_attr(e, 'brightness') or 0,
+                  'xy': state_attr(e, 'xy_color'),
+                  'k': state_attr(e, 'color_temp_kelvin'),
+                  'mode': state_attr(e, 'color_mode')}] %}
+            {% endfor %}
+            {{ ns.l }}
       # TV on → Disney+ (NELLY) → Search → type "jeop" → Jeopardy! (1984) → Play (next unwatched episode).
       # Mapped from screenshots of this TV; Disney+ ignores page links on LG, so we use its own search.
       - action: media_player.turn_on
@@ -224,15 +241,7 @@ script:
       # Episode starting: Living Room lights chase blue → light blue → white for 10 s, then go back.
       - delay: 2
       - variables:
-          room_lights: >-
-            {{ area_entities('living_room') | select('match', 'light\\.')
-               | reject('is_state_attr', 'is_hue_group', true)
-               | reject('is_state', 'unavailable') | list }}
           colors: [[0.1532, 0.0475], [0.2148, 0.2535], [0.3227, 0.329]]
-      - action: scene.create
-        data:
-          scene_id: bug_lizzer_before_jeopardy
-          snapshot_entities: "{{ room_lights }}"
       - variables:
           chase_end: "{{ as_timestamp(now()) + 10 }}"
       - repeat:
@@ -288,17 +297,61 @@ script:
             - delay:
                 milliseconds: 700
           until: "{{ as_timestamp(now()) >= chase_end }}"
-      # Back to how the room was. Sent twice: the Hue bridge drops some commands when many arrive at once.
-      - delay: 0.8
-      - action: scene.turn_on
-        target:
-          entity_id: scene.bug_lizzer_before_jeopardy
-        data:
-          transition: 1
-      - delay: 2
-      - action: scene.turn_on
-        target:
-          entity_id: scene.bug_lizzer_before_jeopardy
+      # Back to exactly how the room was, one light at a time (the Hue bridge drops bursts),
+      # then check every light and resend to any that didn't take.
+      - delay: 1
+      - repeat:
+          sequence:
+            - variables:
+                pass_no: "{{ repeat.index }}"
+            - repeat:
+                for_each: "{{ saved }}"
+                sequence:
+                  - variables:
+                      x: "{{ repeat.item }}"
+                      cur_xy: "{{ state_attr(x.e, 'xy_color') }}"
+                      off_ok: "{{ not x.on and is_state(x.e, 'off') }}"
+                      on_ok: >-
+                        {{ x.on and is_state(x.e, 'on')
+                           and ((state_attr(x.e, 'brightness') or 0) - x.b) | abs <= 3
+                           and (x.mode == 'color_temp' and ((state_attr(x.e, 'color_temp_kelvin') or 0) - (x.k or 0)) | abs <= 60
+                                or x.mode != 'color_temp' and x.xy is not none and cur_xy is not none
+                                   and (cur_xy[0] - x.xy[0]) | abs <= 0.01 and (cur_xy[1] - x.xy[1]) | abs <= 0.01
+                                or x.mode != 'color_temp' and x.xy is none) }}
+                  - if: "{{ pass_no == 1 or not (off_ok or on_ok) }}"
+                    then:
+                      - choose:
+                          - conditions: "{{ not x.on }}"
+                            sequence:
+                              - action: light.turn_off
+                                target: { entity_id: "{{ x.e }}" }
+                                data: { transition: 1 }
+                          - conditions: "{{ x.mode == 'color_temp' and x.k }}"
+                            sequence:
+                              - action: light.turn_on
+                                target: { entity_id: "{{ x.e }}" }
+                                data: { color_temp_kelvin: "{{ x.k }}", brightness: "{{ x.b }}", transition: 1 }
+                          - conditions: "{{ x.xy is not none }}"
+                            sequence:
+                              - action: light.turn_on
+                                target: { entity_id: "{{ x.e }}" }
+                                data: { xy_color: "{{ x.xy }}", brightness: "{{ x.b }}", transition: 1 }
+                        default:
+                          - action: light.turn_on
+                            target: { entity_id: "{{ x.e }}" }
+                            data: { brightness: "{{ x.b }}", transition: 1 }
+                      - delay: { milliseconds: 150 }
+            - delay: 2.5
+          until: >-
+            {% set ns = namespace(bad=0) %}
+            {% for x in saved %}
+              {% set cxy = state_attr(x.e, 'xy_color') %}
+              {% if x.on != is_state(x.e, 'on') %}{% set ns.bad = ns.bad + 1 %}
+              {% elif x.on and x.mode != 'color_temp' and x.xy is not none and cxy is not none
+                     and ((cxy[0] - x.xy[0]) | abs > 0.01 or (cxy[1] - x.xy[1]) | abs > 0.01) %}{% set ns.bad = ns.bad + 1 %}
+              {% endif %}
+            {% endfor %}
+            {{ ns.bad == 0 or repeat.index >= 4 }}
 
   bug_lizzer_tv_keys:
     alias: Bug-Lizzer · press TV remote buttons
