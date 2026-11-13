@@ -1130,6 +1130,12 @@ function renderLauncher(){
 document.addEventListener('click',async e=>{ const t=e.target.closest('[data-scene]'); if(!t) return;
   const sc=AREAS.find(a=>a.id==='home').scenes.find(x=>x.id===t.dataset.scene); const done=[];
   t.classList.add('busy');
+  // Home Assistant at home runs the scene if it has checked the mailbox in the last 30 s.
+  const {data:seen}=await sb.from('app_settings').select('value').eq('key','ha_seen').maybeSingle();
+  if(seen?.value&&Date.now()-new Date(seen.value)<30000){
+    const {data:c,error}=await sb.from('home_commands').insert({cmd:sc.id}).select('id').single();
+    let res=null; if(!error) for(let i=0;i<10&&!res;i++){ await new Promise(r=>setTimeout(r,1000)); const {data:x}=await sb.from('home_commands').select('done_at,result').eq('id',c.id).single(); if(x?.done_at) res=x.result; }
+    t.classList.remove('busy'); toast(`${sc.ic} ${sc.name} · ${error?'couldn’t send it':res||'sent to Home Assistant'}`,6000); return; }
   if(sc.chase){ const {data:r}=await sb.functions.invoke('hue',{body:{action:'chase',...sc.chase}}).catch(()=>({})); done.push(r?.ok?`${r.room} lights chasing for ${r.seconds}s`:'lights: '+(r?.error||'not reachable')); }
   if(sc.hue){ if(!hue?.rooms) await hueCall({action:'rooms'});
     const room=(hue?.rooms||[]).find(r=>r.name===sc.hue[0]), x=room?.scenes.find(z=>z.name===sc.hue[1]);

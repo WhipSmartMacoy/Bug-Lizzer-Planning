@@ -1,0 +1,144 @@
+# Bug-Lizzer Planning ⇄ Home Assistant
+# Home Assistant checks the app's mailbox every 3 seconds (it only reaches out; nothing comes in),
+# runs the matching script here on the home network, and reports back.
+# Needs `bug_lizzer_token` in secrets.yaml.
+
+wake_on_lan:   # lets Home Assistant switch the LG TV on
+
+rest_command:
+  bug_lizzer_poll:
+    url: https://ndbanzpiwhaqvtsepszf.supabase.co/rest/v1/rpc/ha_poll
+    method: POST
+    headers:
+      apikey: sb_publishable_ShdakQ72QP9DFFyTPcg0_g_IBZBdNcc
+      x-ha-token: !secret bug_lizzer_token
+    content_type: application/json
+    payload: "{}"
+    timeout: 8
+  bug_lizzer_done:
+    url: https://ndbanzpiwhaqvtsepszf.supabase.co/rest/v1/rpc/ha_done
+    method: POST
+    headers:
+      apikey: sb_publishable_ShdakQ72QP9DFFyTPcg0_g_IBZBdNcc
+      x-ha-token: !secret bug_lizzer_token
+    content_type: application/json
+    payload: '{"p_id": {{ id }}, "p_result": {{ result | to_json }}}'
+
+automation:
+  - id: bug_lizzer_mailbox
+    alias: Bug-Lizzer · check the app for requests
+    mode: single
+    max_exceeded: silent
+    triggers:
+      - trigger: time_pattern
+        seconds: "/3"
+    actions:
+      - action: rest_command.bug_lizzer_poll
+        response_variable: r
+        continue_on_error: true
+      - condition: template
+        value_template: "{{ r is defined and r.status == 200 and (r.content | count) > 0 }}"
+      - repeat:
+          for_each: "{{ r.content }}"
+          sequence:
+            - variables:
+                script_id: "{{ {'jeopardy': 'script.bug_lizzer_jeopardy', 'rest': 'script.bug_lizzer_rest'}.get(repeat.item.cmd, '') }}"
+            - if: "{{ script_id != '' }}"
+              then:
+                - action: script.turn_on
+                  target:
+                    entity_id: "{{ script_id }}"
+            - action: rest_command.bug_lizzer_done
+              data:
+                id: "{{ repeat.item.id }}"
+                result: "{{ 'Started in Home Assistant' if script_id else 'Home Assistant doesn’t know ' ~ repeat.item.cmd }}"
+
+  - id: bug_lizzer_tv_wake
+    alias: Bug-Lizzer · turn on Fish's TV (Wake-on-LAN)
+    triggers:
+      - trigger: webostv.turn_on
+        entity_id: media_player.living_room_fish_s_tv
+    actions:
+      - action: wake_on_lan.send_magic_packet
+        data:
+          mac: "AC:5A:F0:54:08:EE"
+          broadcast_address: 192.168.1.255
+
+script:
+  bug_lizzer_jeopardy:
+    alias: JEOPARDY!
+    icon: mdi:television-classic
+    mode: restart
+    sequence:
+      - parallel:
+          # Living room lamps chase blue → light blue → white for 30 s, then go back to how they were.
+          - sequence:
+              - action: scene.create
+                data:
+                  scene_id: bug_lizzer_before_jeopardy
+                  snapshot_entities:
+                    - light.living_room_living_room_lamp
+                    - light.living_room_living_room_lamp_2
+              - variables:
+                  colors: [[0.1532, 0.0475], [0.2148, 0.2535], [0.3227, 0.329]]
+              - repeat:
+                  count: 30
+                  sequence:
+                    - action: light.turn_on
+                      target:
+                        entity_id: light.living_room_living_room_lamp
+                      data:
+                        xy_color: "{{ colors[repeat.index % 3] }}"
+                        brightness_pct: 100
+                        transition: 0.6
+                    - action: light.turn_on
+                      target:
+                        entity_id: light.living_room_living_room_lamp_2
+                      data:
+                        xy_color: "{{ colors[(repeat.index + 1) % 3] }}"
+                        brightness_pct: 100
+                        transition: 0.6
+                    - delay: 1
+              - action: scene.turn_on
+                target:
+                  entity_id: scene.bug_lizzer_before_jeopardy
+                data:
+                  transition: 1
+          # TV on → Disney+ on the JEOPARDY! page → OK on "Continue S__ E__".
+          - sequence:
+              - action: media_player.turn_on
+                target:
+                  entity_id: media_player.living_room_fish_s_tv
+              - wait_template: "{{ states('media_player.living_room_fish_s_tv') not in ['off', 'unavailable', 'unknown'] }}"
+                timeout: 45
+                continue_on_timeout: false
+              - delay: 3
+              - action: webostv.command
+                data:
+                  entity_id: media_player.living_room_fish_s_tv
+                  command: system.launcher/launch
+                  payload:
+                    id: com.disney.disneyplus-prod
+                    contentId: https://www.disneyplus.com/browse/entity-3ddd9f60-886c-4a43-a415-f065c2bf04c8
+                    params:
+                      contentTarget: https://www.disneyplus.com/browse/entity-3ddd9f60-886c-4a43-a415-f065c2bf04c8
+              - delay: 15
+              - action: webostv.button
+                data:
+                  entity_id: media_player.living_room_fish_s_tv
+                  button: ENTER
+
+  bug_lizzer_rest:
+    alias: Rest Mode
+    icon: mdi:weather-night
+    mode: restart
+    sequence:
+      - action: scene.turn_on
+        target:
+          entity_id: scene.home_rest
+        data:
+          transition: 2
+      - action: media_player.turn_off
+        target:
+          entity_id: media_player.living_room_fish_s_tv
+        continue_on_error: true
