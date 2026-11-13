@@ -190,9 +190,6 @@ script:
               continue_on_error: true
               response_variable: scr
           until: "{{ (scr is defined and scr.get('media_player.living_room_fish_s_tv', {}).get('returnValue')) or repeat.index >= 4 }}"
-      # Black out the panel (picture brightness, contrast and OLED light to 0) so the remote
-      # presses below happen on a black screen; the picture comes back as Play is pressed.
-      - action: script.bug_lizzer_tv_blackout
       - action: media_player.volume_mute
         target:
           entity_id: media_player.living_room_fish_s_tv
@@ -350,6 +347,9 @@ script:
             id: com.disney.disneyplus-prod
       - wait_template: "{{ state_attr('media_player.living_room_fish_s_tv', 'source') == 'Disney+' }}"
         timeout: 15
+      # Black out the panel now that Disney+ is in front (the TV keeps picture settings per app):
+      # the remote presses below then happen on a black screen; the picture comes back at Play.
+      - action: script.bug_lizzer_tv_blackout
       - delay: 9   # Disney+ loading its home screen
       # Disney+ opens on whoever watched last: always switch to NELLY (2nd on "Who's watching?").
       # Top tabs → side menu → profile/SWITCH at its top.
