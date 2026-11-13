@@ -258,6 +258,7 @@ table{border-radius:14px}
 .addbtn .meta{font-weight:500}
 .sheetwrap[hidden]{display:none!important}
 .meal.scr{background:#f6f3ea}.meal.scr .scrt{font:700 16px var(--display)}.meal.scr .outnote{width:100%;margin:6px 0}
+.pdin{margin-top:8px;text-align:left}.pdin .lrow .outnote{flex:1;min-width:0;margin:0}
 .sheetwrap{position:fixed;inset:0;z-index:40;background:rgba(23,33,28,.35);display:flex;align-items:flex-end;justify-content:center}
 .sheet{background:var(--card);width:min(560px,100%);max-height:88vh;overflow:auto;border-radius:22px 22px 0 0;padding:16px 16px calc(18px + var(--safe-bot));box-shadow:0 -12px 40px rgba(23,33,28,.2)}
 @media (min-width:641px){.sheetwrap{align-items:center}.sheet{border-radius:22px}}
@@ -927,7 +928,8 @@ const timesPlanned = id => S.meals.filter(m=>String(m.recipe_id)===String(id)&&!
 const EAT=2, KEEP_DAYS=4;   // leftovers are offered for up to 4 days after cooking
 const PEOPLE=['Amy','Parker'];   // who lunch is planned for (1 serving each)
 const isScan = m => m.meal==='scan';
-const isLunch = m => m.meal==='lunch'||m.meal==='breakfast'||m.meal==='snack';
+const isPDin = m => m.meal==='dinner'&&!!m.person;   // one person's own dinner, under a Scrunge / restaurant night
+const isLunch = m => m.meal==='lunch'||m.meal==='breakfast'||m.meal==='snack'||isPDin(m);
 const isSnack = m => m.meal==='snack'||(m.meal==='scan'&&m.slot==='snack');
 const SLOT_LABEL={breakfast:'Breakfast',lunch:'Lunch',snack:'Snackies',dinner:'Dinner'};   // one person's own meal (1 serving)
 const eaten = m => isLunch(m)?1:EAT;
@@ -958,16 +960,17 @@ function priceCell(i){
   return `<a href="${esc(p.link||FAIRWAY(i))}" target="_blank" rel="noopener">${esc(p.price)}</a>${p.available===false?' <span class="needprice">out of stock</span>':''} <a href="#" class="meta" data-editprice="${esc(i)}">edit</a><div class="meta">${esc([p.item,p.size].filter(Boolean).join(', '))}${p.source==='Household'&&p.updated_by?((p.item||p.size)?' · ':'')+'set by '+esc(nameOf(p.updated_by)):''}</div>`;
 }
 // "Scrunge": a dinner of whatever's around, no recipe. Stored as a dinner row with no recipe, note "Scrunge" or "Scrunge: what we had".
-const isScr = m => m.meal==='dinner'&&!m.recipe_id&&/^Scrunge/i.test(m.note||'');
+const isScr = m => m.meal==='dinner'&&!m.person&&!m.recipe_id&&/^Scrunge/i.test(m.note||'');
 const isRest = m => !m.recipe_id&&/ —( |$)/.test(m.note||'');          // a restaurant pick: "Name — dish"
 const restName = m => (m.note||'').split(' —')[0];
 const restDish = m => (m.note||'').split(' —').slice(1).join(' —').trim();
-const isOutDin = m => m.meal==='dinner'&&!m.recipe_id&&!isScr(m);
+const isOutDin = m => m.meal==='dinner'&&!m.person&&!m.recipe_id&&!isScr(m);
 const mapsUrl = n => 'https://maps.apple.com/?q='+encodeURIComponent(n);
 const outLabel = m => isRest(m)?`🍽️ <a href="${mapsUrl(restName(m))}" target="_blank" rel="noopener">${esc(restName(m))}</a>${restDish(m)?' · '+esc(restDish(m)):''}`:`🍴 ${esc(m.note||'')}`;
 const scrDesc = m => (m.note||'').replace(/^Scrunge:?\s*/i,'');
 const dTitle = m => isScr(m)?'Scrunge'+(scrDesc(m)?': '+scrDesc(m):''):isOutDin(m)?(isRest(m)?restName(m)+(restDish(m)?' · '+restDish(m):''):m.note||'Out'):rec(m.recipe_id)?.title||'';
-const isDin = m => m.meal==='dinner'&&(rec(m.recipe_id)||!m.recipe_id);
+const isDin = m => m.meal==='dinner'&&!m.person;
+const pDinOf = (d,p) => S.meals.find(m=>m.planned_for===d&&isPDin(m)&&m.person===p);
 const hasDinner = d => S.meals.some(m=>m.planned_for===d&&isDin(m));
 function dayOptions(){ return weekDays().map(d=>`<option value="${d}" ${hasDinner(d)?'disabled':''}>${dayName(d)} ${shortDate(d)}${hasDinner(d)?' · dinner set':''}</option>`).join(''); }
 function card(r, extra=''){
@@ -1196,12 +1199,12 @@ function renderPlan(){
       <div class="lh">Dinner</div>
       ${ms.map(m=>{const r=rec(m.recipe_id); if(isOutDin(m)) return `<div class="meal scr">
         <div class="scrt">${isRest(m)?`🍽️ <a href="${mapsUrl(restName(m))}" target="_blank" rel="noopener">${esc(restName(m))}</a>`:'🥡 '+esc(m.note||'Out')}</div>
-        ${isRest(m)?(restDish(m)?`<div>${esc(restDish(m))}</div>`:`<input class="outnote" data-dish="${m.id}" placeholder="What are we getting? (optional)" enterkeyhint="done">`):''}
-        <div class="meta">eating out · added by ${esc(nameOf(m.added_by))}</div>
+        ${isRest(m)&&restDish(m)?`<div>${esc(restDish(m))}</div>`:''}
+        <div class="meta">eating out · added by ${esc(nameOf(m.added_by))}</div>${pDinRows(d)}
         <div class="mrow"><select data-move="${m.id}" style="font-size:11.5px;padding:2px 4px;width:auto;margin:0"><option value="">Move…</option>${days.filter(x=>x!==d&&!hasDinner(x)).map(x=>`<option value="${x}">${dayName(x)}</option>`).join('')}</select>
           <button data-unplan="${m.id}" title="Remove">✕</button></div></div>`; if(isScr(m)) return `<div class="meal scr">
-        <div class="scrt">🫙 Scrunge</div>${scrDesc(m)?`<div>${esc(scrDesc(m))}</div>`:`<input class="outnote" data-scrnote="${m.id}" placeholder="What did you scrunge? (optional)" enterkeyhint="done">`}
-        <div class="meta">whatever’s at home · added by ${esc(nameOf(m.added_by))}</div>
+        <div class="scrt">🫙 Scrunge</div>${scrDesc(m)?`<div>${esc(scrDesc(m))}</div>`:''}
+        <div class="meta">whatever’s at home · added by ${esc(nameOf(m.added_by))}</div>${pDinRows(d)}
         <div class="mrow"><select data-move="${m.id}" style="font-size:11.5px;padding:2px 4px;width:auto;margin:0"><option value="">Move…</option>${days.filter(x=>x!==d&&!hasDinner(x)).map(x=>`<option value="${x}">${dayName(x)}</option>`).join('')}</select>
           <button data-unplan="${m.id}" title="Remove">✕</button></div></div>`; if(!r) return ''; const n=servingsNum(r), left=leftoversOf(m); return `<div class="meal ${m.cooked_at?'cooked':''}">
         ${m.leftover_of?'<div class="meta">🍱 Leftovers</div>':''}<a href="${esc(r.url)}" target="_blank" rel="noopener">${esc(r.title)}</a>
@@ -1376,6 +1379,9 @@ const scanBtn=(d,p,slot)=>`<button data-scanday="${d}" data-person="${p}" data-s
 function lunchRow(d,p,opts,meal='lunch'){
   return lunchRow1(d,p,opts,meal)+scansFor(d,p,meal).map(scanLine).join('');
 }
+function pDinRows(d){ return `<div class="pdin">${PEOPLE.map(p=>{ const m=pDinOf(d,p);
+  return m?`<div class="lrow" data-who="${p}"><b class="who">${p}</b> <span class="lwhat">🍴 ${esc(m.note||'')}${m.nutrition?' <span class="meta">(est.)</span>':''}</span>${scanBtn(d,p,'dinner')}<button data-unplan="${m.id}" title="Clear">✕</button></div>`
+          :`<div class="lrow" data-who="${p}"><b class="who">${p}</b><input class="outnote" data-pdin="${d}|${p}" placeholder="What did ${p} have?" enterkeyhint="done">${scanBtn(d,p,'dinner')}</div>`; }).join('')}</div>`; }
 function lunchRow1(d,p,opts,meal='lunch'){
   const m=S.meals.find(x=>x.meal===meal&&x.planned_for===d&&x.person===p);
   if(m){ const r=rec(m.recipe_id);
@@ -1478,6 +1484,11 @@ document.addEventListener('click',async e=>{ const b=e.target.closest('[data-res
   const {data}=await sb.from('meal_plan').insert({planned_for:d,meal,person:meal==='dinner'?null:p,recipe_id:null,note:name+' —'}).select('id').single();
   toast(`${name} for ${p?p+"'s ":''}${SLOT_LABEL[meal].toLowerCase()}`); await DB.load(); renderAll();
   if(data?.id) setTimeout(()=>document.querySelector(`.day.sel [data-dish="${data.id}"]`)?.focus({preventScroll:true}),80); },true);
+async function savePDin(key,text){ const [d,p]=key.split('|'); text=text.trim(); if(!text||pDinOf(d,p)) return;
+  const {data}=await sb.from('meal_plan').insert({planned_for:d,meal:'dinner',person:p,recipe_id:null,note:text}).select('id').single();
+  await DB.load(); renderAll(); if(data?.id) saveOutNote(data.id,text); }
+document.addEventListener('keydown',e=>{ if(e.key==='Enter'&&e.target.dataset?.pdin){ e.preventDefault(); e.target.dataset.done=1; savePDin(e.target.dataset.pdin,e.target.value); } });
+document.addEventListener('focusout',e=>{ if(e.target.dataset?.pdin&&!e.target.dataset.done&&e.target.value.trim()) savePDin(e.target.dataset.pdin,e.target.value); });
 function saveDish(id,dish){ const m=S.meals.find(x=>String(x.id)===String(id)); dish=dish.trim(); if(!m||!dish) return; saveOutNote(id,restName(m)+' — '+dish); }
 document.addEventListener('keydown',e=>{ if(e.key==='Enter'&&e.target.dataset?.dish){ e.preventDefault(); e.target.dataset.done=1; saveDish(e.target.dataset.dish,e.target.value); } });
 document.addEventListener('focusout',e=>{ if(e.target.dataset?.dish&&!e.target.dataset.done&&e.target.value.trim()) saveDish(e.target.dataset.dish,e.target.value); });
@@ -1511,8 +1522,8 @@ function personMeals(p,d){   // [{label, r}] eaten by p on day d
     const r=rec(m.recipe_id);
     if(isLunch(m)){ if(m.person!==p) continue; out.push({when:SLOT_LABEL[m.meal],r,out:!m.recipe_id,note:isRest(m)?restName(m)+(restDish(m)?' · '+restDish(m):''):m.note,n:m.recipe_id?r?.nutrition:m.nutrition,left:!!m.leftover_of}); }
     else if(isScan(m)){ if(m.person!==p) continue; out.push({when:SLOT_LABEL[m.slot||'snack'],scan:true,note:m.note,n:m.nutrition}); }
-    else if(isScr(m)) out.push({when:'Dinner',scr:true,note:dTitle(m),n:m.nutrition});
-    else if(isOutDin(m)) out.push({when:'Dinner',out:true,note:dTitle(m),n:m.nutrition});
+    else if(isScr(m)){ if(!pDinOf(d,p)) out.push({when:'Dinner',scr:true,note:dTitle(m),n:m.nutrition}); }
+    else if(isOutDin(m)){ if(!pDinOf(d,p)) out.push({when:'Dinner',out:true,note:dTitle(m),n:m.nutrition}); }
     else if(r) out.push({when:'Dinner',r,n:r.nutrition,left:!!m.leftover_of});
   }
   const ORD={Breakfast:0,Lunch:1,Snackies:1.5,Dinner:2}; return out.sort((a,b)=>ORD[a.when]-ORD[b.when]);
@@ -1911,7 +1922,13 @@ document.addEventListener('click',async e=>{
   else if(t.id==='wkNext'){ week=addDays(week,7); }
   else if(t.id==='wkToday'){ week=mondayOf(TODAY); }
   else if(t.dataset.cook){ await DB.setCooked(t.dataset.cook,t.dataset.v==='1'); }
-  else if(t.dataset.unplan){ const row={...S.meals.find(x=>String(x.id)===String(t.dataset.unplan))}; await DB.unplan(t.dataset.unplan);
+  else if(t.dataset.unplan){ const row={...S.meals.find(x=>String(x.id)===String(t.dataset.unplan))};
+    const kids=isDin(row)&&!row.recipe_id?S.meals.filter(x=>x.planned_for===row.planned_for&&isPDin(x)).map(x=>({...x})):[];
+    for(const k of kids) await sb.from('meal_plan').delete().eq('id',k.id);
+    await DB.unplan(t.dataset.unplan);
+    if(kids.length){ for(const k of kids) delete k.id; const r0={...row}; delete r0.id;
+      toast(`Removed ${row.note||'dinner'}`,6000,{label:'Undo',fn:async()=>{ await sb.from('meal_plan').insert(r0); for(const k of kids) await sb.from('meal_plan').insert(k); await DB.load(); toast('Put back'); renderAll(); }}); }
+    else
     if(row.planned_for){ const what=row.recipe_id?rec(row.recipe_id)?.title:row.note||'that'; delete row.id;
       toast(`Removed ${what||'that'}`,6000,{label:'Undo',fn:async()=>{ if(row.recipe_id&&!rec(row.recipe_id)) return toast("Can't bring that back");
         await DB.run(sb.from('meal_plan').insert(row)); toast('Put back'); renderAll(); }}); } }
@@ -1935,7 +1952,9 @@ document.addEventListener('change',async e=>{
   if(el.dataset.have!==undefined){ await DB.setHave(el.dataset.have,el.checked); renderShop(); renderActivity(); return; }
   if(el.dataset.addday!==undefined&&el.value){ await DB.plan(el.value,el.dataset.addday); toast('Planned for '+dayName(el.dataset.addday,'long')); renderAll(); return; }
   if(el.dataset.planfor!==undefined&&el.value){ await DB.plan(el.dataset.planfor,el.value); toast('Planned for '+dayName(el.value,'long')); renderAll(); return; }
-  if(el.dataset.move!==undefined&&el.value){ await DB.move(el.dataset.move,el.value); renderAll(); return; }
+  if(el.dataset.move!==undefined&&el.value){ const m=S.meals.find(x=>String(x.id)===String(el.dataset.move));
+    if(m&&isDin(m)&&!m.recipe_id) for(const k of S.meals.filter(x=>x.planned_for===m.planned_for&&isPDin(x))) await sb.from('meal_plan').update({planned_for:el.value}).eq('id',k.id);
+    await DB.move(el.dataset.move,el.value); renderAll(); return; }
   if(el.dataset.moveto!==undefined){ await DB.moveTo(el.dataset.moveto,el.value); toast('Moved to '+STORE_LABEL[el.value]); renderAll(); return; }
   if(el.id==='hideStaples') renderShop();
   if(el.id==='recList'||el.id==='recSort') renderRecipes();
