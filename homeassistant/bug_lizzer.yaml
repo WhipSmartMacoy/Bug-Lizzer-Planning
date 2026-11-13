@@ -140,11 +140,16 @@ script:
         continue_on_timeout: false
       # Dark and quiet while Disney+ loads (the screen comes back on at the first remote press,
       # which the TV always does), sound back on when the episode starts.
-      - action: webostv.command
-        data:
-          entity_id: media_player.living_room_fish_s_tv
-          command: com.webos.service.tvpower/power/turnOffScreen
-        continue_on_error: true
+      - repeat:   # the TV refuses this for a moment right after it wakes: retry
+          sequence:
+            - delay: 1
+            - action: webostv.command
+              data:
+                entity_id: media_player.living_room_fish_s_tv
+                command: com.webos.service.tvpower/power/turnOffScreen
+              continue_on_error: true
+              response_variable: scr
+          until: "{{ (scr is defined and scr.get('media_player.living_room_fish_s_tv', {}).get('returnValue')) or repeat.index >= 4 }}"
       - action: media_player.volume_mute
         target:
           entity_id: media_player.living_room_fish_s_tv
@@ -205,7 +210,7 @@ script:
         data:
           keys: [ENTER]
           gap: 0.1
-      - delay: 3
+      - delay: 5   # the show's page loading; pressing earlier does nothing
       - action: script.bug_lizzer_tv_keys
         data:
           keys: [ENTER]
