@@ -538,6 +538,7 @@ html[data-theme="dark"] input, html[data-theme="dark"] select, html[data-theme="
       <input type="file" id="receiptFile" accept="image/*" capture="environment" hidden>
     </div></div>
     <div id="usualsPanel"></div>
+    <div id="receiptInbox"></div>
     <div id="receiptReview"></div>
     <div id="pantryList"></div>
   </section>
@@ -855,7 +856,7 @@ function shopPlan(){
 // ---------------- data ----------------
 const DB = {
   async load(){
-    const [r,p,m,h,mem,act,pan,us,ppl]=await Promise.all([
+    const [r,p,m,h,mem,act,pan,us,ppl,inb]=await Promise.all([
       sb.from('recipes').select('*').order('added_at',{ascending:false}),
       sb.from('prices').select('*'),
       sb.from('meal_plan').select('*').order('planned_for').order('added_at'),
@@ -864,10 +865,11 @@ const DB = {
       sb.from('activity').select('*').order('created_at',{ascending:false}).limit(150),
       sb.from('pantry').select('*').order('ingredient'),
       sb.from('fairway_usuals').select('*').order('rank'),
-      sb.from('people').select('*')
+      sb.from('people').select('*'),
+      sb.from('receipt_inbox').select('id,received_at,sender,subject,body').is('handled_at',null).order('received_at',{ascending:false}).limit(10)
     ]);
     for(const x of [r,p,m,h,mem,act,pan]) if(x.error) console.warn(x.error.message);
-    S.pantry=pan.data||[]; S.usuals=us.error?[]:(us.data||[]); S.people=ppl.error?[]:(ppl.data||[]);
+    S.pantry=pan.data||[]; S.usuals=us.error?[]:(us.data||[]); S.people=ppl.error?[]:(ppl.data||[]); S.inbox=inb.error?[]:(inb.data||[]);
     S.recipes=r.data||[]; S.prices=Object.fromEntries((p.data||[]).map(x=>[x.ingredient,x]));
     S.meals=m.data||[]; S.have=h.data||[]; S.members=mem.data||[]; S.activity=act.data||[];
     byId=Object.fromEntries(S.recipes.map(x=>[String(x.id),x]));
@@ -2117,7 +2119,7 @@ function renderAll(){
   publishStation();
   renderLauncher();
   if(!window.__devRec&&me&&S.members.length){ window.__devRec=1; recordDevice(); }
-  renderWho();renderSettings();renderPantry();renderPlan();renderUseup();renderRecipes();renderNutrition();renderDiscover();renderActivity();
+  renderWho();renderSettings();renderPantry();renderPlan();renderUseup();renderRecipes();renderNutrition();renderDiscover();renderActivity();renderInbox();
   $('#shareList').style.display='none';
   $('#syncNote').innerHTML=`<b>Live:</b> everything you add, plan, tick or cook shows up for the whole household right away, with your name on it.`;
 }
@@ -2280,6 +2282,35 @@ function renderReview(){
     ${review.text?`<details><summary class="meta">What the scanner read</summary><pre style="white-space:pre-wrap;font-size:12px">${esc(review.text)}</pre></details>`:''}
     <div class="row"><button class="btn primary" id="reviewSave" type="button" ${review.rows.some(r=>r.on&&r.ingredient)?'':'disabled'}>Add to At Home</button><button class="btn" id="reviewCancel" type="button">Cancel</button></div></div>`;
 }
+// Email receipts: turn the HTML (or plain text) into one line per item so parseReceipt can read it.
+function emailText(body){
+  if(!/<[a-z][\s\S]*>/i.test(body||'')) return body||'';
+  const d=new DOMParser().parseFromString(body,'text/html');
+  d.querySelectorAll('style,script,head').forEach(n=>n.remove());
+  d.querySelectorAll('br').forEach(n=>n.replaceWith('\n'));
+  d.querySelectorAll('td,th').forEach(n=>n.append(' '));
+  d.querySelectorAll('tr,p,div,li,h1,h2,h3,h4,table').forEach(n=>n.append('\n'));
+  return (d.body.textContent||'').replace(/\u00a0/g,' ').split('\n').map(l=>l.replace(/\s+/g,' ').trim()).filter(Boolean).join('\n');
+}
+// Some emails put the price on its own line under the item name: join those back together.
+function joinPriceLines(text){
+  const out=[];
+  for(const l of text.split('\n')){ const prev=out[out.length-1];
+    if(/^-?\$?\d+\.\d{2}\s*[a-z]{0,2}$/i.test(l)&&prev&&/[a-z]/i.test(prev)&&!/\d+\.\d{2}\s*[a-z]{0,2}$/i.test(prev)) out[out.length-1]=prev+' '+l; else out.push(l); }
+  return out.join('\n');
+}
+function renderInbox(){
+  const el=$('#receiptInbox'); if(!el) return; const box=S.inbox||[];
+  if(!box.length||(review&&review.inboxId)){ el.innerHTML=''; return; }
+  el.innerHTML=box.map(x=>`<div class="card" style="margin:8px 0;display:flex;align-items:center;gap:10px;flex-wrap:wrap"><span style="font-size:22px">🧾</span><span style="flex:1;min-width:180px"><b>New Fairway receipt</b><span class="meta" style="display:block">${esc(x.subject||'Receipt email')} · ${esc(new Date(x.received_at).toLocaleDateString(undefined,{weekday:'short',month:'short',day:'numeric'}))}</span></span><button class="btn primary" type="button" data-inbox="${x.id}">Review</button><button class="btn" type="button" data-inboxskip="${x.id}">Dismiss</button></div>`).join('');
+}
+async function markInbox(id){ await sb.from('receipt_inbox').update({handled_at:new Date().toISOString(),handled_by:me.user_id}).eq('id',id); S.inbox=(S.inbox||[]).filter(x=>x.id!==id); }
+function openInbox(id){
+  const x=(S.inbox||[]).find(r=>r.id===id); if(!x) return;
+  const text=joinPriceLines(emailText(x.body));
+  review={source:'receipt',inboxId:id,text,rows:parseReceipt(text).map(toReviewRow)};
+  renderInbox(); renderReview(); setTimeout(()=>$('#receiptReview').scrollIntoView({behavior:'smooth',block:'start'}),50);
+}
 const loadScript=src=>new Promise((res,rej)=>{ if([...document.scripts].some(s=>s.src===src)) return res(); const s=document.createElement('script'); s.src=src; s.onload=res; s.onerror=()=>rej(new Error('Could not load the scanner')); document.head.appendChild(s); });
 async function scanReceipt(file){
   review={source:'receipt',rows:[],status:'Loading the scanner (first time takes a few seconds)…'}; renderReview();
@@ -2301,8 +2332,8 @@ async function saveReview(){
     rows.push({ingredient:i,q,u,location:a.where===defaultStore(i)?null:a.where,updated_by:me.user_id,updated_at:now});
   }
   if(!rows.length) return toast('Nothing ticked to add');
-  if(await DB.run(sb.from('pantry').upsert(rows))){ toast(`Added to At Home: ${rows.map(r=>r.ingredient).join(', ')}`,4000); review=null; usualsPick.clear(); usualsOpen=false; }
-  renderAll(); renderReview(); renderUsuals();
+  if(await DB.run(sb.from('pantry').upsert(rows))){ if(review.inboxId) await markInbox(review.inboxId); toast(`Added to At Home: ${rows.map(r=>r.ingredient).join(', ')}`,4000); review=null; usualsPick.clear(); usualsOpen=false; }
+  renderAll(); renderReview(); renderUsuals(); renderInbox();
 }
 document.addEventListener('change',e=>{
   const el=e.target;
@@ -2314,12 +2345,14 @@ document.addEventListener('change',e=>{
 });
 document.addEventListener('input',e=>{ if(e.target.id==='usualsSearch') renderUsuals(); });
 document.addEventListener('click',e=>{
-  const t=e.target.closest('#usualsToggle,#usualsClose,#usualsReview,#reviewSave,#reviewCancel,[data-usual]'); if(!t) return;
+  const t=e.target.closest('#usualsToggle,#usualsClose,#usualsReview,#reviewSave,#reviewCancel,[data-usual],[data-inbox],[data-inboxskip]'); if(!t) return;
+  if(t.dataset.inbox){ openInbox(+t.dataset.inbox); return; }
+  if(t.dataset.inboxskip){ t.disabled=true; markInbox(+t.dataset.inboxskip).then(renderInbox); return; }
   if(t.id==='usualsToggle'){ usualsOpen=true; renderUsuals(); setTimeout(()=>$('#usualsPanel').scrollIntoView({behavior:'smooth',block:'start'}),50); }
   else if(t.id==='usualsClose'){ usualsOpen=false; renderUsuals(); }
   else if(t.dataset.usual){ const n=t.dataset.usual; usualsPick.has(n)?usualsPick.delete(n):usualsPick.add(n); renderUsuals(); }
   else if(t.id==='usualsReview'){ review={source:'usuals',rows:S.usuals.filter(u=>usualsPick.has(u.name)).map(u=>toReviewRow({usual:u,line:u.name}))}; usualsOpen=false; renderUsuals(); renderReview(); }
-  else if(t.id==='reviewCancel'){ review=null; renderReview(); }
+  else if(t.id==='reviewCancel'){ review=null; renderReview(); renderInbox(); }
   else if(t.id==='reviewSave'){ t.disabled=true; saveReview(); }
 });
 

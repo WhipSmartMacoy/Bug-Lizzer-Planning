@@ -50,8 +50,32 @@ rest_command:
     content_type: application/json
     payload: '{"p_id": {{ id | int }}}'
     timeout: 8
+  bug_lizzer_receipt:   # a Fairway receipt email → the app's receipt inbox
+    url: https://ndbanzpiwhaqvtsepszf.supabase.co/rest/v1/rpc/ha_receipt
+    method: POST
+    headers:
+      apikey: sb_publishable_ShdakQ72QP9DFFyTPcg0_g_IBZBdNcc
+      x-ha-token: !secret bug_lizzer_token
+    content_type: application/json
+    payload: '{"p_sender": {{ sender | to_json }}, "p_subject": {{ subject | to_json }}, "p_body": {{ body | to_json }}}'
+    timeout: 15
 
 automation:
+  - id: bug_lizzer_fairway_receipt
+    alias: Bug-Lizzer · Fairway receipt email → app
+    mode: queued
+    triggers:
+      - trigger: event
+        event_type: imap_content
+    conditions:
+      - condition: template
+        value_template: "{{ 'fairway' in ((trigger.event.data.sender or '') ~ ' ' ~ (trigger.event.data.subject or '')) | lower }}"
+    actions:
+      - action: rest_command.bug_lizzer_receipt
+        data:
+          sender: "{{ trigger.event.data.sender }}"
+          subject: "{{ trigger.event.data.subject }}"
+          body: "{{ trigger.event.data.text }}"
   - id: bug_lizzer_mailbox
     alias: Bug-Lizzer · check the app for requests
     mode: single
