@@ -1280,12 +1280,10 @@ function renderPlan(){
         <div class="scrt">${isRest(m)?`🍽️ <a href="${mapsUrl(restName(m))}" target="_blank" rel="noopener">${esc(restName(m))}</a>`:'🥡 '+esc(m.note||'Out')}</div>
         ${isRest(m)&&restDish(m)?`<div>${esc(restDish(m))}</div>`:''}
         <div class="meta">eating out · added by ${esc(nameOf(m.added_by))}</div>
-        <div class="mrow"><select data-move="${m.id}" style="font-size:11.5px;padding:2px 4px;width:auto;margin:0"><option value="">Move…</option>${days.filter(x=>x!==d&&!hasDinner(x)).map(x=>`<option value="${x}">${dayName(x)}</option>`).join('')}</select>
-          <button data-unplan="${m.id}" title="Remove">✕</button></div></div>`; if(isScr(m)) return `<div class="meal scr">
+        <div class="mrow"><button data-unplan="${m.id}" title="Remove">✕</button></div></div>`; if(isScr(m)) return `<div class="meal scr">
         <div class="scrt">🫙 Scrunge</div>${scrDesc(m)?`<div>${esc(scrDesc(m))}</div>`:''}
         <div class="meta">whatever’s at home · added by ${esc(nameOf(m.added_by))}</div>
-        <div class="mrow"><select data-move="${m.id}" style="font-size:11.5px;padding:2px 4px;width:auto;margin:0"><option value="">Move…</option>${days.filter(x=>x!==d&&!hasDinner(x)).map(x=>`<option value="${x}">${dayName(x)}</option>`).join('')}</select>
-          <button data-unplan="${m.id}" title="Remove">✕</button></div></div>`; if(!r) return ''; const n=servingsNum(r), left=leftoversOf(m); return `<div class="meal ${m.cooked_at?'cooked':''}">
+        <div class="mrow"><button data-unplan="${m.id}" title="Remove">✕</button></div></div>`; if(!r) return ''; const n=servingsNum(r), left=leftoversOf(m); return `<div class="meal ${m.cooked_at?'cooked':''}">
         ${m.leftover_of?'<div class="meta">🍱 Leftovers</div>':''}<a href="${esc(r.url)}" target="_blank" rel="noopener">${esc(r.title)}</a>
         <div class="meta">${m.leftover_of?'nothing to buy or cook':`${r.servings?'Serves '+esc(r.servings.replace(/^serves\s*/i,''))+' · ':''}added by ${esc(nameOf(m.added_by))}`}</div>
         ${!m.leftover_of&&(n>EAT||m.left_after!=null)?`<div class="meta">${left?`<b>${left} serving${left>1?'s':''} left over</b>`:'No leftovers left'}${m.left_after==null&&m.cooked_at?' (guess)':''}</div>`:''}
@@ -1294,7 +1292,6 @@ function renderPlan(){
         <div class="mrow">
           <button data-cook="${m.id}" data-v="${m.cooked_at?0:1}">${m.cooked_at?'Undo cooked':m.leftover_of?'Eaten ✓':'Cooked ✓'}</button>
           ${+m.lunches?`<button data-lunch="${m.id}" data-d="-1" title="Undo an earlier lunch">↶ lunch</button>`:''}
-          <select data-move="${m.id}" style="font-size:11.5px;padding:2px 4px;width:auto;margin:0"><option value="">Move…</option>${days.filter(x=>x!==d&&!hasDinner(x)).map(x=>`<option value="${x}">${dayName(x)}</option>`).join('')}</select>
           <button data-unplan="${m.id}" title="Remove">✕</button>
         </div></div>`}).join('')}
       ${mealList(d,'dinner')}</div>
