@@ -1884,19 +1884,29 @@ const UNITS={cups:['ml',236.6],tbsp:['ml',14.79],tsp:['ml',4.93],'fl oz':['ml',2
 const unitOpts=()=>Object.keys(UNITS).map(u=>`<option>${u}</option>`).join('');
 let editingPantry=null, homeLoc='all', homeQ='';
 // ---- Leftovers on the Home tab: give a serving to someone, or throw them out ----
-let leftOpen=null;
+let leftOpen=null, leftFix=false;
 function renderHomeLeft(){
   const el=$('#homeLeft'); if(!el) return;
   const list=leftoverMeals(addDays(TODAY,1),1);
-  if(!list.length){ el.innerHTML=''; return; }
-  el.innerHTML=`<div class="hgroup"><h2>🍱 Leftovers <span class="meta">${list.length}</span></h2><div class="hlist">${list.map(m=>{ const n=leftoversOf(m), open=String(leftOpen)===String(m.id);
+  // Recently cooked dinners, so the count can be corrected ("there's more in the fridge than the app thinks").
+  const recent=S.meals.filter(m=>!m.leftover_of&&!m.person&&m.cooked_at&&rec(m.recipe_id)&&m.planned_for>=addDays(TODAY,-KEEP_DAYS)&&m.planned_for<=TODAY)
+    .sort((a,b)=>b.planned_for.localeCompare(a.planned_for));
+  const fix=leftFix?`<div class="hitem open"><div class="hmore" style="padding-top:12px"><b>How many servings are left?</b>${recent.length?recent.map(m=>`<div class="row" style="margin:0;align-items:center;gap:8px"><span style="flex:1">${esc(rec(m.recipe_id).title)} <span class="meta">· ${dayName(m.planned_for)}</span></span>${[0,1,2,3,4].map(n=>`<button type="button" class="btn small ${leftoversOf(m)===n?'primary':''}" data-leftset="${m.id}|${n}">${n}</button>`).join('')}</div>`).join(''):'<span class="meta">Nothing cooked in the last few days. Leftovers come from meals marked ✓ cooked.</span>'}
+      <button type="button" class="btn small" data-leftfix style="align-self:flex-start">Done</button></div></div>`:'';
+  el.innerHTML=`<div class="hgroup"><h2>🍱 Leftovers <span class="meta">${list.length||'none right now'}</span><button type="button" class="btn small" data-leftfix style="margin-left:auto;font-family:inherit">${leftFix?'Close':'Fix count'}</button></h2><div class="hlist">${fix}${list.length?'':leftFix?'':`<div class="hitem"><div class="hrow" style="cursor:default"><span class="meta">Nothing left over. Leftovers show up here after you cook something with servings to spare.</span></div></div>`}${list.map(m=>{ const n=leftoversOf(m), open=String(leftOpen)===String(m.id);
     return `<div class="hitem ${open?'open':''}"><button type="button" class="hrow" data-leftopen="${m.id}"><b>${esc(rec(m.recipe_id).title)}</b><span class="amt">${n} serving${n>1?'s':''} · ${dayName(m.planned_for)}</span><span class="chev">›</span></button>
       ${open?`<div class="hmore">${PEOPLE.map(p=>`<div class="lrow" data-who="${p}"><b class="who">${p}</b> <span class="leftto">${['breakfast','lunch','snack'].map(ml=>`<button type="button" class="btn small" data-leftgive="${m.id}|${p}|${ml}">${SLOT_LABEL[ml]}</button>`).join('')}</span></div>`).join('')}
         <div class="row" style="margin:0"><button type="button" class="btn small" data-leftdin="${m.id}">Dinner for 2 tonight</button><button type="button" class="btn small" data-lefttoss="${m.id}" style="margin-left:auto">🗑 Throw out</button></div>
         <span class="meta">Gives one serving to that person today.</span></div>`:''}</div>`; }).join('')}</div></div>`;
 }
 document.addEventListener('click',async e=>{
-  const t=e.target.closest('[data-leftopen],[data-leftgive],[data-lefttoss],[data-leftdin]'); if(!t) return;
+  const t=e.target.closest('[data-leftopen],[data-leftgive],[data-lefttoss],[data-leftdin],[data-leftfix],[data-leftset]'); if(!t) return;
+  if(t.dataset.leftfix!==undefined){ leftFix=!leftFix; return renderHomeLeft(); }
+  if(t.dataset.leftset){ const [id,n]=t.dataset.leftset.split('|'); const m=S.meals.find(x=>String(x.id)===id); if(!m) return;
+    // left_after is what was left right after the meal; keep what's been eaten since, so the remaining count becomes n.
+    const nServ=servingsNum(rec(m.recipe_id)); const start=m.left_after!=null?+m.left_after:(nServ?nServ-eaten(m):0);
+    const used=start-leftoversOf(m); await DB.run(sb.from('meal_plan').update({left_after:used+(+n)}).eq('id',m.id));
+    await DB.load(); renderAll(); return toast(`${rec(m.recipe_id).title}: ${n} serving${+n===1?'':'s'} left`); }
   if(t.dataset.leftopen){ leftOpen=String(leftOpen)===t.dataset.leftopen?null:t.dataset.leftopen; return renderHomeLeft(); }
   if(t.dataset.leftgive){ const [id,p,ml]=t.dataset.leftgive.split('|'); const src=S.meals.find(x=>String(x.id)===id); if(!src) return;
     await DB.run(sb.from('meal_plan').insert({planned_for:TODAY,meal:ml,person:p,recipe_id:src.recipe_id,leftover_of:src.id}));
