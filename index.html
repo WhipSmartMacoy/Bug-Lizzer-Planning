@@ -1013,7 +1013,38 @@ const dTitle = m => isScr(m)?'Scrunge'+(scrDesc(m)?': '+scrDesc(m):''):isOutDin(
 const isDin = m => m.meal==='dinner'&&!m.person;
 const pDinOf = (d,p) => S.meals.find(m=>m.planned_for===d&&isPDin(m)&&m.person===p);
 const hasDinner = d => S.meals.some(m=>m.planned_for===d&&isDin(m));
-function dayOptions(){ return weekDays().map(d=>`<option value="${d}" ${hasDinner(d)?'disabled':''}>${dayName(d)} ${shortDate(d)}${hasDinner(d)?' · dinner set':''}</option>`).join(''); }
+const relDay = d => d===TODAY?'Today':d===addDays(TODAY,1)?'Tomorrow':d===addDays(TODAY,-1)?'Yesterday':`${dayName(d)} ${shortDate(d)}`;
+// Plan for: today and the next 6 days, including days that already have meals (you pick the meal next).
+let planS=null;
+function openPlanFor(rid,d,made){ planS={rid,d,made,who:[...PEOPLE]}; renderPlanFor(); }
+function renderPlanFor(){
+  let el=$('#planSheet'); if(!planS){ el?.remove(); return; }
+  if(!el){ el=document.createElement('div'); el.id='planSheet'; el.className='sheetwrap'; document.body.appendChild(el); }
+  const r=rec(planS.rid), both=planS.who.length===PEOPLE.length, din=S.meals.find(m=>m.planned_for===planS.d&&isDin(m));
+  el.innerHTML=`<div class="sheet" role="dialog"><div class="sheethead"><b>${planS.made?'Made':'Plan'} ${esc(r?.title||'')} · ${relDay(planS.d)}</b><button class="btn small" data-planx type="button">Close</button></div>
+    <div class="whobar"><span class="meta">For</span>${PEOPLE.map(p=>`<button type="button" class="btn small ${!both&&planS.who[0]===p?'primary':''}" data-planwho="${p}" data-who="${p}">${p}</button>`).join('')}<button type="button" class="btn small ${both?'primary':''}" data-planwho="both">Both</button></div>
+    <h3>${planS.made?'Which meal was it?':'Which meal?'}</h3>
+    <div class="grid" style="grid-template-columns:1fr 1fr;gap:8px">${['breakfast','lunch','dinner','snack'].map(ml=>`<button type="button" class="btn" data-planmeal="${ml}" style="padding:14px">${SLOT_LABEL[ml]}${ml==='dinner'&&din?`<span class="meta" style="display:block;font-weight:400">adds to ${esc(dTitle(din)).slice(0,24)}</span>`:''}</button>`).join('')}</div>
+    ${planS.made?'<p class="meta">It goes in as cooked: the ingredients come out of At Home and you can say how much is left over.</p>':''}</div>`;
+}
+document.addEventListener('click',async e=>{
+  if(!planS) return;
+  if(e.target.id==='planSheet'||e.target.closest('[data-planx]')){ planS=null; return renderPlanFor(); }
+  const w=e.target.closest('[data-planwho]'); if(w){ planS.who=w.dataset.planwho==='both'?[...PEOPLE]:[w.dataset.planwho]; return renderPlanFor(); }
+  const b=e.target.closest('[data-planmeal]'); if(!b) return;
+  const {rid,d,made,who}=planS, meal=b.dataset.planmeal, r=rec(rid); planS=null; renderPlanFor();
+  if(meal==='dinner'&&who.length===PEOPLE.length&&!hasDinner(d)) await DB.plan(rid,d);      // the household dinner
+  else for(const p of who){ await setLunch(d,p,String(rid),meal); await DB.load(); }       // shared between both when it's for both
+  await DB.load();
+  if(made){ const m=S.meals.find(x=>String(x.recipe_id)===String(rid)&&x.planned_for===d&&(x.meal||'dinner')===meal&&!x.leftover_of&&!x.cooked_at);
+    if(m){ await DB.setCooked(m.id,true); await DB.load(); } }
+  else toast(`${r?.title||'Recipe'} → ${who.length===PEOPLE.length?'both':who[0]} · ${SLOT_LABEL[meal].toLowerCase()} ${relDay(d).toLowerCase()}`);
+  renderAll();
+});
+function dayOptions(){ return [0,1,2,3,4,5,6].map(i=>addDays(TODAY,i)).map(d=>{ const din=S.meals.find(m=>m.planned_for===d&&isDin(m));
+  return `<option value="${d}">${relDay(d)}${din?' · '+esc(dTitle(din)).slice(0,22):''}</option>`; }).join(''); }
+// Made already: today and the 6 days before.
+function madeOptions(){ return [0,1,2,3,4,5,6].map(i=>addDays(TODAY,-i)).map(d=>`<option value="${d}">${relDay(d)}</option>`).join(''); }
 function card(r, extra=''){
   const n=timesPlanned(r.id), lc=lastCooked(r.id);
   return `<div class="card">
@@ -1025,7 +1056,7 @@ function card(r, extra=''){
     <div class="ings">${r.ingredients.map(i=>fridge.includes(i)?`<b>${esc(i)}</b>`:esc(i)).join(' · ')||'<i>No ingredients listed</i>'}</div>
     <div class="actions">
       <select class="btn small" data-planfor="${r.id}"><option value="">+ Plan for…</option>${dayOptions()}</select>
-      <button class="btn small" data-made="${r.id}">Made it today</button>
+      <select class="btn small" data-madeon="${r.id}"><option value="">✓ Made already?</option>${madeOptions()}</select>
       <button class="btn small danger" data-delrecipe="${r.id}">Remove</button>
     </div></div>`;
 }
@@ -1902,7 +1933,7 @@ async function planFromWeb(url,day){
   }
   await DB.plan(r.id,day); toast(`${r.title} planned for ${dayName(day,'long')}`); renderAll();
 }
-document.addEventListener('change',e=>{ const el=e.target; if(el.dataset.webplanSel!==undefined&&el.value){ planFromWeb(el.dataset.webplanSel,el.value); } });
+document.addEventListener('change',async e=>{ const el=e.target; if(el.dataset.webplanSel!==undefined&&el.value){ const d=el.value; el.value=''; const r=await importWeb(el.dataset.webplanSel); if(r){ await DB.load(); openPlanFor(r.id,d,false); } } });
 // ---- Make it now: search the web (links only) ----
 let web=LS.get('web',null), webBusy=false;
 function useupInputs(){
@@ -2196,7 +2227,8 @@ document.addEventListener('change',async e=>{
   const el=e.target;
   if(el.dataset.have!==undefined){ await DB.setHave(el.dataset.have,el.checked); renderShop(); renderActivity(); return; }
   if(el.dataset.addday!==undefined&&el.value){ await DB.plan(el.value,el.dataset.addday); toast('Planned for '+dayName(el.dataset.addday,'long')); renderAll(); return; }
-  if(el.dataset.planfor!==undefined&&el.value){ await DB.plan(el.dataset.planfor,el.value); toast('Planned for '+dayName(el.value,'long')); renderAll(); return; }
+  if(el.dataset.planfor!==undefined&&el.value){ const v=el.value; el.value=''; return openPlanFor(el.dataset.planfor,v,false); }
+  if(el.dataset.madeon!==undefined&&el.value){ const v=el.value; el.value=''; return openPlanFor(el.dataset.madeon,v,true); }
   if(el.dataset.move!==undefined&&el.value){ const m=S.meals.find(x=>String(x.id)===String(el.dataset.move));
     if(m&&isDin(m)&&!m.recipe_id) for(const k of S.meals.filter(x=>x.planned_for===m.planned_for&&isPDin(x))) await sb.from('meal_plan').update({planned_for:el.value}).eq('id',k.id);
     await DB.move(el.dataset.move,el.value); renderAll(); return; }
