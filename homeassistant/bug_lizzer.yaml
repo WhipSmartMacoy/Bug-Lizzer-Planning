@@ -60,53 +60,31 @@ rest_command:
     payload: '{"p_sender": {{ sender | to_json }}, "p_subject": {{ subject | to_json }}, "p_body": {{ body | to_json }}}'
     timeout: 15
 
-input_boolean:
-  bug_lizzer_jeopardy_parked:
-    name: JEOPARDY! parked on Disney+
-    icon: mdi:parking
+input_text:
+  bug_lizzer_tv_picture:   # the TV's picture settings while JEOPARDY! has the panel blacked out
+    name: TV picture saved by JEOPARDY!
+    max: 255
+
 
 automation:
-  # After the TV is switched off, set Disney+ up on JEOPARDY! so the next JEOPARDY! tap is quick
-  # and dark. Not overnight: the screen does light up while it sets up.
-  - id: bug_lizzer_jeopardy_park_on_off
-    alias: Bug-Lizzer · park JEOPARDY! after the TV turns off
-    mode: single
+  # Safety net: if JEOPARDY! ever stops before putting the picture back, fix it within a minute.
+  - id: bug_lizzer_tv_picture_safety
+    alias: Bug-Lizzer · TV picture never left black
     triggers:
       - trigger: state
-        entity_id: media_player.living_room_fish_s_tv
+        entity_id: script.bug_lizzer_jeopardy
         to: "off"
-        for: "00:00:20"
-      - trigger: time
-        at: "09:00:00"
-    conditions:
-      - condition: state
-        entity_id: input_boolean.bug_lizzer_jeopardy_parked
-        state: "off"
-      - condition: state
-        entity_id: media_player.living_room_fish_s_tv
-        state: "off"
-      - condition: time
-        after: "09:00:00"
-        before: "23:00:00"
-      - condition: template
-        value_template: "{{ not is_state('script.bug_lizzer_jeopardy', 'on') and not is_state('script.bug_lizzer_jeopardy_park', 'on') }}"
-    actions:
-      - action: script.bug_lizzer_jeopardy_park
-
-  # Anyone turning the TV on themselves may move Disney+ off the JEOPARDY! page: no longer parked.
-  - id: bug_lizzer_jeopardy_unpark
-    alias: Bug-Lizzer · JEOPARDY! no longer parked when the TV is used
-    triggers:
+        for: "00:00:05"
       - trigger: state
         entity_id: media_player.living_room_fish_s_tv
         from: "off"
+        for: "00:01:30"
     conditions:
       - condition: template
-        value_template: "{{ not is_state('script.bug_lizzer_jeopardy', 'on') and not is_state('script.bug_lizzer_jeopardy_park', 'on') }}"
+        value_template: "{{ states('input_text.bug_lizzer_tv_picture') not in ['', 'unknown'] and not is_state('script.bug_lizzer_jeopardy', 'on') and not is_state('media_player.living_room_fish_s_tv', 'off') }}"
     actions:
-      - action: input_boolean.turn_off
-        target:
-          entity_id: input_boolean.bug_lizzer_jeopardy_parked
+      - action: script.bug_lizzer_tv_picture_restore
+
   - id: bug_lizzer_fairway_receipt
     alias: Bug-Lizzer · Fairway receipt email → app
     mode: queued
@@ -177,13 +155,6 @@ script:
     mode: single            # a second tap while it runs is ignored (restarting mid-chase saved the chase colors)
     max_exceeded: silent
     sequence:
-      # Parked = Disney+ is already waiting on NELLY's JEOPARDY! page in the background (see
-      # bug_lizzer_jeopardy_park), so only Play is needed and the screen stays dark until then.
-      - variables:
-          parked: "{{ is_state('input_boolean.bug_lizzer_jeopardy_parked', 'on') and is_state('media_player.living_room_fish_s_tv', 'off') }}"
-      - action: input_boolean.turn_off
-        target:
-          entity_id: input_boolean.bug_lizzer_jeopardy_parked
       # Remember the room exactly as it is now, before anything changes.
       - variables:
           room_lights: >-
@@ -208,8 +179,7 @@ script:
       - wait_template: "{{ states('media_player.living_room_fish_s_tv') not in ['off', 'unavailable', 'unknown'] }}"
         timeout: 45
         continue_on_timeout: false
-      # Dark and quiet while Disney+ loads (the screen comes back on at the first remote press,
-      # which the TV always does), sound back on when the episode starts.
+      # Screen off while Disney+ starts loading.
       - repeat:   # the TV refuses this for a moment right after it wakes: retry
           sequence:
             - delay: 1
@@ -220,40 +190,23 @@ script:
               continue_on_error: true
               response_variable: scr
           until: "{{ (scr is defined and scr.get('media_player.living_room_fish_s_tv', {}).get('returnValue')) or repeat.index >= 4 }}"
-      - if: "{{ parked }}"
-        then:
-          # Bring Disney+ forward (it resumes on the JEOPARDY! page), light the screen, Play.
-          - action: webostv.command
-            data:
-              entity_id: media_player.living_room_fish_s_tv
-              command: system.launcher/launch
-              payload:
-                id: com.disney.disneyplus-prod
-          - wait_template: "{{ state_attr('media_player.living_room_fish_s_tv', 'source') == 'Disney+' }}"
-            timeout: 6
-          - delay: 0.8
-          - action: webostv.command
-            data:
-              entity_id: media_player.living_room_fish_s_tv
-              command: com.webos.service.tvpower/power/turnOnScreen
-            continue_on_error: true
-          - delay: 0.4
-          - action: script.bug_lizzer_tv_keys
-            data:
-              keys: [ENTER]
-              gap: 0.1
-        else:
-          - action: media_player.volume_mute
-            target:
-              entity_id: media_player.living_room_fish_s_tv
-            data:
-              is_volume_muted: true
-            continue_on_error: true
-          - action: script.bug_lizzer_disney_to_jeopardy
-          - action: script.bug_lizzer_tv_keys
-            data:
-              keys: [ENTER]
-              gap: 0.1
+      # Black out the panel (picture brightness, contrast and OLED light to 0) so the remote
+      # presses below happen on a black screen; the picture comes back as Play is pressed.
+      - action: script.bug_lizzer_tv_blackout
+      - action: media_player.volume_mute
+        target:
+          entity_id: media_player.living_room_fish_s_tv
+        data:
+          is_volume_muted: true
+        continue_on_error: true
+      - action: script.bug_lizzer_disney_to_jeopardy
+        continue_on_error: true
+      - action: script.bug_lizzer_tv_keys
+        data:
+          keys: [ENTER]
+          gap: 0.1
+      - delay: 1.2
+      - action: script.bug_lizzer_tv_picture_restore
       - action: media_player.volume_mute
         target:
           entity_id: media_player.living_room_fish_s_tv
@@ -435,50 +388,69 @@ script:
           gap: 0.1
       - delay: 5   # the show's page loading; pressing earlier does nothing
 
-  bug_lizzer_jeopardy_park:
-    alias: Bug-Lizzer · park Disney+ on JEOPARDY! (while the TV is off)
-    mode: single
-    max_exceeded: silent
+
+
+  # Run a TV system command Home Assistant isn't normally allowed to (picture settings): LG TVs
+  # run the command attached to a notice when the notice is closed, so open one and close it.
+  bug_lizzer_tv_luna:
+    alias: Bug-Lizzer · TV system command
+    mode: queued
+    fields:
+      uri: {description: "luna:// address"}
+      params: {description: "Its parameters"}
     sequence:
-      - condition: state
-        entity_id: media_player.living_room_fish_s_tv
-        state: "off"
-      - action: media_player.turn_on
-        target:
-          entity_id: media_player.living_room_fish_s_tv
-      - wait_template: "{{ states('media_player.living_room_fish_s_tv') not in ['off', 'unavailable', 'unknown'] }}"
-        timeout: 45
-        continue_on_timeout: false
-      - repeat:   # the TV refuses this for a moment right after it wakes: retry
-          sequence:
-            - delay: 1
-            - action: webostv.command
-              data:
-                entity_id: media_player.living_room_fish_s_tv
-                command: com.webos.service.tvpower/power/turnOffScreen
-              continue_on_error: true
-              response_variable: scr
-          until: "{{ (scr is defined and scr.get('media_player.living_room_fish_s_tv', {}).get('returnValue')) or repeat.index >= 4 }}"
-      - action: media_player.volume_mute
-        target:
-          entity_id: media_player.living_room_fish_s_tv
+      - action: webostv.command
         data:
-          is_volume_muted: true
-        continue_on_error: true
-      - action: script.bug_lizzer_disney_to_jeopardy
-      - action: media_player.volume_mute
-        target:
           entity_id: media_player.living_room_fish_s_tv
+          command: system.notifications/createAlert
+          payload:
+            message: " "
+            type: confirm
+            isSysReq: true
+            buttons: [{label: "ok", onClick: "{{ uri }}", params: "{{ params }}"}]
+            onclose: {uri: "{{ uri }}", params: "{{ params }}"}
+            onfail: {uri: "{{ uri }}", params: "{{ params }}"}
+        response_variable: alert
+      - delay: {milliseconds: 200}
+      - action: webostv.command
         data:
-          is_volume_muted: false
-        continue_on_error: true
-      - delay: 1
-      - action: media_player.turn_off
-        target:
           entity_id: media_player.living_room_fish_s_tv
-      - action: input_boolean.turn_on
-        target:
-          entity_id: input_boolean.bug_lizzer_jeopardy_parked
+          command: system.notifications/closeAlert
+          payload:
+            alertId: "{{ alert['media_player.living_room_fish_s_tv'].alertId }}"
+
+  bug_lizzer_tv_blackout:
+    alias: Bug-Lizzer · TV picture to black (saving it first)
+    sequence:
+      - if: "{{ states('input_text.bug_lizzer_tv_picture') in ['', 'unknown'] }}"
+        then:
+          - action: webostv.command
+            data:
+              entity_id: media_player.living_room_fish_s_tv
+              command: settings/getSystemSettings
+              payload: {category: picture, keys: [backlight, contrast, brightness]}
+            response_variable: pic
+          - action: input_text.set_value
+            target: {entity_id: input_text.bug_lizzer_tv_picture}
+            data:
+              value: "{{ pic['media_player.living_room_fish_s_tv'].settings | to_json }}"
+      - action: script.bug_lizzer_tv_luna
+        data:
+          uri: luna://com.webos.settingsservice/setSystemSettings
+          params: {category: picture, settings: {backlight: 0, contrast: 0, brightness: 0}}
+
+  bug_lizzer_tv_picture_restore:
+    alias: Bug-Lizzer · TV picture back to normal
+    sequence:
+      - condition: template
+        value_template: "{{ states('input_text.bug_lizzer_tv_picture') not in ['', 'unknown'] }}"
+      - action: script.bug_lizzer_tv_luna
+        data:
+          uri: luna://com.webos.settingsservice/setSystemSettings
+          params: "{{ {'category': 'picture', 'settings': states('input_text.bug_lizzer_tv_picture') | from_json} }}"
+      - action: input_text.set_value
+        target: {entity_id: input_text.bug_lizzer_tv_picture}
+        data: {value: ""}
 
   bug_lizzer_tv_keys:
     alias: Bug-Lizzer · press TV remote buttons
