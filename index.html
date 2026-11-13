@@ -1504,7 +1504,7 @@ function whoBar(){ if(!addS||!addS.who) return '';
   const both=addS.who.length===PEOPLE.length;
   return `<div class="whobar"><span class="meta">For</span>${PEOPLE.map(p=>`<button type="button" class="btn small ${!both&&addS.who[0]===p?'primary':''}" data-who-set="${p}" data-who="${p}">${p}</button>`).join('')}<button type="button" class="btn small ${both?'primary':''}" data-who-set="both">Both</button></div>`; }
 document.addEventListener('click',e=>{ const b=e.target.closest('[data-who-set]'); if(!b||!addS) return; e.preventDefault(); e.stopImmediatePropagation();
-  addS.who=b.dataset.whoSet==='both'?[...PEOPLE]:[b.dataset.whoSet]; addS.p=addS.who[0]; renderAdd(); },true);
+  addS.who=b.dataset.whoSet==='both'?[...PEOPLE]:[b.dataset.whoSet]; addS.p=addS.who[0]; addS.whoChosen=true; renderAdd(); },true);
 function renderAdd(){ renderAdd0(); const el=$('#addSheet');
   if(addS&&addS.who&&el){ const h=el.querySelector('.sheethead'); if(h){ h.querySelector('b').textContent=`${SLOT_LABEL[addS.meal]} · ${dayName(addS.d,'long')}`; h.insertAdjacentHTML('afterend',whoBar()); } } if(addS&&addS.replace&&el){ const h=el.querySelector('.sheethead'); if(h){ h.querySelector('b').textContent='Edit'; h.insertAdjacentHTML('afterend',editBlock()); } } }
 function renderAdd0(){
@@ -1537,7 +1537,7 @@ function renderAdd0(){
     ${dinner?`<h3>✏️ Type what you're having</h3><form class="row" data-addout style="margin:0"><input id="addOut" placeholder="e.g. tacos at home" enterkeyhint="done" style="flex:1" autocomplete="off"><button class="btn primary">Add</button></form>`:''}
     ${dinner?'':`<h3>✏️ Type what you ate</h3><form class="row" data-addout style="margin:0"><input id="addOut" placeholder="e.g. a banana, protein bar, 2 eggs" enterkeyhint="done" style="flex:1" autocomplete="off"><button class="btn primary">Add</button></form>`}
     <h3>🍽️ Restaurant or takeout</h3><input id="addR" type="search" placeholder="Search restaurants near us" autocomplete="off" enterkeyhint="search"><div class="picks" id="addRres">${restPicks('')}</div>
-    <h3>🍳 Make something</h3>
+    <h3>🍳 Make something${addS.who&&!addS.whoChosen?' <span class="meta" style="font-weight:400">· adds for both</span>':''}</h3>
     <input id="addQ" type="search" placeholder="Search recipes or an ingredient" value="${esc(q)}">
     <div class="picks">${recs.map(r=>`<button type="button" class="pick" data-addpick="r:${r.id}">${r.image_url?`<img src="${esc(r.image_url)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">`:''}<span><b>${esc(r.title)}</b><span class="meta">${r.status==='past'?(lastCooked(r.id)?'made '+ago(lastCooked(r.id).cooked_at):'in the recipe box'):'new to try'}</span></span></button>`).join('')||'<p class="meta">No recipes match.</p>'}</div>
     <button type="button" class="btn" data-addscan style="margin-top:12px;width:100%">📷 Scan a barcode or label instead</button></div>`;
@@ -1548,7 +1548,9 @@ document.addEventListener('click',async e=>{
   if(e.target.id==='addSheet'||e.target.closest('[data-addx]')) return closeAdd(true);
   if(e.target.closest('[data-addscan]')){ const {d,p,meal}=addS; closeAdd(); return openScan(d,p||undefined,meal); }
   const pk=e.target.closest('[data-addpick]'); if(!pk) return;
-  const {d,p,meal}=addS, ps=addS.who||[p], v=pk.dataset.addpick; closeAdd();
+  const {d,p,meal}=addS, v=pk.dataset.addpick;
+  // A recipe is cooked for the household: it goes to both of us unless someone was picked under "For".
+  const ps=addS.who?(/^(r|w):/.test(v)&&!addS.whoChosen?[...PEOPLE]:addS.who):[p]; closeAdd();
   if(meal==='pdin'){
     if(pDinOf(d,p)) return toast(`${p} already has dinner logged`);
     const base={planned_for:d,meal:'dinner',person:p};
