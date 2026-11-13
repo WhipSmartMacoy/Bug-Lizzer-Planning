@@ -157,10 +157,23 @@ script:
       - wait_template: "{{ state_attr('media_player.living_room_fish_s_tv', 'source') == 'Disney+' }}"
         timeout: 15
       - delay: 9   # Disney+ loading its home screen
-      # Menu → Search (keyboard opens with the cursor on the space bar)
+      # Disney+ opens on whoever watched last: always switch to NELLY (2nd on "Who's watching?").
+      # Top tabs → side menu → profile/SWITCH at its top.
       - action: script.bug_lizzer_tv_keys
         data:
-          keys: [LEFT, UP, ENTER]
+          keys: [UP, UP, LEFT, UP, UP, ENTER]
+          gap: 1
+      - delay: 2
+      # The picker opens on the current profile: go to the first, then one right = NELLY.
+      - action: script.bug_lizzer_tv_keys
+        data:
+          keys: [LEFT, LEFT, LEFT, RIGHT, ENTER]
+          gap: 0.6
+      - delay: 7   # NELLY's home screen loading
+      # Top tabs → side menu (opens on Home) → Search (keyboard opens with the cursor on the space bar)
+      - action: script.bug_lizzer_tv_keys
+        data:
+          keys: [UP, UP, LEFT, UP, ENTER]
           gap: 1
       - delay: 1
       # space → e, then j-e-o-p
