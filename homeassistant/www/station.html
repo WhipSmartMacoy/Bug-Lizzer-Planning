@@ -25,7 +25,8 @@
   body.light .room.on{ background:#e6f1dc; border-color:#a9c98f; }
   body.light .room.on small{ color:#3f6b2a; }
   body.light .toast{ background:#17211c; }
-  .clockcard{ cursor:pointer; }
+  button.clockcard{ display:block; width:100%; text-align:left; min-height:0; padding:16px 18px; border-radius:20px; background:var(--card); }
+  .themehint{ float:right; font-size:22px; opacity:.7; }
   .wrap{ display:grid; grid-template-columns: 38% 1fr; grid-gap:18px; height:100%; padding:22px 24px; }
   .col{ display:grid; grid-gap:14px; align-content:start; overflow:hidden; }
   .card{ background:var(--card); border:1px solid var(--line); border-radius:20px; padding:16px 18px; }
@@ -67,7 +68,7 @@
 <script>
 (function(){
   'use strict';
-  var VERSION = 'station-3';   // bump when the page changes; open iPads reload themselves
+  var VERSION = 'station-4';   // bump when the page changes; open iPads reload themselves
   var TV = 'media_player.living_room_fish_s_tv';
   var HIDE_SCRIPTS = ['script.bug_lizzer_tv_keys'];
   var ICONS = { 'script.bug_lizzer_jeopardy':'🎯', 'script.bug_lizzer_rest':'🌙' };
@@ -129,8 +130,10 @@
     var months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
     var hh = h % 12 || 12;
 
-    var left = '<div class="card clockcard" id="clockcard"><div class="clock">' + hh + ':' + pad(now.getMinutes()) + '</div>' +
-      '<div class="date">' + days[now.getDay()] + ', ' + months[now.getMonth()] + ' ' + now.getDate() + '</div></div>';
+    // The clock is a real button: tap it to switch dark ⇄ light.
+    var left = '<button class="card clockcard" data-theme-toggle="1"><div class="clock">' + hh + ':' + pad(now.getMinutes()) + '</div>' +
+      '<div class="date">' + days[now.getDay()] + ', ' + months[now.getMonth()] + ' ' + now.getDate() +
+      '<span class="themehint">' + (light ? '🌙' : '☀️') + '</span></div></button>';
 
     var din = food && food.dinner;
     left += '<div class="card"><h2>Tonight</h2>' +
@@ -172,6 +175,7 @@
   document.addEventListener('click', function(ev){
     var b = ev.target; while (b && b.tagName !== 'BUTTON') b = b.parentNode; if (!b || !b.getAttribute) return;
     var p;
+    if (b.getAttribute('data-theme-toggle')) { flipTheme(); return; }
     if (b.getAttribute('data-script')) {
       var e = b.getAttribute('data-script'); b.className += ' busy';
       p = call('script', 'turn_on', { entity_id: e }).then(function(){ toast((states[e].attributes.friendly_name || 'Scene') + ' started'); });
@@ -190,17 +194,8 @@
     if (p) p.then(function(){ setTimeout(refresh, 800); }, function(err){ toast(err.message === 'auth' ? 'Access code rejected' : 'Couldn’t reach Home Assistant'); });
   });
 
-  // ---------- double-tap the clock: dark ⇄ light ----------
-  function inClock(el){ while (el && el.id !== 'clockcard') el = el.parentNode; return !!el; }
   function flipTheme(){ var cur = 'dark'; try { cur = localStorage.getItem('station_theme') || 'dark'; localStorage.setItem('station_theme', cur === 'light' ? 'dark' : 'light'); } catch(e) {}
     render(); toast(cur === 'light' ? 'Dark mode' : 'Light mode'); }
-  var lastTap = 0;
-  document.addEventListener('touchend', function(ev){
-    if (!inClock(ev.target)) return;
-    var now = Date.now();
-    if (now - lastTap < 450) { lastTap = 0; ev.preventDefault(); flipTheme(); } else lastTap = now;
-  }, false);
-  document.addEventListener('dblclick', function(ev){ if (inClock(ev.target)) flipTheme(); }, false);   // mouse
 
   // ---------- pick up new versions of this page by itself ----------
   function checkVersion(){
