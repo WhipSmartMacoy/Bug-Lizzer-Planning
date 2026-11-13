@@ -87,19 +87,16 @@ script:
       - wait_template: "{{ states('media_player.living_room_fish_s_tv') not in ['off', 'unavailable', 'unknown'] }}"
         timeout: 45
         continue_on_timeout: false
-      # Only restart Disney+ if it's already open (so it starts from its home screen).
-      - if: "{{ state_attr('media_player.living_room_fish_s_tv', 'source') == 'Disney+' }}"
-        then:
-          - action: webostv.command
-            data:
-              entity_id: media_player.living_room_fish_s_tv
-              command: system.launcher/close
-              payload:
-                id: com.disney.disneyplus-prod
-            continue_on_error: true
-          - delay: 1.5
-        else:
-          - delay: 1
+      # Always restart Disney+: a TV that was switched off keeps it in the background on whatever
+      # screen it was left on, and the remote presses below must start from its home screen.
+      - action: webostv.command
+        data:
+          entity_id: media_player.living_room_fish_s_tv
+          command: system.launcher/close
+          payload:
+            id: com.disney.disneyplus-prod
+        continue_on_error: true
+      - delay: 1.5
       - action: webostv.command
         data:
           entity_id: media_player.living_room_fish_s_tv
