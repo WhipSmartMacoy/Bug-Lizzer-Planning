@@ -67,6 +67,7 @@
 <script>
 (function(){
   'use strict';
+  var VERSION = 'station-3';   // bump when the page changes; open iPads reload themselves
   var TV = 'media_player.living_room_fish_s_tv';
   var HIDE_SCRIPTS = ['script.bug_lizzer_tv_keys'];
   var ICONS = { 'script.bug_lizzer_jeopardy':'🎯', 'script.bug_lizzer_rest':'🌙' };
@@ -169,9 +170,6 @@
 
   // ---------- taps ----------
   document.addEventListener('click', function(ev){
-    var c = ev.target; while (c && c.id !== 'clockcard') c = c.parentNode;
-    if (c) { var cur = 'dark'; try { cur = localStorage.getItem('station_theme') || 'dark'; localStorage.setItem('station_theme', cur === 'light' ? 'dark' : 'light'); } catch(e) {}
-             render(); toast(cur === 'light' ? 'Dark mode' : 'Light mode'); return; }
     var b = ev.target; while (b && b.tagName !== 'BUTTON') b = b.parentNode; if (!b || !b.getAttribute) return;
     var p;
     if (b.getAttribute('data-script')) {
@@ -192,6 +190,25 @@
     if (p) p.then(function(){ setTimeout(refresh, 800); }, function(err){ toast(err.message === 'auth' ? 'Access code rejected' : 'Couldn’t reach Home Assistant'); });
   });
 
+  // ---------- double-tap the clock: dark ⇄ light ----------
+  function inClock(el){ while (el && el.id !== 'clockcard') el = el.parentNode; return !!el; }
+  function flipTheme(){ var cur = 'dark'; try { cur = localStorage.getItem('station_theme') || 'dark'; localStorage.setItem('station_theme', cur === 'light' ? 'dark' : 'light'); } catch(e) {}
+    render(); toast(cur === 'light' ? 'Dark mode' : 'Light mode'); }
+  var lastTap = 0;
+  document.addEventListener('touchend', function(ev){
+    if (!inClock(ev.target)) return;
+    var now = Date.now();
+    if (now - lastTap < 450) { lastTap = 0; ev.preventDefault(); flipTheme(); } else lastTap = now;
+  }, false);
+  document.addEventListener('dblclick', function(ev){ if (inClock(ev.target)) flipTheme(); }, false);   // mouse
+
+  // ---------- pick up new versions of this page by itself ----------
+  function checkVersion(){
+    fetch('/local/station.html?t=' + Date.now()).then(function(r){ return r.text(); })
+      .then(function(t){ if (t.indexOf("var VERSION = '" + VERSION + "'") < 0 && t.indexOf('var VERSION') >= 0) location.reload(); })
+      .catch(function(){});
+  }
+
   function refresh(){
     return loadStates().then(function(){ lastErr = ''; render(); }, function(err){
       if (err.message === 'auth' && token) { token = null; try { localStorage.removeItem('station_token'); } catch(e) {} return setup('That access code didn’t work. Please paste a new one.'); }
@@ -205,7 +222,8 @@
         setInterval(refresh, 5000);                 // lights, TV, scenes
         setInterval(function(){ loadFood().then(render); }, 120000);   // meals
         setInterval(render, 20000);                 // clock
-        setInterval(loadRooms, 600000); })
+        setInterval(loadRooms, 600000);
+        setInterval(checkVersion, 300000); })
       .catch(function(err){ if (err.message === 'auth') { token = null; try { localStorage.removeItem('station_token'); } catch(e) {} setup('That access code didn’t work. Please paste a new one.'); }
                             else setup('Couldn’t reach Home Assistant: ' + err.message); });
   }
