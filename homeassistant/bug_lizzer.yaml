@@ -347,6 +347,12 @@ script:
             id: com.disney.disneyplus-prod
       - wait_template: "{{ state_attr('media_player.living_room_fish_s_tv', 'source') == 'Disney+' }}"
         timeout: 15
+      # Opening Disney+ lights the screen: switch it straight back off while the blackout is applied.
+      - action: webostv.command
+        data:
+          entity_id: media_player.living_room_fish_s_tv
+          command: com.webos.service.tvpower/power/turnOffScreen
+        continue_on_error: true
       # Black out the panel now that Disney+ is in front (the TV keeps picture settings per app):
       # the remote presses below then happen on a black screen; the picture comes back at Play.
       - action: script.bug_lizzer_tv_blackout
