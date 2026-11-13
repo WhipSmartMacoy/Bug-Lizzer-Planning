@@ -269,7 +269,8 @@ table{border-radius:14px}
 .addbtn .meta{font-weight:500}
 .sheetwrap[hidden]{display:none!important}
 .meal.scr{background:var(--warm)}.meal.scr .scrt{font:700 16px var(--display)}.meal.scr .outnote{width:100%;margin:6px 0}
-.pdin{margin-top:8px;text-align:left}.pdin .lrow .outnote{flex:1;min-width:0;margin:0}
+.pdin{margin-top:8px;text-align:left}
+.leftto{display:flex;flex-wrap:wrap;gap:6px;flex:1}.leftto .btn{margin:0}#homeLeft .hmore .lrow{display:flex;align-items:center;gap:8px}.pdin .lrow .outnote{flex:1;min-width:0;margin:0}
 .sheetwrap{position:fixed;inset:0;z-index:40;background:rgba(23,33,28,.35);display:flex;align-items:flex-end;justify-content:center}
 .sheet{background:var(--card);width:min(560px,100%);max-height:88vh;overflow:auto;border-radius:22px 22px 0 0;padding:16px 16px calc(18px + var(--safe-bot));box-shadow:0 -12px 40px rgba(23,33,28,.2)}
 @media (min-width:641px){.sheetwrap{align-items:center}.sheet{border-radius:22px}}
@@ -497,6 +498,7 @@ html[data-theme="dark"] input, html[data-theme="dark"] select, html[data-theme="
 
   <section class="panel" id="pantry">
     <p class="intro"><b>What's already at home</b>, sorted into the fridge, freezer and pantry. Buying from the shopping list adds here, and marking a meal as cooked takes its ingredients out, so leftovers (like half a carton of broth) count toward the next recipe. Adjust anything that's off.</p>
+    <div id="homeLeft"></div>
     <div class="hometop">
       <input type="search" id="homeQ" placeholder="Search what's at home" autocomplete="off">
       <button class="btn primary" type="button" id="homeAddBtn">＋ Add</button>
@@ -1433,6 +1435,7 @@ function lunchRow1(d,p,opts,meal='lunch'){
 let addS=null;
 function openAdd(key){ const [d,p,meal]=key.split('|'); addS={d,p:p||null,meal,q:''}; restLive=[]; restQ=''; renderAdd(); setTimeout(()=>$('#addQ')?.focus({preventScroll:true}),60); }
 function closeAdd(){ addS=null; renderAdd(); }
+const againLabel = m => isRest(m)?restName(m)+(restDish(m)?' · '+restDish(m):''):(m.note||'').trim();
 function renderAdd(){
   let el=$('#addSheet'); if(!addS){ el?.remove(); return; }
   if(!el){ el=document.createElement('div'); el.id='addSheet'; el.className='sheetwrap'; document.body.appendChild(el); }
@@ -1441,9 +1444,14 @@ function renderAdd(){
   const ql=q.toLowerCase();
   const recs=S.recipes.filter(r=>!ql||r.title.toLowerCase().includes(ql)||r.ingredients.some(i=>i.includes(ql)))
     .sort((a,b)=>(b.status==='past')-(a.status==='past')||(lastCooked(b.id)?.cooked_at||'').localeCompare(lastCooked(a.id)?.cooked_at||'')).slice(0,ql?20:8);
+  const seenA=new Set(), again=[...S.meals].filter(m=>!m.recipe_id&&m.note&&!isScr(m)&&m.planned_for<=d)
+    .sort((a,b)=>(b.person===p)-(a.person===p)||(b.planned_for||'').localeCompare(a.planned_for||'')||b.id-a.id)
+    .filter(m=>{ const k=againLabel(m).toLowerCase(); if(!k||seenA.has(k)) return false; seenA.add(k); return true; })
+    .filter(m=>!ql||againLabel(m).toLowerCase().includes(ql)).slice(0,8);
   el.innerHTML=`<div class="sheet" role="dialog" aria-label="Add a meal">
     <div class="sheethead"><b>${p?esc(p)+"'s ":''}${SLOT_LABEL[meal].toLowerCase()} · ${dayName(d,'long')}</b><button class="btn small" data-addx type="button">Close</button></div>
     ${lo.length?`<h3>🍱 Leftovers</h3><div class="picks">${lo.map(x=>`<button type="button" class="pick" data-addpick="lo:${x.id}"><b>${esc(rec(x.recipe_id).title)}</b><span class="meta">${leftoversOf(x)} serving${leftoversOf(x)>1?'s':''} left · from ${dayName(x.planned_for,'long')}</span></button>`).join('')}</div>`:''}
+    ${again.length?`<h3>🔁 Again</h3><div class="picks">${again.map(m=>`<button type="button" class="pick" data-addpick="ag:${m.id}"><span class="pickic">${m.meal==='scan'?'📷':isRest(m)?'🍽️':'🍴'}</span><span><b>${esc(againLabel(m))}</b><span class="meta">${m.person?esc(m.person)+' · ':''}${dayName(m.planned_for,'long')}${m.nutrition?' · nutrition saved':''}</span></span></button>`).join('')}</div>`:''}
     ${dinner?`<h3>🫙 Scrunge</h3><form class="row" data-addscr style="margin:0"><input id="addScr" placeholder="What's around? (optional)" enterkeyhint="done" style="flex:1"><button class="btn primary">Scrunge</button></form>`:''}
     ${dinner?'':`<h3>✏️ Type what you ate</h3><form class="row" data-addout style="margin:0"><input id="addOut" placeholder="e.g. a banana, protein bar, 2 eggs" enterkeyhint="done" style="flex:1" autocomplete="off"><button class="btn primary">Add</button></form>`}
     <h3>🍽️ Restaurant or takeout</h3><input id="addR" type="search" placeholder="Search restaurants near us" autocomplete="off" enterkeyhint="search"><div class="picks" id="addRres">${restPicks('')}</div>
@@ -1459,6 +1467,10 @@ document.addEventListener('click',async e=>{
   if(e.target.closest('[data-addscan]')){ const {d,p,meal}=addS; closeAdd(); return openScan(d,p||undefined,meal); }
   const pk=e.target.closest('[data-addpick]'); if(!pk) return;
   const {d,p,meal}=addS, v=pk.dataset.addpick; closeAdd();
+  if(v.startsWith('ag:')){ const src=S.meals.find(x=>String(x.id)===v.slice(3)); if(!src) return;
+    if(meal==='dinner'&&hasDinner(d)) return toast(`${dayName(d,'long')} already has a dinner`);
+    await DB.run(sb.from('meal_plan').insert({planned_for:d,meal,person:meal==='dinner'?null:p,recipe_id:null,note:src.note,nutrition:src.nutrition||null}));
+    toast(`🔁 ${againLabel(src)} added`); await DB.load(); return renderAll(); }
   if(meal==='dinner'){
     if(v.startsWith('lo:')) await DB.planLeftovers(S.meals.find(x=>String(x.id)===v.slice(3)),d); else await DB.plan(v.slice(2),d);
   } else await setLunch(d,p,v.startsWith('lo:')?v:v.slice(2),meal);
@@ -1831,7 +1843,33 @@ function renderSettings(){
 const UNITS={cups:['ml',236.6],tbsp:['ml',14.79],tsp:['ml',4.93],'fl oz':['ml',29.57],quarts:['ml',946],ml:['ml',1],oz:['g',28.35],lb:['g',453.6],g:['g',1],each:['each',1],packages:['pkg',1]};
 const unitOpts=()=>Object.keys(UNITS).map(u=>`<option>${u}</option>`).join('');
 let editingPantry=null, homeLoc='all', homeQ='';
+// ---- Leftovers on the Home tab: give a serving to someone, or throw them out ----
+let leftOpen=null;
+function renderHomeLeft(){
+  const el=$('#homeLeft'); if(!el) return;
+  const list=leftoverMeals(addDays(TODAY,1),1);
+  if(!list.length){ el.innerHTML=''; return; }
+  el.innerHTML=`<div class="hgroup"><h2>🍱 Leftovers <span class="meta">${list.length}</span></h2><div class="hlist">${list.map(m=>{ const n=leftoversOf(m), open=String(leftOpen)===String(m.id);
+    return `<div class="hitem ${open?'open':''}"><button type="button" class="hrow" data-leftopen="${m.id}"><b>${esc(rec(m.recipe_id).title)}</b><span class="amt">${n} serving${n>1?'s':''} · ${dayName(m.planned_for)}</span><span class="chev">›</span></button>
+      ${open?`<div class="hmore">${PEOPLE.map(p=>`<div class="lrow" data-who="${p}"><b class="who">${p}</b> <span class="leftto">${['breakfast','lunch','snack'].map(ml=>`<button type="button" class="btn small" data-leftgive="${m.id}|${p}|${ml}">${SLOT_LABEL[ml]}</button>`).join('')}</span></div>`).join('')}
+        <div class="row" style="margin:0"><button type="button" class="btn small" data-leftdin="${m.id}">Dinner for 2 tonight</button><button type="button" class="btn small" data-lefttoss="${m.id}" style="margin-left:auto">🗑 Throw out</button></div>
+        <span class="meta">Gives one serving to that person today.</span></div>`:''}</div>`; }).join('')}</div></div>`;
+}
+document.addEventListener('click',async e=>{
+  const t=e.target.closest('[data-leftopen],[data-leftgive],[data-lefttoss],[data-leftdin]'); if(!t) return;
+  if(t.dataset.leftopen){ leftOpen=String(leftOpen)===t.dataset.leftopen?null:t.dataset.leftopen; return renderHomeLeft(); }
+  if(t.dataset.leftgive){ const [id,p,ml]=t.dataset.leftgive.split('|'); const src=S.meals.find(x=>String(x.id)===id); if(!src) return;
+    await DB.run(sb.from('meal_plan').insert({planned_for:TODAY,meal:ml,person:p,recipe_id:src.recipe_id,leftover_of:src.id}));
+    toast(`🍱 ${rec(src.recipe_id).title} → ${p}'s ${SLOT_LABEL[ml].toLowerCase()} today`); leftOpen=null; await DB.load(); return renderAll(); }
+  if(t.dataset.leftdin){ const src=S.meals.find(x=>String(x.id)===t.dataset.leftdin); if(!src) return;
+    if(hasDinner(TODAY)) return toast('Tonight already has a dinner');
+    await DB.planLeftovers(src,TODAY); toast('🍱 Leftovers are tonight’s dinner'); leftOpen=null; await DB.load(); return renderAll(); }
+  if(t.dataset.lefttoss){ const src=S.meals.find(x=>String(x.id)===t.dataset.lefttoss); if(!src) return; const before=src.left_after;
+    await DB.run(sb.from('meal_plan').update({left_after:0}).eq('id',src.id)); leftOpen=null; await DB.load(); renderAll();
+    toast(`Threw out ${rec(src.recipe_id).title}`,6000,{label:'Undo',fn:async()=>{ await DB.run(sb.from('meal_plan').update({left_after:before??null}).eq('id',src.id)); await DB.load(); renderAll(); }}); }
+});
 function renderPantry(){
+  renderHomeLeft();
   if(!$('#panU').options.length) $('#panU').innerHTML=unitOpts();
   $('#ingList').innerHTML=allIngredients().map(i=>`<option value="${esc(i)}">`).join('');
   const onHand=S.pantry.filter(p=>+p.q>0);
@@ -1877,7 +1915,7 @@ function publishStation(){
       return {d, day:dayName(d), what:m?dTitle(m):null, kind:m?(m.leftover_of?'leftovers':isScr(m)?'scrunge':isOutDin(m)?'out':'cook'):null, cooked:!!(m&&m.cooked_at)}; });
     const plan=shopPlan(); week=w;
     const buy=plan.filter(o=>o.buy>0&&!STAPLES.has(o.i)).map(o=>({i:o.i, aisle:aisleOf(o.i)[1], tonight:o.uses.some(m=>m.planned_for===TODAY)}));
-    const left=leftoverMeals(addDays(TODAY,1),1).map(m=>({what:rec(m.recipe_id).title, servings:leftoversOf(m), from:dayName(m.planned_for)}));
+    const left=leftoverMeals(addDays(TODAY,1),1).map(m=>({id:m.id, what:rec(m.recipe_id).title, servings:leftoversOf(m), from:dayName(m.planned_for)}));
     const snap={dinners, buy, left, home:S.pantry.filter(p=>+p.q>0).length};
     const val=JSON.stringify(snap); if(val===stationLast) return; stationLast=val;
     await sb.from('app_settings').upsert({key:'station', value:JSON.stringify({...snap, at:new Date().toISOString()}), updated_at:new Date().toISOString()});

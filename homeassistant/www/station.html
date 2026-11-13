@@ -67,6 +67,14 @@
   .toast{ position:fixed; left:50%; bottom:24px; -webkit-transform:translateX(-50%); transform:translateX(-50%);
           background:#2b3d34; color:#fff; padding:12px 20px; border-radius:14px; font-size:16px; opacity:0; -webkit-transition:opacity .3s; transition:opacity .3s; }
   .toast.show{ opacity:1; }
+  .leftbtn{ display:block; width:100%; text-align:left; min-height:0; padding:8px 10px; margin-top:6px; border-radius:12px; }
+  .leftbtn small{ display:block; color:var(--muted); font-size:13px; }
+  .modal{ position:fixed; left:0; top:0; right:0; bottom:0; background:rgba(0,0,0,.55); z-index:50; }
+  .modal .box{ position:absolute; left:50%; top:50%; width:560px; margin-left:-280px; -webkit-transform:translateY(-50%); transform:translateY(-50%);
+               background:var(--card); border:1px solid var(--line); border-radius:22px; padding:20px 22px; }
+  .modal h3{ margin:0 0 4px; font-size:22px; } .modal .sub{ margin-bottom:12px; }
+  .modal .who{ font-weight:700; margin:12px 0 6px; }
+  .modal .actions{ display:table; width:100%; margin-top:16px; } .modal .actions > *{ display:table-cell; }
   .setup{ max-width:620px; margin:60px auto; padding:0 24px; }
   .setup textarea{ width:100%; height:140px; font:14px Menlo, monospace; background:var(--card); color:var(--ink);
                    border:1px solid var(--line); border-radius:12px; padding:12px; margin:12px 0; -webkit-user-select:text; user-select:text; }
@@ -80,11 +88,11 @@
 <script>
 (function(){
   'use strict';
-  var VERSION = 'station-5';   // bump when the page changes; open iPads reload themselves
+  var VERSION = 'station-6';   // bump when the page changes; open iPads reload themselves
   var TV = 'media_player.living_room_fish_s_tv';
   var HIDE_SCRIPTS = ['script.bug_lizzer_tv_keys'];
   var ICONS = { 'script.bug_lizzer_jeopardy':'🎯', 'script.bug_lizzer_rest':'🌙' };
-  var token = null, states = {}, rooms = [], food = null, lastErr = '', events = [], forecast = null;
+  var token = null, states = {}, rooms = [], food = null, lastErr = '', events = [], forecast = null, leftModal = null;
 
   try { token = localStorage.getItem('station_token'); } catch(e) {}
   // If this iPad has signed in to Home Assistant in Safari, use that sign-in.
@@ -191,8 +199,8 @@
     });
     c1 += '</div>';
     if (sum && sum.left && sum.left.length) {
-      c1 += '<div class="card"><h2>Leftovers</h2>' + sum.left.slice(0, 4).map(function(l){
-        return '<div class="ev"><b>🍱 ' + esc(l.what) + '</b><small>' + l.servings + ' serving' + (l.servings === 1 ? '' : 's') + ' · from ' + esc(l.from) + '</small></div>'; }).join('') + '</div>';
+      c1 += '<div class="card"><h2>Leftovers · tap to give or toss</h2>' + sum.left.slice(0, 4).map(function(l){
+        return '<button class="leftbtn" data-left="' + l.id + '"><b>🍱 ' + esc(l.what) + '</b><small>' + l.servings + ' serving' + (l.servings === 1 ? '' : 's') + ' · from ' + esc(l.from) + '</small></button>'; }).join('') + '</div>';
     }
 
     // ---- column 2: this week's dinners, calendar, shopping ----
@@ -238,15 +246,32 @@
     c3 += '<div class="card tv"><h2>TV' + (tvOn && tv.attributes.source ? ' · ' + esc(tv.attributes.source) : '') + '</h2><div class="grid g4">' +
       '<button data-tv="power">' + (tvOn ? '⏻ Off' : '⏻ On') + '</button><button data-tv="down">🔉</button><button data-tv="mute">🔇</button><button data-tv="up">🔊</button></div></div>';
 
-    $('app').innerHTML = '<div class="wrap"><div class="col">' + c1 + '</div><div class="col">' + c2 + '</div><div class="col">' + c3 + '</div></div>' +
+    var lm = leftModal && sum && sum.left ? sum.left.filter(function(x){ return String(x.id) === String(leftModal); })[0] : null;
+    var modal = lm ? '<div class="modal" data-modalbg="1"><div class="box"><h3>🍱 ' + esc(lm.what) + '</h3><div class="sub">' + lm.servings + ' serving' + (lm.servings === 1 ? '' : 's') + ' left · from ' + esc(lm.from) + '. Give one serving to:</div>' +
+      ['Amy', 'Parker'].map(function(p){ return '<div class="who" style="color:var(--' + p.toLowerCase() + ')">' + p + '</div><div class="grid g3">' +
+        [['breakfast','Breakfast'],['lunch','Lunch'],['snack','Snack']].map(function(m){ return '<button data-give="' + lm.id + '|' + p + '|' + m[0] + '">' + m[1] + '</button>'; }).join('') + '</div>'; }).join('') +
+      '<div class="grid g2" style="margin-top:16px"><button data-toss="' + lm.id + '" style="color:var(--red)">🗑 Throw out</button><button data-close="1">Cancel</button></div></div></div>' : '';
+    $('app').innerHTML = modal + '<div class="wrap"><div class="col">' + c1 + '</div><div class="col">' + c2 + '</div><div class="col">' + c3 + '</div></div>' +
       (lastErr ? '<div style="position:fixed;top:6px;right:12px;color:var(--red);font-size:13px">' + esc(lastErr) + '</div>' : '');
   }
 
   // ---------- taps ----------
   document.addEventListener('click', function(ev){
+    if (ev.target && ev.target.getAttribute && ev.target.getAttribute('data-modalbg')) { leftModal = null; render(); return; }
     var b = ev.target; while (b && b.tagName !== 'BUTTON') b = b.parentNode; if (!b || !b.getAttribute) return;
     var p;
     if (b.getAttribute('data-theme-toggle')) { flipTheme(); return; }
+    if (b.getAttribute('data-left')) { leftModal = b.getAttribute('data-left'); render(); return; }
+    if (b.getAttribute('data-close')) { leftModal = null; render(); return; }
+    if (b.getAttribute('data-give') || b.getAttribute('data-toss')) {
+      var g = (b.getAttribute('data-give') || '').split('|'), tossId = b.getAttribute('data-toss');
+      var req = tossId ? call('rest_command', 'bug_lizzer_leftover_remove', { id: +tossId })
+                       : call('rest_command', 'bug_lizzer_leftover', { id: +g[0], person: g[1], meal: g[2] });
+      b.className += ' busy';
+      req.then(function(){ toast(tossId ? 'Thrown out' : '🍱 ' + g[1] + '’s ' + g[2] + ' today'); leftModal = null; return loadFood(); })
+         .then(render, function(){ toast('Couldn’t save that — try again'); render(); });
+      return;
+    }
     if (b.getAttribute('data-script')) {
       var e = b.getAttribute('data-script'); b.className += ' busy';
       p = call('script', 'turn_on', { entity_id: e }).then(function(){ toast((states[e].attributes.friendly_name || 'Scene') + ' started'); });

@@ -32,6 +32,24 @@ rest_command:
     content_type: application/json
     payload: "{}"
     timeout: 8
+  bug_lizzer_leftover:   # Station: give a serving of leftovers to someone today
+    url: https://ndbanzpiwhaqvtsepszf.supabase.co/rest/v1/rpc/station_leftover
+    method: POST
+    headers:
+      apikey: sb_publishable_ShdakQ72QP9DFFyTPcg0_g_IBZBdNcc
+      x-ha-token: !secret bug_lizzer_token
+    content_type: application/json
+    payload: '{"p_id": {{ id | int }}, "p_person": {{ person | to_json }}, "p_meal": {{ meal | to_json }}}'
+    timeout: 8
+  bug_lizzer_leftover_remove:   # Station: throw leftovers out
+    url: https://ndbanzpiwhaqvtsepszf.supabase.co/rest/v1/rpc/station_leftover_remove
+    method: POST
+    headers:
+      apikey: sb_publishable_ShdakQ72QP9DFFyTPcg0_g_IBZBdNcc
+      x-ha-token: !secret bug_lizzer_token
+    content_type: application/json
+    payload: '{"p_id": {{ id | int }}}'
+    timeout: 8
 
 automation:
   - id: bug_lizzer_mailbox
