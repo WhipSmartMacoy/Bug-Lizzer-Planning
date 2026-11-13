@@ -59,10 +59,19 @@ automation:
       - trigger: webostv.turn_on
         entity_id: media_player.living_room_fish_s_tv
     actions:
-      - action: wake_on_lan.send_magic_packet
-        data:
-          mac: "AC:5A:F0:54:08:EE"
-          broadcast_address: 192.168.1.255
+      # The TV has two network addresses (cable and Wi-Fi); wake both, a few times.
+      - repeat:
+          count: 3
+          sequence:
+            - repeat:
+                for_each: ["AC:5A:F0:54:08:EE", "4C:BA:D7:E7:F6:20"]
+                sequence:
+                  - action: wake_on_lan.send_magic_packet
+                    data:
+                      mac: "{{ repeat.item }}"
+                      broadcast_address: 192.168.1.255
+            - delay:
+                milliseconds: 400
 
 script:
   bug_lizzer_jeopardy:
@@ -70,41 +79,48 @@ script:
     icon: mdi:television-classic
     mode: restart
     sequence:
+      - variables:
+          room_lights: >-
+            {{ area_entities('living_room') | select('match', 'light\\.')
+               | reject('is_state_attr', 'is_hue_group', true)
+               | reject('is_state', 'unavailable') | list }}
+          colors: [[0.1532, 0.0475], [0.2148, 0.2535], [0.3227, 0.329]]
       - parallel:
-          # Living room lamps chase blue → light blue → white for 30 s, then go back to how they were.
+          # Every light in the Living Room area chases blue → light blue → white for 30 s, then goes back to how it was.
           - sequence:
               - action: scene.create
                 data:
                   scene_id: bug_lizzer_before_jeopardy
-                  snapshot_entities:
-                    - light.living_room_living_room_lamp
-                    - light.living_room_living_room_lamp_2
-              - variables:
-                  colors: [[0.1532, 0.0475], [0.2148, 0.2535], [0.3227, 0.329]]
+                  snapshot_entities: "{{ room_lights }}"
               - repeat:
                   count: 30
                   sequence:
-                    - action: light.turn_on
-                      target:
-                        entity_id: light.living_room_living_room_lamp
-                      data:
-                        xy_color: "{{ colors[repeat.index % 3] }}"
-                        brightness_pct: 100
-                        transition: 0.6
-                    - action: light.turn_on
-                      target:
-                        entity_id: light.living_room_living_room_lamp_2
-                      data:
-                        xy_color: "{{ colors[(repeat.index + 1) % 3] }}"
-                        brightness_pct: 100
-                        transition: 0.6
+                    - variables:
+                        step: "{{ repeat.index }}"
+                    - repeat:
+                        for_each: [0, 1, 2]
+                        sequence:
+                          - variables:
+                              group: >-
+                                {% set ns = namespace(l=[]) %}
+                                {% for e in room_lights %}{% if (loop.index0 + step) % 3 == repeat.item %}{% set ns.l = ns.l + [e] %}{% endif %}{% endfor %}
+                                {{ ns.l }}
+                          - if: "{{ group | count > 0 }}"
+                            then:
+                              - action: light.turn_on
+                                target:
+                                  entity_id: "{{ group }}"
+                                data:
+                                  xy_color: "{{ colors[repeat.item] }}"
+                                  brightness_pct: 100
+                                  transition: 0.6
                     - delay: 1
               - action: scene.turn_on
                 target:
                   entity_id: scene.bug_lizzer_before_jeopardy
                 data:
                   transition: 1
-          # TV on → Disney+ on the JEOPARDY! page → OK on "Continue S__ E__".
+          # TV on → Disney+ → NELL (2nd profile) → the JEOPARDY! page → OK on "Continue S__ E__".
           - sequence:
               - action: media_player.turn_on
                 target:
@@ -113,6 +129,44 @@ script:
                 timeout: 45
                 continue_on_timeout: false
               - delay: 3
+              # Close Disney+ so it always starts on "Who's watching?"
+              - action: webostv.command
+                data:
+                  entity_id: media_player.living_room_fish_s_tv
+                  command: system.launcher/close
+                  payload:
+                    id: com.disney.disneyplus-prod
+                continue_on_error: true
+              - delay: 2
+              - action: webostv.command
+                data:
+                  entity_id: media_player.living_room_fish_s_tv
+                  command: system.launcher/launch
+                  payload:
+                    id: com.disney.disneyplus-prod
+              - delay: 12
+              # Pick NELL: all the way left, one step right, OK.
+              - repeat:
+                  count: 4
+                  sequence:
+                    - action: webostv.button
+                      data:
+                        entity_id: media_player.living_room_fish_s_tv
+                        button: LEFT
+                    - delay:
+                        milliseconds: 400
+              - action: webostv.button
+                data:
+                  entity_id: media_player.living_room_fish_s_tv
+                  button: RIGHT
+              - delay:
+                  milliseconds: 600
+              - action: webostv.button
+                data:
+                  entity_id: media_player.living_room_fish_s_tv
+                  button: ENTER
+              - delay: 7
+              # Go to the JEOPARDY! page and press OK on Continue.
               - action: webostv.command
                 data:
                   entity_id: media_player.living_room_fish_s_tv
@@ -122,7 +176,7 @@ script:
                     contentId: https://www.disneyplus.com/browse/entity-3ddd9f60-886c-4a43-a415-f065c2bf04c8
                     params:
                       contentTarget: https://www.disneyplus.com/browse/entity-3ddd9f60-886c-4a43-a415-f065c2bf04c8
-              - delay: 15
+              - delay: 12
               - action: webostv.button
                 data:
                   entity_id: media_player.living_room_fish_s_tv
