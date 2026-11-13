@@ -270,6 +270,8 @@ table{border-radius:14px}
 .sheetwrap[hidden]{display:none!important}
 .meal.scr{background:var(--warm)}.meal.scr .scrt{font:700 16px var(--display)}.meal.scr .outnote{width:100%;margin:6px 0}
 .pdin{margin-top:8px;text-align:left}
+.lwhat{cursor:pointer}.lwhat:hover{text-decoration:underline dotted}.meal.scr .scrt{cursor:pointer}
+.editbox{background:var(--tint);border:1px solid var(--line);border-radius:14px;padding:12px;margin:4px 0 6px}.editbox input,.editbox select{font:inherit;padding:9px 10px;border:1px solid var(--line2);border-radius:10px;background:var(--card);color:var(--ink)}
 .leftto{display:flex;flex-wrap:wrap;gap:6px;flex:1}.leftto .btn{margin:0}#homeLeft .hmore .lrow{display:flex;align-items:center;gap:8px}.pdin .lrow .outnote{flex:1;min-width:0;margin:0}
 .sheetwrap{position:fixed;inset:0;z-index:40;background:rgba(23,33,28,.35);display:flex;align-items:flex-end;justify-content:center}
 .sheet{background:var(--card);width:min(560px,100%);max-height:88vh;overflow:auto;border-radius:22px 22px 0 0;padding:16px 16px calc(18px + var(--safe-bot));box-shadow:0 -12px 40px rgba(23,33,28,.2)}
@@ -1435,9 +1437,50 @@ function lunchRow1(d,p,opts,meal='lunch'){
 // ---- Add sheet: one place to add any meal (leftovers · out · a recipe · scan) ----
 let addS=null;
 function openAdd(key){ const [d,p,meal]=key.split('|'); addS={d,p:p||null,meal,q:''}; restLive=[]; restQ=''; renderAdd(); setTimeout(()=>$('#addQ')?.focus({preventScroll:true}),60); }
-function closeAdd(){ addS=null; renderAdd(); }
+function closeAdd(cancel){
+  if(addS&&addS.replace&&!cancel){ const id=addS.replace; S.meals=S.meals.filter(x=>String(x.id)!==String(id)); sb.from('meal_plan').delete().eq('id',id).then(()=>{}); }
+  addS=null; renderAdd(); }
+// ---- Editing something already logged: tap it ----
+function openEdit(id){ const m=S.meals.find(x=>String(x.id)===String(id)); if(!m) return;
+  const meal=isPDin(m)?'pdin':m.meal==='scan'?(m.slot||'snack'):m.meal;
+  addS={d:m.planned_for,p:m.person||null,meal,q:'',replace:m.id}; restLive=[]; restQ=''; renderAdd(); }
+function editBlock(){ const m=S.meals.find(x=>String(x.id)===String(addS.replace)); if(!m) return '';
+  const label=m.recipe_id?(m.leftover_of?'🍱 ':'🍳 ')+esc(rec(m.recipe_id)?.title||''):isScr(m)?'🫙 Scrunge'+(scrDesc(m)?': '+esc(scrDesc(m)):''):isRest(m)?'🍽️ '+esc(againLabel(m)):'🍴 '+esc(m.note||'');
+  const week7=weekDays().includes(m.planned_for)?weekDays():[...new Set([m.planned_for,...weekDays()])];
+  const slots=m.person&&!isPDin(m)?['breakfast','lunch','snack']:[];
+  return `<div class="editbox"><div class="meta">Editing</div><div style="font-weight:600;margin-bottom:8px">${label}</div>
+    ${!m.recipe_id&&!isScr(m)?(isRest(m)?`<div class="row" style="margin:0 0 8px;gap:6px"><input id="editPlace" value="${esc(restName(m))}" placeholder="Place" style="flex:1 1 140px"><input id="editDish" value="${esc(restDish(m))}" placeholder="What you got" style="flex:2 1 180px"></div>`
+        :`<input id="editNote" value="${esc(m.note||'')}" placeholder="What was it?" style="width:100%;margin-bottom:8px">`):isScr(m)?`<input id="editNote" value="${esc(scrDesc(m))}" placeholder="What's around? (optional)" style="width:100%;margin-bottom:8px">`:''}
+    ${slots.length?`<div class="row" style="margin:0 0 8px;gap:6px">${slots.map(sl=>`<button type="button" class="btn small ${(m.meal==='scan'?m.slot:m.meal)===sl?'primary':''}" data-editslot="${sl}">${SLOT_LABEL[sl]}</button>`).join('')}</div>`:''}
+    <div class="row" style="margin:0;gap:6px;align-items:center"><select id="editDay">${week7.map(x=>`<option value="${x}" ${x===m.planned_for?'selected':''}>${dayName(x,'long')} ${shortDate(x)}</option>`).join('')}</select>
+      <button type="button" class="btn primary" data-editsave>Save</button><button type="button" class="btn" data-editdel style="margin-left:auto">🗑 Remove</button></div>
+    <h3 style="margin-top:14px">Or swap it for…</h3></div>`; }
+document.addEventListener('click',async e=>{
+  // tap the words of a logged meal → edit it (links inside, like a restaurant's map link, still open)
+  const w=e.target.closest('.lwhat, .meal.scr .scrt'); if(w&&!e.target.closest('a')){ const row=w.closest('.lrow, .meal'); const x=row&&row.querySelector('[data-unplan]'); if(x){ e.preventDefault(); return openEdit(x.dataset.unplan); } }
+  if(!addS||!addS.replace) return;
+  const m=S.meals.find(x=>String(x.id)===String(addS.replace)); if(!m) return;
+  const sl=e.target.closest('[data-editslot]');
+  if(sl){ addS.editSlot=sl.dataset.editslot; document.querySelectorAll('[data-editslot]').forEach(b=>b.classList.toggle('primary',b===sl)); return; }
+  if(e.target.closest('[data-editdel]')){ const row={...m}; delete row.id; addS=null; renderAdd(); await DB.run(sb.from('meal_plan').delete().eq('id',m.id)); await DB.load(); renderAll();
+    return toast('Removed',6000,{label:'Undo',fn:async()=>{ await sb.from('meal_plan').insert(row); await DB.load(); renderAll(); }}); }
+  if(e.target.closest('[data-editsave]')){
+    const day=$('#editDay')?.value||m.planned_for, upd={};
+    if(day!==m.planned_for){ if(isDin(m)&&hasDinner(day)) return toast(`${dayName(day,'long')} already has a dinner`); upd.planned_for=day; }
+    const cur=m.meal==='scan'?m.slot:m.meal; if(addS.editSlot&&addS.editSlot!==cur){ if(m.meal==='scan') upd.slot=addS.editSlot; else upd.meal=addS.editSlot; }
+    let note=null;
+    if($('#editPlace')){ const pl=$('#editPlace').value.trim(), di=$('#editDish').value.trim(); if(pl) note=pl+' —'+(di?' '+di:''); }
+    else if($('#editNote')){ const v=$('#editNote').value.trim(); note=isScr(m)?(v?'Scrunge: '+v:'Scrunge'):v||null; }
+    addS=null; renderAdd();
+    if(Object.keys(upd).length) await DB.run(sb.from('meal_plan').update(upd).eq('id',m.id));
+    if(note&&note!==m.note){ if(isScr(m)){ await DB.run(sb.from('meal_plan').update({note}).eq('id',m.id)); const v=scrDesc({note}); if(v) saveScrNote(m.id,v); } else await saveOutNote(m.id,note); }
+    if(day!==m.planned_for&&isDin(m)&&!m.recipe_id) for(const k of S.meals.filter(x=>x.planned_for===m.planned_for&&isPDin(x))) await sb.from('meal_plan').update({planned_for:day}).eq('id',k.id);
+    await DB.load(); renderAll(); return toast('Saved');
+  }
+},true);
 const againLabel = m => isRest(m)?restName(m)+(restDish(m)?' · '+restDish(m):''):(m.note||'').trim();
-function renderAdd(){
+function renderAdd(){ renderAdd0(); const el=$('#addSheet'); if(addS&&addS.replace&&el){ const h=el.querySelector('.sheethead'); if(h){ h.querySelector('b').textContent='Edit'; h.insertAdjacentHTML('afterend',editBlock()); } } }
+function renderAdd0(){
   let el=$('#addSheet'); if(!addS){ el?.remove(); return; }
   if(!el){ el=document.createElement('div'); el.id='addSheet'; el.className='sheetwrap'; document.body.appendChild(el); }
   const {d,p,meal,q}=addS, dinner=meal==='dinner';
@@ -1473,7 +1516,7 @@ function renderAdd(){
 document.addEventListener('click',async e=>{
   const a=e.target.closest('[data-add]'); if(a){ e.preventDefault(); return openAdd(a.dataset.add); }
   if(!addS) return;
-  if(e.target.id==='addSheet'||e.target.closest('[data-addx]')) return closeAdd();
+  if(e.target.id==='addSheet'||e.target.closest('[data-addx]')) return closeAdd(true);
   if(e.target.closest('[data-addscan]')){ const {d,p,meal}=addS; closeAdd(); return openScan(d,p||undefined,meal); }
   const pk=e.target.closest('[data-addpick]'); if(!pk) return;
   const {d,p,meal}=addS, v=pk.dataset.addpick; closeAdd();
@@ -1499,7 +1542,7 @@ document.addEventListener('submit',async e=>{ if(!e.target.matches?.('[data-addo
   if(meal==='pdin'&&pDinOf(d,p)) return toast(`${p} already has dinner logged`);
   const {data}=await sb.from('meal_plan').insert({planned_for:d,meal:meal==='pdin'?'dinner':meal,person:p,recipe_id:null,note}).select('id').single();
   toast(`Added: ${note}`); await DB.load(); renderAll(); if(data?.id) saveOutNote(data.id,note); },true);
-document.addEventListener('keydown',e=>{ if(e.key==='Escape'&&addS) closeAdd(); });
+document.addEventListener('keydown',e=>{ if(e.key==='Escape'&&addS) closeAdd(true); });
 // ---- Restaurants: places we've picked before, then live search near us (OpenStreetMap via Photon, no key) ----
 const FOOD_TAGS=['restaurant','fast_food','cafe','bar','pub','ice_cream','food_court','biergarten','bakery','deli'];
 let restLive=[], restT=null, restQ='';
