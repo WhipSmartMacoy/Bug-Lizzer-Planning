@@ -155,51 +155,51 @@ script:
             - variables:
                 step: "{{ repeat.index }}"
             - parallel:
-            - sequence:
-              - variables:
-                  g: >-
-                    {% set ns = namespace(l=[]) %}
-                    {% for e in room_lights %}{% if (loop.index0 + step) % 3 == 0 %}{% set ns.l = ns.l + [e] %}{% endif %}{% endfor %}
-                    {{ ns.l }}
-              - if: "{{ g | count > 0 }}"
-                then:
-                  - action: light.turn_on
-                    target:
-                      entity_id: "{{ g }}"
-                    data:
-                      xy_color: "{{ colors[0] }}"
-                      brightness_pct: 100
-                      transition: 0.5
-            - sequence:
-              - variables:
-                  g: >-
-                    {% set ns = namespace(l=[]) %}
-                    {% for e in room_lights %}{% if (loop.index0 + step) % 3 == 1 %}{% set ns.l = ns.l + [e] %}{% endif %}{% endfor %}
-                    {{ ns.l }}
-              - if: "{{ g | count > 0 }}"
-                then:
-                  - action: light.turn_on
-                    target:
-                      entity_id: "{{ g }}"
-                    data:
-                      xy_color: "{{ colors[1] }}"
-                      brightness_pct: 100
-                      transition: 0.5
-            - sequence:
-              - variables:
-                  g: >-
-                    {% set ns = namespace(l=[]) %}
-                    {% for e in room_lights %}{% if (loop.index0 + step) % 3 == 2 %}{% set ns.l = ns.l + [e] %}{% endif %}{% endfor %}
-                    {{ ns.l }}
-              - if: "{{ g | count > 0 }}"
-                then:
-                  - action: light.turn_on
-                    target:
-                      entity_id: "{{ g }}"
-                    data:
-                      xy_color: "{{ colors[2] }}"
-                      brightness_pct: 100
-                      transition: 0.5
+                - sequence:
+                  - variables:
+                      g: >-
+                        {% set ns = namespace(l=[]) %}
+                        {% for e in room_lights %}{% if (loop.index0 + step) % 3 == 0 %}{% set ns.l = ns.l + [e] %}{% endif %}{% endfor %}
+                        {{ ns.l }}
+                  - if: "{{ g | count > 0 }}"
+                    then:
+                      - action: light.turn_on
+                        target:
+                          entity_id: "{{ g }}"
+                        data:
+                          xy_color: "{{ colors[0] }}"
+                          brightness_pct: 100
+                          transition: 0.5
+                - sequence:
+                  - variables:
+                      g: >-
+                        {% set ns = namespace(l=[]) %}
+                        {% for e in room_lights %}{% if (loop.index0 + step) % 3 == 1 %}{% set ns.l = ns.l + [e] %}{% endif %}{% endfor %}
+                        {{ ns.l }}
+                  - if: "{{ g | count > 0 }}"
+                    then:
+                      - action: light.turn_on
+                        target:
+                          entity_id: "{{ g }}"
+                        data:
+                          xy_color: "{{ colors[1] }}"
+                          brightness_pct: 100
+                          transition: 0.5
+                - sequence:
+                  - variables:
+                      g: >-
+                        {% set ns = namespace(l=[]) %}
+                        {% for e in room_lights %}{% if (loop.index0 + step) % 3 == 2 %}{% set ns.l = ns.l + [e] %}{% endif %}{% endfor %}
+                        {{ ns.l }}
+                  - if: "{{ g | count > 0 }}"
+                    then:
+                      - action: light.turn_on
+                        target:
+                          entity_id: "{{ g }}"
+                        data:
+                          xy_color: "{{ colors[2] }}"
+                          brightness_pct: 100
+                          transition: 0.5
             - delay:
                 milliseconds: 700
           until: "{{ as_timestamp(now()) >= chase_end }}"
