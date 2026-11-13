@@ -320,6 +320,12 @@ table{border-radius:14px}
 .pick .pickic{font-size:24px;width:40px;text-align:center;flex:none}
 label.pick{cursor:pointer}
 body.shopping{overflow:hidden}
+.shoptotal{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:10px 16px 6px}
+.shoptotal > div{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:8px 10px}
+.shoptotal .meta{display:block;font-size:12px}.shoptotal b{font-size:17px}
+.sitem .sprice{margin-left:auto;font-weight:600;font-size:15px;white-space:nowrap;padding-left:8px}
+.sitem .sprice.none{font-weight:400;font-size:12.5px;color:var(--muted)}
+.sitem.done .sprice{color:var(--muted)}
 #shopModeEl{position:fixed;inset:0;z-index:45;background:var(--bg);overflow:auto;padding-top:var(--safe-top)}
 .shophead{position:sticky;top:0;display:flex;align-items:center;gap:12px;padding:12px 16px;background:rgba(243,245,241,.95);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
 .shophead b{font:700 19px var(--display);flex:1}
@@ -1815,10 +1821,16 @@ function renderShopMode(){
   const got=new Set(S.have.filter(h=>h.week_start===week).map(h=>h.ingredient));
   const items=rows.filter(o=>o.buy>0||got.has(o.i));
   const left=items.filter(o=>o.buy>0).length;
+  // Estimated cost: packages to buy × the Fairway price. Checked items keep what they were going to cost.
+  const cost=o=>{ const n=o.buy>0?o.buy:(o.need?Math.max(1,Math.ceil(o.need/(o.pk.q||1))):1); return o.pk.price!=null?n*o.pk.price:null; };
+  let toGo=0, inCart=0, noPrice=0; for(const o of items){ const c=cost(o); if(c==null){ if(o.buy>0) noPrice++; continue; } if(o.buy>0) toGo+=c; else inCart+=c; }
   el.innerHTML=`<div class="shophead"><button class="btn small" id="shopModeX" type="button">Done</button><b>🛒 ${left?`${left} to get`:'All done'}</b><span class="meta">${shortDate(week)}–${shortDate(addDays(week,6))}</span></div>
+    <div class="shoptotal"><div><span class="meta">Still to get</span><b>≈ $${toGo.toFixed(2)}</b></div><div><span class="meta">In the cart</span><b>$${inCart.toFixed(2)}</b></div><div><span class="meta">Trip estimate</span><b>≈ $${(toGo+inCart).toFixed(2)}</b></div></div>
+    ${noPrice?`<p class="meta" style="padding:0 16px">${noPrice} item${noPrice>1?'s have':' has'} no price yet, so the real total will be a bit higher.</p>`:''}
     ${items.length?AISLES.map(([ic,name])=>{ const xs=items.filter(o=>aisleOf(o.i)[1]===name).sort((a,b)=>(a.buy>0?0:1)-(b.buy>0?0:1)||a.i.localeCompare(b.i)); if(!xs.length) return '';
-      return `<h3>${ic} ${name}</h3>${xs.map(o=>{ const done=o.buy<=0;
-        return `<label class="sitem ${done?'done':''}"><input type="checkbox" ${done?'checked':''} data-shopcheck="${esc(o.i)}"><span><b>${esc(cap(o.i))}</b><span class="meta">${done?'in the cart':`${o.pk.u==='each'&&o.pk.label==='1'?o.buy:`${o.buy} × ${esc(o.pk.label)}`}${o.pk.price!=null?` · $${(o.buy*o.pk.price).toFixed(2)}`:''}`}</span></span></label>`; }).join('')}`; }).join('')
+      const sub=xs.reduce((t,o)=>t+(cost(o)||0),0);
+      return `<h3>${ic} ${name}${sub?` <span class="meta" style="float:right;font-weight:500">≈ $${sub.toFixed(2)}</span>`:''}</h3>${xs.map(o=>{ const done=o.buy<=0, c=cost(o);
+        return `<label class="sitem ${done?'done':''}"><input type="checkbox" ${done?'checked':''} data-shopcheck="${esc(o.i)}"><span><b>${esc(cap(o.i))}</b><span class="meta">${done?'in the cart':`${o.pk.u==='each'&&o.pk.label==='1'?o.buy:`${o.buy} × ${esc(o.pk.label)}`}`}</span></span><span class="sprice ${c==null?'none':''}">${c==null?'no price yet':'$'+c.toFixed(2)}</span></label>`; }).join('')}`; }).join('')
       :'<p class="meta" style="padding:20px">Nothing to buy this week.</p>'}
     <p class="meta" style="padding:0 16px 24px">Checking an item adds it to At Home.</p>`;
 }
