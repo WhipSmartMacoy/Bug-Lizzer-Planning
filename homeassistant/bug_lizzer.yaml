@@ -138,6 +138,19 @@ script:
       - wait_template: "{{ states('media_player.living_room_fish_s_tv') not in ['off', 'unavailable', 'unknown'] }}"
         timeout: 45
         continue_on_timeout: false
+      # Dark and quiet while Disney+ loads (the screen comes back on at the first remote press,
+      # which the TV always does), sound back on when the episode starts.
+      - action: webostv.command
+        data:
+          entity_id: media_player.living_room_fish_s_tv
+          command: com.webos.service.tvpower/power/turnOffScreen
+        continue_on_error: true
+      - action: media_player.volume_mute
+        target:
+          entity_id: media_player.living_room_fish_s_tv
+        data:
+          is_volume_muted: true
+        continue_on_error: true
       # Always restart Disney+: a TV that was switched off keeps it in the background on whatever
       # screen it was left on, and the remote presses below must start from its home screen.
       - action: webostv.command
@@ -147,7 +160,7 @@ script:
           payload:
             id: com.disney.disneyplus-prod
         continue_on_error: true
-      - delay: 1.5
+      - delay: 0.8
       - action: webostv.command
         data:
           entity_id: media_player.living_room_fish_s_tv
@@ -162,8 +175,8 @@ script:
       - action: script.bug_lizzer_tv_keys
         data:
           keys: [UP, UP, LEFT, UP, UP, ENTER]
-          gap: 1
-      - delay: 2
+          gap: 0.7
+      - delay: 1.5
       # The picker opens on the current profile: go to the first, then one right = NELLY.
       - action: script.bug_lizzer_tv_keys
         data:
@@ -174,7 +187,7 @@ script:
       - action: script.bug_lizzer_tv_keys
         data:
           keys: [UP, UP, LEFT, UP, ENTER]
-          gap: 1
+          gap: 0.7
       - delay: 1
       # space → e, then j-e-o-p
       - action: script.bug_lizzer_tv_keys
@@ -197,6 +210,12 @@ script:
         data:
           keys: [ENTER]
           gap: 0.1
+      - action: media_player.volume_mute
+        target:
+          entity_id: media_player.living_room_fish_s_tv
+        data:
+          is_volume_muted: false
+        continue_on_error: true
       # Episode starting: Living Room lights chase blue → light blue → white for 10 s, then go back.
       - delay: 2
       - variables:
@@ -264,11 +283,17 @@ script:
             - delay:
                 milliseconds: 700
           until: "{{ as_timestamp(now()) >= chase_end }}"
+      # Back to how the room was. Sent twice: the Hue bridge drops some commands when many arrive at once.
+      - delay: 0.8
       - action: scene.turn_on
         target:
           entity_id: scene.bug_lizzer_before_jeopardy
         data:
           transition: 1
+      - delay: 2
+      - action: scene.turn_on
+        target:
+          entity_id: scene.bug_lizzer_before_jeopardy
 
   bug_lizzer_tv_keys:
     alias: Bug-Lizzer · press TV remote buttons
