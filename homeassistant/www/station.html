@@ -88,7 +88,7 @@
 <script>
 (function(){
   'use strict';
-  var VERSION = 'station-6';   // bump when the page changes; open iPads reload themselves
+  var VERSION = 'station-7';   // bump when the page changes; open iPads reload themselves
   var TV = 'media_player.living_room_fish_s_tv';
   var HIDE_SCRIPTS = ['script.bug_lizzer_tv_keys'];
   var ICONS = { 'script.bug_lizzer_jeopardy':'🎯', 'script.bug_lizzer_rest':'🌙' };
@@ -230,7 +230,13 @@
     }
 
     // ---- column 3: scenes, lights, TV ----
-    var scripts = Object.keys(states).filter(function(e){ return e.indexOf('script.') === 0 && HIDE_SCRIPTS.indexOf(e) < 0; });
+    // Only the real scenes: JEOPARDY!, Rest Mode and anything you make yourself. Bug-Lizzer's own
+    // helper steps (Disney+ navigation, TV picture, remote presses…) stay hidden.
+    var scripts = Object.keys(states).filter(function(e){
+      if (e.indexOf('script.') !== 0 || HIDE_SCRIPTS.indexOf(e) >= 0) return false;
+      if (states[e].state === 'unavailable') return false;
+      return e.indexOf('script.bug_lizzer_') !== 0 || !!ICONS[e];
+    });
     scripts.sort(function(a, b){ return (ICONS[b] ? 1 : 0) - (ICONS[a] ? 1 : 0) || a.localeCompare(b); });
     var c3 = '<div class="card"><h2>Scenes</h2><div class="grid g2">' +
       scripts.map(function(e){ var st = states[e]; return '<button class="scene" data-script="' + e + '"><i>' + (ICONS[e] || '✨') + '</i>' +
