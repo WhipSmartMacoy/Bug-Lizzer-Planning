@@ -19,6 +19,13 @@
   html,body{ margin:0; height:100%; background:var(--bg); color:var(--ink);
     font:17px/1.35 -apple-system, "Helvetica Neue", Helvetica, Arial, sans-serif; -webkit-user-select:none; user-select:none; overflow:hidden; }
   body.night{ --ink:#8e9891; --muted:#5f6963; --card:#121815; --card2:#161d19; }
+  /* Light mode (tap the clock to switch) */
+  body.light{ --bg:#f3f5f1; --card:#ffffff; --card2:#f7f9f6; --ink:#17211c; --muted:#66706a; --line:#dfe4dd;
+              --green:#2f6b4f; --amber:#b9862b; --red:#c23b2b; --amy:#b88a00; --parker:#c4382b; }
+  body.light .room.on{ background:#e6f1dc; border-color:#a9c98f; }
+  body.light .room.on small{ color:#3f6b2a; }
+  body.light .toast{ background:#17211c; }
+  .clockcard{ cursor:pointer; }
   .wrap{ display:grid; grid-template-columns: 38% 1fr; grid-gap:18px; height:100%; padding:22px 24px; }
   .col{ display:grid; grid-gap:14px; align-content:start; overflow:hidden; }
   .card{ background:var(--card); border:1px solid var(--line); border-radius:20px; padding:16px 18px; }
@@ -115,12 +122,13 @@
 
   function render(){
     var now = new Date(), h = now.getHours();
-    document.body.className = (h >= 22 || h < 6) ? 'night' : '';
+    var light = false; try { light = localStorage.getItem('station_theme') === 'light'; } catch(e) {}
+    document.body.className = light ? 'light' : ((h >= 22 || h < 6) ? 'night' : '');
     var days = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
     var months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
     var hh = h % 12 || 12;
 
-    var left = '<div class="card"><div class="clock">' + hh + ':' + pad(now.getMinutes()) + '</div>' +
+    var left = '<div class="card clockcard" id="clockcard"><div class="clock">' + hh + ':' + pad(now.getMinutes()) + '</div>' +
       '<div class="date">' + days[now.getDay()] + ', ' + months[now.getMonth()] + ' ' + now.getDate() + '</div></div>';
 
     var din = food && food.dinner;
@@ -161,6 +169,9 @@
 
   // ---------- taps ----------
   document.addEventListener('click', function(ev){
+    var c = ev.target; while (c && c.id !== 'clockcard') c = c.parentNode;
+    if (c) { var cur = 'dark'; try { cur = localStorage.getItem('station_theme') || 'dark'; localStorage.setItem('station_theme', cur === 'light' ? 'dark' : 'light'); } catch(e) {}
+             render(); toast(cur === 'light' ? 'Dark mode' : 'Light mode'); return; }
     var b = ev.target; while (b && b.tagName !== 'BUTTON') b = b.parentNode; if (!b || !b.getAttribute) return;
     var p;
     if (b.getAttribute('data-script')) {
