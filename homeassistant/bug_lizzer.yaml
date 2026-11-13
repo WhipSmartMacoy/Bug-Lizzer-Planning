@@ -198,6 +198,23 @@ script:
         continue_on_error: true
       - action: script.bug_lizzer_disney_to_jeopardy
         continue_on_error: true
+      - if: "{{ state_attr('media_player.living_room_fish_s_tv', 'source') != 'Disney+' }}"
+        then:
+          - action: script.bug_lizzer_tv_picture_restore
+          - action: media_player.volume_mute
+            target:
+              entity_id: media_player.living_room_fish_s_tv
+            data:
+              is_volume_muted: false
+            continue_on_error: true
+          - action: webostv.command
+            data:
+              entity_id: media_player.living_room_fish_s_tv
+              command: system.notifications/createToast
+              payload:
+                message: "JEOPARDY!: Disney+ didn't open. Try again."
+            continue_on_error: true
+          - stop: Disney+ did not open
       - action: script.bug_lizzer_tv_keys
         data:
           keys: [ENTER]
@@ -338,15 +355,25 @@ script:
           payload:
             id: com.disney.disneyplus-prod
         continue_on_error: true
-      - delay: 0.8
-      - action: webostv.command
-        data:
-          entity_id: media_player.living_room_fish_s_tv
-          command: system.launcher/launch
-          payload:
-            id: com.disney.disneyplus-prod
-      - wait_template: "{{ state_attr('media_player.living_room_fish_s_tv', 'source') == 'Disney+' }}"
-        timeout: 15
+      # Disney+ needs a moment to finish closing (longer if it was left mid-episode); a launch sent
+      # too soon is accepted but ignored. Check it really came to the front, and try again if not.
+      - delay: 2
+      - repeat:
+          sequence:
+            - action: webostv.command
+              data:
+                entity_id: media_player.living_room_fish_s_tv
+                command: system.launcher/launch
+                payload:
+                  id: com.disney.disneyplus-prod
+              continue_on_error: true
+            - wait_template: "{{ state_attr('media_player.living_room_fish_s_tv', 'source') == 'Disney+' }}"
+              timeout: 6
+          until: "{{ state_attr('media_player.living_room_fish_s_tv', 'source') == 'Disney+' or repeat.index >= 3 }}"
+      - if: "{{ state_attr('media_player.living_room_fish_s_tv', 'source') != 'Disney+' }}"
+        then:
+          - stop: Disney+ did not open
+            error: true
       # Opening Disney+ lights the screen: switch it straight back off while the blackout is applied.
       - action: webostv.command
         data:
