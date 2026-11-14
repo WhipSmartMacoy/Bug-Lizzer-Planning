@@ -478,6 +478,11 @@ html[data-theme="dark"] .shophead{background:rgba(15,21,18,.95)}
 #bcOverlay .bc2{display:flex;gap:8px}
 #bcOverlay .bcamt{display:flex;gap:4px}#bcOverlay .bcamt input{flex:1 1 60px;min-width:0}#bcOverlay .bcamt select{flex:0 0 auto;width:auto}
 .tierh{margin:14px 0 6px;font-size:16px}
+.recedit label{display:block;margin:0 0 8px}
+.recedit .reing{display:flex;gap:6px;margin:0 0 6px;align-items:center}
+.recedit .reing input[data-f="name"]{flex:1 1 120px;min-width:0}
+.recedit .reing input[data-f="q"]{width:64px;flex:0 0 64px}
+.recedit .reing select{flex:0 0 92px;width:92px}
 </style>
 </head>
 <body>
@@ -1103,7 +1108,65 @@ function dayOptions(){ return [0,1,2,3,4,5,6].map(i=>addDays(TODAY,i)).map(d=>{ 
   return `<option value="${d}">${relDay(d)}${din?' · '+esc(dTitle(din)).slice(0,22):''}</option>`; }).join(''); }
 // Made already: today and the 6 days before.
 function madeOptions(){ return [0,1,2,3,4,5,6].map(i=>addDays(TODAY,-i)).map(d=>`<option value="${d}">${relDay(d)}</option>`).join(''); }
+// ---- Editing a recipe in the box: title, servings, photo, link, ingredients and their amounts ----
+let recEdit=null;
+function amtForEdit(a){   // a stored amount → a friendly number + unit for the editor
+  if(!a) return ['',''];
+  const q=+a.q;
+  if(a.u==='ml'){ const u=q>=59?'cups':q>=14?'tbsp':'tsp'; return [round(q/UNITS[u][1],100),u]; }
+  if(a.u==='g'){ const u=q>=453.6?'lb':'oz'; return [round(q/UNITS[u][1],100),u]; }
+  if(a.u==='pkg') return [round(q,100),'packages'];
+  return [round(q,100),'each'];
+}
+function startRecEdit(id){
+  const r=S.recipes.find(x=>x.id==id); if(!r) return;
+  recEdit={id:r.id,title:r.title||'',servings:r.servings||'',image_url:r.image_url||'',url:r.url||'',
+    rows:r.ingredients.map(i=>{ const [q,u]=amtForEdit((r.amounts||{})[i]); return {name:i,q,u}; })};
+  renderAll();
+}
+function recEditForm(r){
+  const e=recEdit;
+  return `<div class="card recedit" data-receditcard="${r.id}">
+    <h3 style="margin-top:0">Edit recipe</h3>
+    <label class="meta">Title<input type="text" data-re="title" value="${esc(e.title)}" style="width:100%"></label>
+    <label class="meta">Servings<input type="text" data-re="servings" value="${esc(e.servings)}" placeholder="e.g. 4 servings" style="width:100%"></label>
+    <label class="meta">Recipe link<input type="url" data-re="url" value="${esc(e.url)}" style="width:100%"></label>
+    <label class="meta">Photo link<input type="url" data-re="image_url" value="${esc(e.image_url)}" placeholder="optional" style="width:100%"></label>
+    <div class="meta" style="margin:10px 0 4px">Ingredients and amounts (amounts are optional; they're used for the shopping list and leftovers)</div>
+    ${e.rows.map((x,k)=>`<div class="reing"><input type="text" list="ingList" data-rei="${k}" data-f="name" value="${esc(x.name)}" placeholder="ingredient">
+      <input type="number" step="any" min="0" data-rei="${k}" data-f="q" value="${esc(x.q)}" placeholder="amt">
+      <select data-rei="${k}" data-f="u"><option value="">—</option>${Object.keys(UNITS).map(u=>`<option ${u===x.u?'selected':''}>${u}</option>`).join('')}</select>
+      <button type="button" class="btn small" data-reidel="${k}" aria-label="Remove">✕</button></div>`).join('')}
+    <button type="button" class="btn small" data-reiadd>＋ Add ingredient</button>
+    <div class="row" style="margin-top:12px"><button type="button" class="btn primary" data-resave>Save changes</button><button type="button" class="btn" data-recancel>Cancel</button></div>
+  </div>`;
+}
+async function saveRecEdit(){
+  const e=recEdit; if(!e) return;
+  if(!e.title.trim()) return toast('Give it a title');
+  const ings=[], amounts={};
+  for(const x of e.rows){ const n=x.name.trim().toLowerCase().replace(/\s+/g,' '); if(!n||ings.includes(n)) continue; ings.push(n);
+    const q=parseFloat(x.q); if(q>0&&x.u&&UNITS[x.u]) amounts[n]={q:round(q*UNITS[x.u][1],1000),u:UNITS[x.u][0]}; }
+  const {error}=await sb.from('recipes').update({title:e.title.trim(),servings:e.servings.trim()||null,url:e.url.trim()||(S.recipes.find(x=>x.id===e.id)||{}).url,image_url:e.image_url.trim()||null,ingredients:ings,amounts}).eq('id',e.id);
+  if(error) return toast('Could not save: '+error.message);
+  recEdit=null; await DB.load(); renderAll(); toast('Recipe updated');
+}
+document.addEventListener('input',e=>{ const t=e.target; if(!recEdit) return;
+  if(t.dataset.re) recEdit[t.dataset.re]=t.value;
+  else if(t.dataset.rei!==undefined) recEdit.rows[+t.dataset.rei][t.dataset.f]=t.value; });
+document.addEventListener('change',e=>{ const t=e.target; if(recEdit&&t.dataset.rei!==undefined&&t.tagName==='SELECT') recEdit.rows[+t.dataset.rei].u=t.value; });
+document.addEventListener('click',e=>{
+  const t=e.target.closest('[data-editrecipe],[data-reidel],[data-reiadd],[data-resave],[data-recancel]'); if(!t) return;
+  if(t.dataset.editrecipe) return startRecEdit(t.dataset.editrecipe);
+  if(!recEdit) return;
+  if(t.dataset.reidel!==undefined){ recEdit.rows.splice(+t.dataset.reidel,1); renderAll(); }
+  else if(t.dataset.reiadd!==undefined){ recEdit.rows.push({name:'',q:'',u:''}); renderAll(); setTimeout(()=>{ const l=[...document.querySelectorAll('[data-f="name"][data-rei]')].pop(); l&&l.focus(); },30); }
+  else if(t.dataset.resave!==undefined){ t.disabled=true; saveRecEdit().finally(()=>{ t.disabled=false; }); }
+  else if(t.dataset.recancel!==undefined){ recEdit=null; renderAll(); }
+});
+
 function card(r, extra=''){
+  if(recEdit&&recEdit.id===r.id) return recEditForm(r);
   const n=timesPlanned(r.id), lc=lastCooked(r.id);
   return `<div class="card">
     ${r.image_url?`<a href="${esc(r.url)}" target="_blank" rel="noopener"><img class="thumb" src="${esc(r.image_url)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()"></a>`:''}
@@ -1115,6 +1178,7 @@ function card(r, extra=''){
     <div class="actions">
       <select class="btn small" data-planfor="${r.id}"><option value="">+ Plan for…</option>${dayOptions()}</select>
       <select class="btn small" data-madeon="${r.id}"><option value="">✓ Made already?</option>${madeOptions()}</select>
+      <button class="btn small" type="button" data-editrecipe="${r.id}">✎ Edit</button>
       <button class="btn small danger" data-delrecipe="${r.id}">Remove</button>
     </div></div>`;
 }
