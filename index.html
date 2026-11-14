@@ -470,6 +470,12 @@ html[data-theme="dark"] .shophead{background:rgba(15,21,18,.95)}
 #bcOverlay .bclist{font-size:14px;max-height:120px;overflow:auto}
 #bcOverlay .bcrow{display:flex;gap:8px;align-items:center}
 #bcOverlay .bcrow input{flex:1}
+#bcOverlay.carding .bclist{max-height:none}
+#bcOverlay.carding #bcManual{display:none}
+#bcOverlay .bccard{display:flex;flex-direction:column;gap:8px}
+#bcOverlay .bccard label{display:flex;flex-direction:column;gap:3px;font-size:13px;color:var(--muted);flex:1;min-width:0}
+#bcOverlay .bccard input,#bcOverlay .bccard select{font-size:16px;width:100%;box-sizing:border-box}
+#bcOverlay .bc2{display:flex;gap:8px}
 </style>
 </head>
 <body>
@@ -2387,37 +2393,57 @@ async function lookupBarcode(code){
     const name=(p.product_name||p.generic_name||'').trim(); if(!name) return null;
     return {name, brand:(p.brands||'').split(',')[0].trim(), qty:(p.quantity||'').trim()}; }catch(e){ return null; }
 }
+// Each scan pauses on a card showing what it found; you fix anything, then add it (or skip).
 async function addBarcode(code){
-  if(!bc) return;
-  const have=bc.seen.get(code); if(have){ have.count+=1; renderBc(`${have.line}: ${have.count}`); return; }
-  bc.seen.set(code,{line:'Looking up '+code+'…',count:1,pending:true}); renderBc();
+  if(!bc||bc.card) return;
+  bc.card={code,loading:true}; renderBc();
   const p=await lookupBarcode(code); if(!bc) return;
-  const prev=bc.seen.get(code), line=p?[p.brand,p.name,p.qty].filter(Boolean).join(' · '):`Barcode ${code} (not found, type what it is)`;
-  const row=toReviewRow({line:p?`${p.name} ${p.qty}`:line}); row.line=line; row.count=prev.count; row.code=code;
-  if(!p){ row.ingredient=''; row.on=false; }
-  bc.seen.set(code,row); renderBc(p?`Added ${p.name}`:'Not in the product database: type it in after');
+  const name=p?[p.brand,p.name].filter(Boolean).join(' '):'';
+  const row=toReviewRow({line:p?`${p.name} ${p.qty}`:''});
+  bc.card={code, found:!!p, name, ingredient:p?row.ingredient:'', count:1, sizeText:p&&p.qty?p.qty:(row.size.label!=='1 package'?row.size.label:''), price:'', where:row.ingredient?row.where:'pantry'};
+  renderBc();
+  setTimeout(()=>{ const f=$(bc&&bc.card&&!bc.card.ingredient?'#bcIng':'#bcCount'); f&&f.focus&&!('ontouchstart' in window)&&f.focus(); },50);
 }
-function renderBc(msg){
+function renderBc(){
   const el=$('#bcOverlay'); if(!el||!bc) return;
-  const rows=[...bc.seen.values()];
-  el.querySelector('.bclist').innerHTML=rows.length?rows.map(r=>`<div>• ${esc(r.line)}${r.count>1?` × ${r.count}`:''}${r.ingredient?` <span class="meta">→ ${esc(r.ingredient)}</span>`:''}</div>`).join(''):'<span class="meta">Point at a barcode. Each item you scan is listed here.</span>';
-  if(msg) toast(msg,1500);
+  const c=bc.card, box=el.querySelector('.bclist');
+  el.classList.toggle('carding',!!c);
+  if(c&&c.loading){ box.innerHTML=`<b>Looking up ${esc(c.code)}…</b>`; return; }
+  if(c){ box.innerHTML=`<div class="bccard">
+      <div class="meta">${c.found?'Found':'Not in the product database: tell us what it is'} · ${esc(c.code)}</div>
+      <label>Name<input type="text" id="bcName" value="${esc(c.name)}" placeholder="e.g. Fairway Large Eggs"></label>
+      <label>Ingredient<input type="text" id="bcIng" list="ingList" value="${esc(c.ingredient)}" placeholder="e.g. eggs"></label>
+      <div class="bc2"><label>How many<input type="number" min="0" step="any" id="bcCount" value="${c.count}"></label>
+        <label>Each is<input type="text" id="bcSize" value="${esc(c.sizeText)}" placeholder="e.g. 12 ct, 32 oz, 1 lb"></label></div>
+      <div class="bc2"><label>Price paid (each)<input type="text" inputmode="decimal" id="bcPrice" value="${esc(c.price)}" placeholder="$ optional"></label>
+        <label>Kept in<select id="bcWhere">${['fridge','freezer','pantry'].map(l=>`<option value="${l}" ${l===c.where?'selected':''}>${STORE_ICON[l]} ${cap(l)}</option>`).join('')}</select></label></div>
+      <div class="bcrow"><button class="btn primary" type="button" id="bcAdd">Add to At Home</button><button class="btn" type="button" id="bcSkip">Skip</button></div></div>`; return; }
+  box.innerHTML=bc.added.length?`<div class="meta">Added: ${bc.added.map(esc).join(', ')}</div><div class="meta">Scan the next item, or tap Done.</div>`:'<span class="meta">Point at a barcode. You\'ll get a chance to check each item before it\'s added.</span>';
+}
+async function confirmBarcode(){
+  const c=bc&&bc.card; if(!c||c.loading) return;
+  const i=$('#bcIng').value.trim().toLowerCase(); if(!i) return toast('Type what it is (the ingredient), e.g. eggs');
+  const count=parseFloat($('#bcCount').value)||1, sizeText=$('#bcSize').value.trim(), name=$('#bcName').value.trim()||i;
+  const paid=parseFloat($('#bcPrice').value.replace(/[^0-9.]/g,'')), where=$('#bcWhere').value;
+  let size=sizeFrom(sizeText||'',i); if(!sizeText) size=sizeFrom(name,i);
+  const saved=review; review={source:'barcode',rows:[{line:name,product:name,ingredient:i,count,size,lb:null,price:paid>0?'$'+(paid*count).toFixed(2):'',where,on:true}]};   // saveReview divides by how many
+  bc.card={loading:true,code:c.code}; renderBc();
+  await saveReview({quiet:true});
+  review=saved; if(!bc) return;
+  bc.added.push(`${count>1?count+' × ':''}${i}`); bc.card=null; renderBc(); toast(`Added ${i}${paid>0?` · $${paid.toFixed(2)}`:''}`,1500);
 }
 function stopBarcode(){ if(!bc) return; try{ bc.stop&&bc.stop(); }catch(e){} try{ bc.stream&&bc.stream.getTracks().forEach(t=>t.stop()); }catch(e){} }
-function closeBarcode(review_){
-  stopBarcode(); const rows=bc?[...bc.seen.values()].filter(r=>!r.pending):[]; bc=null; $('#bcOverlay')?.remove();
-  if(review_&&rows.length){ document.querySelector('[data-p="pantry"]')?.click(); review={source:'barcode',rows}; renderReview(); setTimeout(()=>$('#receiptReview').scrollIntoView({behavior:'smooth',block:'start'}),60); }
-}
+function closeBarcode(){ stopBarcode(); bc=null; $('#bcOverlay')?.remove(); renderAll(); }
 async function openBarcode(){
-  if(bc) return; bc={seen:new Map()};
+  if(bc) return; bc={added:[],card:null};
   const el=document.createElement('div'); el.id='bcOverlay';
   el.innerHTML=`<video playsinline muted autoplay></video><div class="bcframe"></div>
     <div class="bcbar"><b>Scan barcodes</b><div class="bclist"></div>
       <form class="bcrow" id="bcManual"><input type="text" inputmode="numeric" placeholder="or type the number under the barcode" id="bcCode"><button class="btn small">Add</button></form>
-      <div class="bcrow"><button class="btn primary" type="button" id="bcDone">Review &amp; add to At Home</button><button class="btn" type="button" id="bcCancel">Cancel</button></div></div>`;
+      <div class="bcrow"><button class="btn" type="button" id="bcDone">Done</button></div></div>`;
   document.body.appendChild(el); renderBc();
   const video=el.querySelector('video'); let last='', lastAt=0;
-  const hit=code=>{ code=String(code||'').replace(/\D/g,''); if(code.length<8) return; const t=Date.now(); if(code===last&&t-lastAt<2500) return; last=code; lastAt=t; try{ navigator.vibrate&&navigator.vibrate(60); }catch(e){} addBarcode(code); };
+  const hit=code=>{ code=String(code||'').replace(/\D/g,''); if(code.length<8) return; const t=Date.now(); if(bc&&bc.card) return; if(code===last&&t-lastAt<2500) return; last=code; lastAt=t; try{ navigator.vibrate&&navigator.vibrate(60); }catch(e){} addBarcode(code); };
   try{
     if('BarcodeDetector' in window){
       const det=new BarcodeDetector({formats:['ean_13','ean_8','upc_a','upc_e']});
@@ -2434,12 +2460,13 @@ async function openBarcode(){
 }
 document.addEventListener('click',e=>{
   if(e.target.closest('#barcodeBtn,[data-barcode]')){ e.preventDefault(); openBarcode(); }
-  else if(e.target.id==='bcDone') closeBarcode(true);
-  else if(e.target.id==='bcCancel') closeBarcode(false);
+  else if(e.target.id==='bcDone') closeBarcode();
+  else if(e.target.id==='bcAdd'){ e.target.disabled=true; confirmBarcode().finally(()=>{ const b=$('#bcAdd'); if(b) b.disabled=false; }); }
+  else if(e.target.id==='bcSkip'){ bc.card=null; renderBc(); }
 });
 document.addEventListener('submit',e=>{ if(e.target.id!=='bcManual') return; e.preventDefault(); const v=$('#bcCode').value; $('#bcCode').value=''; const c=v.replace(/\D/g,''); if(c.length>=8) addBarcode(c); else toast('Type the full number under the barcode'); });
 
-async function saveReview(){
+async function saveReview(opt={}){
   const add={};
   for(const r of review.rows){ const i=r.ingredient.trim().toLowerCase(); if(!r.on||!i||!(r.count>0)) continue;
     const a=add[i]||(add[i]={q:0,u:r.size.u,where:r.where}); const d=conv(r.count*r.size.q,r.size.u,a.u,i,pkgOf(i)); a.q+=d??r.count*r.size.q; a.where=r.where; }
@@ -2453,14 +2480,14 @@ async function saveReview(){
   // A receipt (photo or email) also updates what each item costs: per pound for weighed items,
   // otherwise per package. The package size already on file is kept.
   const priced=[];
-  if(review.source==='receipt') for(const r of review.rows){ const i=r.ingredient.trim().toLowerCase(), paid=parseFloat(String(r.price||'').replace(/[^0-9.]/g,''));
+  if(review.source==='receipt'||review.source==='barcode') for(const r of review.rows){ const i=r.ingredient.trim().toLowerCase(), paid=parseFloat(String(r.price||'').replace(/[^0-9.]/g,''));
     if(!r.on||!i||!(paid>0)||priced.some(x=>x.ingredient===i)) continue;
     const old=S.prices[i]||{};
     const price=r.lb?`$${(paid/r.lb).toFixed(2)} / lb`:`$${(paid/Math.max(1,r.count||1)).toFixed(2)}`;
     priced.push({ingredient:i, price, item:old.item||r.product||r.line, size:old.size||(r.lb?'per lb':(r.size.label!=='1 package'?r.size.label:null)),
       source:'Receipt', link:old.link||FAIRWAY(i), updated_by:me.user_id, updated_at:now}); }
   if(priced.length){ const {error}=await sb.from('prices').upsert(priced); if(error) toast('Prices not saved: '+error.message); }
-  if(await DB.run(sb.from('pantry').upsert(rows))){ if(review.inboxId) await markInbox(review.inboxId); toast(`Added to At Home: ${rows.map(r=>r.ingredient).join(', ')}${priced.length?` · ${priced.length} price${priced.length>1?'s':''} updated`:''}`,5000); review=null; usualsPick.clear(); usualsOpen=false; }
+  if(await DB.run(sb.from('pantry').upsert(rows))){ if(review.inboxId) await markInbox(review.inboxId); if(!opt.quiet) toast(`Added to At Home: ${rows.map(r=>r.ingredient).join(', ')}${priced.length?` · ${priced.length} price${priced.length>1?'s':''} updated`:''}`,5000); review=null; usualsPick.clear(); usualsOpen=false; }
   renderAll(); renderReview(); renderUsuals(); renderInbox();
 }
 document.addEventListener('change',e=>{
