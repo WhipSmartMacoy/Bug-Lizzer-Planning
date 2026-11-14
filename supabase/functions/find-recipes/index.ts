@@ -129,21 +129,30 @@ Deno.serve(async (req) => {
     const skip = new Set<string>(body.exclude || []);
     if (!have.length) return json({ results: [], searched: [] });
 
-    // Searches: the fridge items (they spoil first) in pairs, then on their own, then the rest.
-    const lead = [...fresh, ...main.filter((h) => !fresh.includes(h))];
+    // Searches. With a focus ingredient (tapped in the app): that ingredient alone and paired with
+    // others from home. Otherwise every item at home gets searched on its own (fridge items first,
+    // they spoil first), plus a couple of fridge pairs; "Search again" rotates which items lead.
+    const focus = String(body.focus || "").toLowerCase().trim();
+    let lead = [...fresh, ...main.filter((h) => !fresh.includes(h))];
+    const off = Math.max(0, Number(body.offset) || 0) * 6;
+    if (off && lead.length) { const k = off % lead.length; lead = [...lead.slice(k), ...lead.slice(0, k)]; }
     const qs: string[] = [];
-    if (lead.length >= 2) qs.push(`${lead[0]} ${lead[1]}`);
-    if (lead.length >= 3) qs.push(`${lead[0]} ${lead[2]}`, `${lead[1]} ${lead[2]}`);
-    if (lead.length >= 4) qs.push(`${lead[0]} ${lead[3]}`, `${lead[2]} ${lead[3]}`);
-    for (const x of lead.slice(0, 4)) qs.push(x);
-    const queries = [...new Set(qs)].slice(0, 8);
+    if (focus) {
+      qs.push(focus);
+      for (const x of lead.filter((h) => h !== focus).slice(0, 6)) qs.push(`${focus} ${x}`);
+    } else {
+      if (lead.length >= 2) qs.push(`${lead[0]} ${lead[1]}`);
+      if (lead.length >= 3) qs.push(`${lead[0]} ${lead[2]}`);
+      for (const x of lead.slice(0, 10)) qs.push(x);
+    }
+    const queries = [...new Set(qs)].slice(0, 12);
 
     const pages = await Promise.all(queries.flatMap((q) => SITES.map(async (s) => ({ s, html: await get(s.search(q)) }))));
     const cand: string[] = [], seen = new Set<string>(), perSite: Record<string, number> = {};
     // Interleave sites so one site doesn't crowd out the others.
     const lists = pages.map(({ s, html }) => [...html.matchAll(s.link)].map((m) => ((s as any).base || "") + m[1].replace(/\/$/, "")));
     for (let k = 0; k < 15; k++) for (const l of lists) { const u = l[k]; if (u && !seen.has(u) && !skip.has(u)) { seen.add(u); cand.push(u); } }
-    const pick = cand.slice(0, 48);
+    const pick = cand.slice(0, 60);
 
     const results = (await Promise.all(pick.map(async (url) => {
       const html = await get(url, 8000); if (!html) return null;
@@ -158,7 +167,8 @@ Deno.serve(async (req) => {
       const uses = ings.filter((i) => main.includes(i));
       // Recipes that use something from home and need at most 3 other things (staples don't count).
       const need = ings.filter((i) => !have.includes(i));
-      if (!uses.length || need.length > 3 || uses.length < Math.min(2, main.length) && need.length > 1) return null;
+      if (focus && !ings.includes(focus)) return null;
+      if (!uses.length || need.length > 3 || !focus && uses.length < Math.min(2, main.length) && need.length > 1) return null;
       let image = recipe.image; if (Array.isArray(image)) image = image[0]; if (image && typeof image === "object") image = image.url || image.contentUrl;
       const host = new URL(url).hostname.replace(/^www\./, "");
       perSite[host] = (perSite[host] || 0) + 1;

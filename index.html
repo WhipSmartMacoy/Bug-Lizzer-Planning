@@ -1979,7 +1979,7 @@ const webNow=()=>{ try{ return web&&web.key===useupInputs().key?(web.results||[]
 function renderUseup(){
   const on=S.pantry.filter(p=>+p.q>0&&!optional(p.ingredient));
   const fresh=new Set(on.filter(p=>storeOf(p.ingredient)==='fridge').map(p=>p.ingredient)), have=new Set(on.map(p=>p.ingredient));
-  $('#useupHave').innerHTML=on.length?`<div class="meta">At Home now: ${['fridge','freezer','pantry'].map(l=>{const xs=on.filter(p=>storeOf(p.ingredient)===l);return xs.length?`${STORE_ICON[l]} ${xs.map(p=>esc(p.ingredient)).join(', ')}`:''}).filter(Boolean).join(' · ')}</div>`:'';
+  $('#useupHave').innerHTML=on.length?`<div class="meta">At Home now. Tap one for ideas built around it:</div><div class="chips" style="margin:6px 0 4px">${['fridge','freezer','pantry'].flatMap(l=>on.filter(p=>storeOf(p.ingredient)===l).map(p=>`<span class="chip ${webFocus===p.ingredient?'on':''}" data-webfocus="${esc(p.ingredient)}">${STORE_ICON[l]} ${esc(p.ingredient)}</span>`)).join('')}${webFocus?`<span class="chip" data-webfocus="">✕ Everything</span>`:''}</div>`:'';
   findOnline();
   if(!on.length){$('#useupResults').innerHTML='<div class="empty">Nothing is tracked At Home yet. Scan a receipt, add from your usual Fairway items, or tap <b>Got it ✓</b> after shopping, and ideas show up here.</div>';return;}
   const haveAll=new Set(S.pantry.filter(p=>+p.q>0).map(p=>p.ingredient));
@@ -2024,11 +2024,11 @@ async function planFromWeb(url,day){
 }
 document.addEventListener('change',async e=>{ const el=e.target; if(el.dataset.webplanSel!==undefined&&el.value){ const d=el.value; el.value=''; const r=await importWeb(el.dataset.webplanSel); if(r){ await DB.load(); openPlanFor(r.id,d,false); } } });
 // ---- Make it now: search the web (links only) ----
-let web=LS.get('web',null), webBusy=false;
+let web=LS.get('web',null), webBusy=false, webFocus='', webOffset=0;
 function useupInputs(){
   const on=S.pantry.filter(p=>+p.q>0&&!optional(p.ingredient)).map(p=>p.ingredient);
   const fresh=on.filter(i=>storeOf(i)==='fridge');
-  return {have:on,fresh,key:[...on].sort().join('|')};
+  return {have:on,fresh,key:[...on].sort().join('|')+'#'+webFocus};
 }
 async function findOnline(force){
   const {have,fresh,key}=useupInputs();
@@ -2036,20 +2036,20 @@ async function findOnline(force){
   if(!have.length){ web=null; renderWeb(); return; }
   if(webBusy||(!force&&web&&web.key===key&&web.v===2)){ renderWeb(); return; }   // v2: results include near-misses
   webBusy=true; renderWeb();
-  const {data,error}=await sb.functions.invoke('find-recipes',{body:{have:S.pantry.filter(p=>+p.q>0).map(p=>p.ingredient),main:have,fresh,staples:[...STAPLES,...[...HERBS].filter(i=>!FRESH_HERBS.has(i))],exclude:S.recipes.map(r=>r.url)}});
+  const {data,error}=await sb.functions.invoke('find-recipes',{body:{focus:webFocus||undefined,offset:force?++webOffset:webOffset,have:S.pantry.filter(p=>+p.q>0).map(p=>p.ingredient),main:have,fresh,staples:[...STAPLES,...[...HERBS].filter(i=>!FRESH_HERBS.has(i))],exclude:S.recipes.map(r=>r.url)}});
   webBusy=false;
   web={v:2,key,at:Date.now(),results:data?.results||[],error:error?'The search didn\'t go through. Try again in a minute.':data?.error||null};
   LS.set('web',web); renderWeb();
 }
 function renderWeb(){
   const {have,key}=useupInputs();
-  if(webBusy){ $('#webStatus').textContent=`Searching recipe sites for ${have.slice(0,4).join(', ')}${have.length>4?'…':''} (about 20 seconds)`; return; }
+  if(webBusy){ $('#webStatus').textContent=`Searching recipe sites for ${webFocus?`ideas with ${webFocus}`:have.slice(0,4).join(', ')+(have.length>4?'…':'')} (about 20 seconds)`; return; }
   if(!have.length){ $('#webStatus').textContent=''; $('#webResults').innerHTML=''; return; }
   if(!web){ $('#webStatus').textContent=''; $('#webResults').innerHTML=''; return; }
   const inBox=new Set(S.recipes.map(r=>r.url));
   const atHome=new Set(S.pantry.filter(p=>+p.q>0).map(p=>p.ingredient));
   const list=web.results.filter(x=>!inBox.has(x.url)).map(x=>({...x,need:x.need.filter(i=>!atHome.has(i)&&!optional(i))})).filter(x=>x.need.length<=3).sort((a,b)=>a.need.length-b.need.length);
-  $('#webStatus').innerHTML=web.error?esc(web.error):`${list.length} recipe${list.length===1?'':'s'} found ${ago(web.at)}${web.key!==key?' · At Home has changed since, so <b>Search again</b>':''}`;
+  $('#webStatus').innerHTML=web.error?esc(web.error):`${list.length} recipe${list.length===1?'':'s'}${webFocus?` with <b>${esc(webFocus)}</b>`:''} found ${ago(web.at)}${web.key!==key?' · At Home has changed since, so <b>Search again</b>':''}`;
   $('#webResults').innerHTML=list.map(x=>`<div class="card">
     ${x.image?`<a href="${esc(x.url)}" target="_blank" rel="noopener"><img class="thumb" src="${esc(x.image)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()"></a>`:''}
     <h3><a href="${esc(x.url)}" target="_blank" rel="noopener">${esc(x.title)}</a></h3>
@@ -2059,6 +2059,7 @@ function renderWeb(){
     ||(web.error?'':'<div class="empty">Nothing online fits what\'s At Home yet. Try <b>Search again</b>, or add more of what you have.</div>');
 }
 document.addEventListener('click',e=>{
+  const fc=e.target.closest('[data-webfocus]'); if(fc){ webFocus=fc.dataset.webfocus; renderUseup(); findOnline(true); $('#webStatus')?.scrollIntoView({behavior:'smooth',block:'start'}); return; }
   const t=e.target.closest('#webAgain,[data-webadd],[data-webplan],[data-p="useup"]'); if(!t) return;
   if(t.dataset.webplan){ planFromWeb(t.dataset.webplan,t.dataset.day); return; }
   if(t.id==='webAgain') findOnline(true);
