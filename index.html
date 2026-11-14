@@ -471,7 +471,7 @@ html[data-theme="dark"] .shophead{background:rgba(15,21,18,.95)}
 #bcOverlay .bcrow{display:flex;gap:8px;align-items:center}
 #bcOverlay .bcrow input{flex:1}
 #bcOverlay.carding .bclist{max-height:none}
-#bcOverlay.carding #bcManual{display:none}
+#bcOverlay.carding #bcManual,#bcOverlay.carding #bcPhotoBtn{display:none}
 #bcOverlay .bccard{display:flex;flex-direction:column;gap:8px}
 #bcOverlay .bccard label{display:flex;flex-direction:column;gap:3px;font-size:13px;color:var(--muted);flex:1;min-width:0}
 #bcOverlay .bccard input,#bcOverlay .bccard select{font-size:16px;width:100%;box-sizing:border-box}
@@ -2388,6 +2388,10 @@ async function scanReceipt(file){
 // ---- barcodes: camera → barcode → Open Food Facts product → review rows (like a receipt) ----
 let bc=null;   // {stream, stop, seen:Map(code→row)}
 async function lookupBarcode(code){
+  const tries=[code]; if(code.length===12) tries.push('0'+code); if(code.length===13&&code[0]==='0') tries.push(code.slice(1));   // US UPC vs EAN-13
+  for(const c of tries){ const p=await lookupOne(c); if(p) return p; } return null;
+}
+async function lookupOne(code){
   try{ const r=await fetch(`https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(code)}.json?fields=product_name,generic_name,brands,quantity`);
     const j=await r.json(); const p=j.product; if(j.status!==1||!p) return null;
     const name=(p.product_name||p.generic_name||'').trim(); if(!name) return null;
@@ -2418,7 +2422,7 @@ function renderBc(){
       <div class="bc2"><label>Price paid (each)<input type="text" inputmode="decimal" id="bcPrice" value="${esc(c.price)}" placeholder="$ optional"></label>
         <label>Kept in<select id="bcWhere">${['fridge','freezer','pantry'].map(l=>`<option value="${l}" ${l===c.where?'selected':''}>${STORE_ICON[l]} ${cap(l)}</option>`).join('')}</select></label></div>
       <div class="bcrow"><button class="btn primary" type="button" id="bcAdd">Add to At Home</button><button class="btn" type="button" id="bcSkip">Skip</button></div></div>`; return; }
-  box.innerHTML=bc.added.length?`<div class="meta">Added: ${bc.added.map(esc).join(', ')}</div><div class="meta">Scan the next item, or tap Done.</div>`:'<span class="meta">Point at a barcode. You\'ll get a chance to check each item before it\'s added.</span>';
+  box.innerHTML=bc.added.length?`<div class="meta">Added: ${bc.added.map(esc).join(', ')}</div><div class="meta">Scan the next item, or tap Done.</div>`:'<span class="meta">Hold the barcode inside the box, about a hand\'s length away (closer is blurry). You\'ll check each item before it\'s added.</span>';
 }
 async function confirmBarcode(){
   const c=bc&&bc.card; if(!c||c.loading) return;
@@ -2434,11 +2438,25 @@ async function confirmBarcode(){
 }
 function stopBarcode(){ if(!bc) return; try{ bc.stop&&bc.stop(); }catch(e){} try{ bc.stream&&bc.stream.getTracks().forEach(t=>t.stop()); }catch(e){} }
 function closeBarcode(){ stopBarcode(); bc=null; $('#bcOverlay')?.remove(); renderAll(); }
+async function bcReader(){
+  if(!window.ZXingBrowser) await loadScript('https://cdn.jsdelivr.net/npm/@zxing/browser@0.1.5/umd/zxing-browser.min.js');
+  return new ZXingBrowser.BrowserMultiFormatOneDReader(new Map([[3,true]]));
+}
+// Backup that always works on iPhone: take a normal photo (the camera app focuses properly) and read that.
+async function barcodeFromPhoto(file){
+  if(!file||!bc) return;
+  const box=$('#bcOverlay .bclist'); if(box&&!bc.card) box.innerHTML='<b>Reading the photo…</b>';
+  let code=null;
+  try{ if('BarcodeDetector' in window){ const r=await new BarcodeDetector({formats:['ean_13','ean_8','upc_a','upc_e']}).detect(await createImageBitmap(file)); code=r[0]&&r[0].rawValue; } }catch(e){}
+  if(!code){ const url=URL.createObjectURL(file); try{ const res=await (await bcReader()).decodeFromImageUrl(url); code=res&&res.getText(); }catch(e){} URL.revokeObjectURL(url); }
+  if(code) addBarcode(String(code).replace(/\D/g,'')); else { renderBc(); toast('No barcode found in that photo. Try closer and straight on, or type the number.',4000); }
+}
 async function openBarcode(){
   if(bc) return; bc={added:[],card:null};
   const el=document.createElement('div'); el.id='bcOverlay';
   el.innerHTML=`<video playsinline muted autoplay></video><div class="bcframe"></div>
     <div class="bcbar"><b>Scan barcodes</b><div class="bclist"></div>
+      <label class="btn" id="bcPhotoBtn" style="text-align:center">📷 Photo of barcode<input type="file" accept="image/*" capture="environment" id="bcPhoto" hidden></label>
       <form class="bcrow" id="bcManual"><input type="text" inputmode="numeric" placeholder="or type the number under the barcode" id="bcCode"><button class="btn small">Add</button></form>
       <div class="bcrow"><button class="btn" type="button" id="bcDone">Done</button></div></div>`;
   document.body.appendChild(el); renderBc();
@@ -2451,12 +2469,17 @@ async function openBarcode(){
       let on=true; bc.stop=()=>{on=false};
       (async function loop(){ while(on&&bc){ try{ const r=await det.detect(video); if(r[0]) hit(r[0].rawValue); }catch(e){} await new Promise(r=>setTimeout(r,250)); } })();
     } else {
-      await loadScript('https://cdn.jsdelivr.net/npm/@zxing/browser@0.1.5/umd/zxing-browser.min.js');
-      const reader=new ZXingBrowser.BrowserMultiFormatReader();
-      const ctrl=await reader.decodeFromVideoDevice(undefined,video,(res)=>{ if(res) hit(res.getText()); });
+      // iPhone: no built-in reader. Use the 1-D (grocery barcode) reader, the back camera, a sharp picture,
+      // and "try harder" (hint 3), then ask for a little zoom so the phone can sit far enough back to focus.
+      const reader=await bcReader();
+      const ctrl=await reader.decodeFromConstraints({audio:false,video:{facingMode:{ideal:'environment'},width:{ideal:1920},height:{ideal:1080}}},video,(res)=>{ if(res) hit(res.getText()); });
       bc.stop=()=>ctrl.stop();
+      try{ const tr=video.srcObject&&video.srcObject.getVideoTracks()[0], cap=tr&&tr.getCapabilities?tr.getCapabilities():{}, adv=[];
+        if(cap.focusMode&&cap.focusMode.includes('continuous')) adv.push({focusMode:'continuous'});
+        if(cap.zoom&&cap.zoom.max>=1.5) adv.push({zoom:Math.min(2,cap.zoom.max)});
+        if(adv.length) await tr.applyConstraints({advanced:adv}); }catch(e){}
     }
-  }catch(err){ toast('Camera not available: '+(err.message||err)+'. You can type the numbers instead.',5000); }
+  }catch(err){ const b=$('#bcOverlay .bclist'); if(b) b.innerHTML=`<b>The live camera didn't start</b> <span class="meta">(${esc(err.message||String(err))})</span><div class="meta">Use <b>📷 Photo of barcode</b> below, or type the number.</div>`; }
 }
 document.addEventListener('click',e=>{
   if(e.target.closest('#barcodeBtn,[data-barcode]')){ e.preventDefault(); openBarcode(); }
@@ -2464,6 +2487,7 @@ document.addEventListener('click',e=>{
   else if(e.target.id==='bcAdd'){ e.target.disabled=true; confirmBarcode().finally(()=>{ const b=$('#bcAdd'); if(b) b.disabled=false; }); }
   else if(e.target.id==='bcSkip'){ bc.card=null; renderBc(); }
 });
+document.addEventListener('change',e=>{ if(e.target.id==='bcPhoto'&&e.target.files[0]){ barcodeFromPhoto(e.target.files[0]); e.target.value=''; } });
 document.addEventListener('submit',e=>{ if(e.target.id!=='bcManual') return; e.preventDefault(); const v=$('#bcCode').value; $('#bcCode').value=''; const c=v.replace(/\D/g,''); if(c.length>=8) addBarcode(c); else toast('Type the full number under the barcode'); });
 
 async function saveReview(opt={}){
