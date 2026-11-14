@@ -2114,6 +2114,7 @@ async function findOnline(force){
   if(webBusy||(!force&&web&&web.key===key&&web.v===3)){ renderWeb(); return; }   // v2: results include near-misses
   webBusy=true; renderWeb();
   const {data,error}=await sb.functions.invoke('find-recipes',{body:{focus:webFocus||undefined,offset:force?++webOffset:webOffset,have:S.pantry.filter(p=>+p.q>0).map(p=>p.ingredient),main:have,fresh,staples:[...STAPLES,...[...HERBS].filter(i=>!FRESH_HERBS.has(i))],exclude:S.recipes.map(r=>r.url)}});
+  await finishWebProgress();
   webBusy=false;
   web={v:3,key,at:Date.now(),results:data?.results||[],error:error?'The search didn\'t go through. Try again in a minute.':data?.error||null};
   LS.set('web',web); renderWeb();
@@ -2136,6 +2137,16 @@ function tickWebProgress(){
   const el=$('#webStatus .wprog'); if(!webProg||!el) return;
   const x=(Date.now()-webProg.t0)/webProg.est, pct=Math.min(96, x<1? x*90 : 90+6*(1-Math.exp(-(x-1)*2)));   // ease toward the end, never "done" early
   el.querySelector('.wpfill').style.width=pct+'%'; el.querySelector('.wppet').style.left=`calc(${pct}% - 28px)`; el.setAttribute('aria-valuenow',Math.round(pct));
+}
+// The search is back: run the bar (and the pet) to the end, pause a moment, then show the results.
+async function finishWebProgress(){
+  const el=$('#webStatus .wprog'); if(!webProg||!el) return;
+  clearInterval(webProg.timer);
+  const f=el.querySelector('.wpfill'), pet=el.querySelector('.wppet');
+  f.style.transition='width .6s ease-out'; pet.style.transition='left .6s ease-out';
+  f.style.width='100%'; pet.style.left='calc(100% - 28px)'; el.setAttribute('aria-valuenow',100);
+  const t=el.querySelector('.wptext'); if(t) t.textContent='Done!';
+  await new Promise(r=>setTimeout(r,matchMedia('(prefers-reduced-motion: reduce)').matches?150:900));
 }
 function stopWebProgress(){ if(webProg){ clearInterval(webProg.timer); webProg=null; } }
 function renderWeb(){
