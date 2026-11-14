@@ -2482,6 +2482,21 @@ document.addEventListener('click',e=>{
   else if(t.id==='reviewSave'){ t.disabled=true; saveReview(); }
 });
 
+// ---------------- stay up to date ----------------
+// Phones keep the page open for days (and cache it for 10 min). When a newer version is published,
+// reload, but never while someone is in the middle of something.
+const pageStamp=Date.parse(document.lastModified)||Date.now();   // when the copy on screen was published
+async function checkForUpdate(){
+  try{ const r=await fetch(location.pathname+'?v='+Date.now(),{method:'HEAD',cache:'no-store'}); const lm=Date.parse(r.headers.get('last-modified')||''); if(!lm) return;
+    if(lm<=pageStamp+2000) return;
+    const busy=shopMode||review||bc||(typeof addS!=='undefined'&&addS)||document.querySelector('#bcOverlay,.sheet.open,dialog[open]')||(document.activeElement&&/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName));
+    if(busy){ setTimeout(checkForUpdate,30000); return; }
+    location.reload();
+  }catch(e){}
+}
+checkForUpdate(); setInterval(checkForUpdate,5*60*1000);
+document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='visible') checkForUpdate(); });
+
 // ---------------- start ----------------
 let booted=false;
 async function boot(){
