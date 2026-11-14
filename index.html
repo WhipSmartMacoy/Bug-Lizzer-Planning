@@ -504,6 +504,7 @@ html[data-theme="dark"] input, html[data-theme="dark"] select, html[data-theme="
     <div class="row">
       <button class="btn primary" id="shopModeBtn" type="button">🛒 Shopping mode</button>
       <button class="btn primary" id="shareList">Share this list</button>
+      <button class="btn" type="button" data-scanreceipt>📷 Scan receipt</button>
     </div>
     <div id="shopList"></div>
   </section>
@@ -820,7 +821,7 @@ function toReviewRow(src){
   const u=src.usual||bestUsual(src.line||''); const name=u?u.name:src.line;
   const i=NOT_FOOD.test(name)?null:ingFrom(name);
   let size=sizeFrom(name,i); if(src.lb) size={q:src.lb*453.6,u:'g',label:`${src.lb} lb`};
-  return {line:src.line||u?.name, product:u?.name||null, ingredient:i||'', count:src.count||1, size, price:src.price||u?.price||'', where:i?storeOf(i):'pantry', on:!!i};
+  return {line:src.line||u?.name, product:u?.name||null, ingredient:i||'', count:src.count||1, size, lb:src.lb||null, price:src.price||u?.price||'', paid:!!src.price, where:i?storeOf(i):'pantry', on:!!i};
 }
 let review=null;   // {source:'receipt'|'usuals', rows:[...], status}
 let usualsOpen=false, usualsPick=new Set();
@@ -1843,7 +1844,7 @@ function renderShopMode(){
   // Estimated cost: packages to buy × the Fairway price. Checked items keep what they were going to cost.
   const cost=o=>{ const n=o.buy>0?o.buy:(o.need?Math.max(1,Math.ceil(o.need/(o.pk.q||1))):1); return o.pk.price!=null?n*o.pk.price:null; };
   let toGo=0, inCart=0, noPrice=0; for(const o of items){ const c=cost(o); if(c==null){ if(o.buy>0) noPrice++; continue; } if(o.buy>0) toGo+=c; else inCart+=c; }
-  el.innerHTML=`<div class="shophead"><button class="btn small" id="shopModeX" type="button">Done</button><b>🛒 ${left?`${left} to get`:'All done'}</b><span class="meta">${shortDate(week)}–${shortDate(addDays(week,6))}</span></div>
+  el.innerHTML=`<div class="shophead"><button class="btn small" id="shopModeX" type="button">Done</button><button class="btn small" type="button" data-scanreceipt>📷 Receipt</button><b>🛒 ${left?`${left} to get`:'All done'}</b><span class="meta">${shortDate(week)}–${shortDate(addDays(week,6))}</span></div>
     <div class="shoptotal"><div><span class="meta">Still to get</span><b>≈ $${toGo.toFixed(2)}</b></div><div><span class="meta">In the cart</span><b>$${inCart.toFixed(2)}</b></div><div><span class="meta">Trip estimate</span><b>≈ $${(toGo+inCart).toFixed(2)}</b></div></div>
     ${noPrice?`<p class="meta" style="padding:0 16px">${noPrice} item${noPrice>1?'s have':' has'} no price yet, so the real total will be a bit higher.</p>`:''}
     ${items.length?AISLES.map(([ic,name])=>{ const xs=items.filter(o=>aisleOf(o.i)[1]===name).sort((a,b)=>(a.buy>0?0:1)-(b.buy>0?0:1)||a.i.localeCompare(b.i)); if(!xs.length) return '';
@@ -2297,11 +2298,12 @@ function renderReview(){
   const ings=allIngredients();
   el.innerHTML=`<div class="card" style="margin:8px 0">
     <div class="row" style="justify-content:space-between"><b>${review.source==='receipt'?'From your receipt':'Add to At Home'}</b><span class="meta">${review.rows.filter(r=>r.on).length} of ${review.rows.length} will be added · check and fix anything off</span></div>
-    ${review.rows.length?`<div style="overflow:auto"><table><tr><th></th><th>${review.source==='receipt'?'Receipt line':'Item'}</th><th>Ingredient</th><th>How many</th><th>Adds</th><th>Kept in</th></tr>
+    ${review.rows.length?`<div style="overflow:auto"><table><tr><th></th><th>${review.source==='receipt'?'Receipt line':'Item'}</th><th>Ingredient</th><th>How many</th><th>Paid</th><th>Adds</th><th>Kept in</th></tr>
     ${review.rows.map((r,k)=>`<tr class="${r.on?'':'have'}"><td><input type="checkbox" data-rv="${k}" data-f="on" ${r.on?'checked':''}></td>
-      <td><span class="${r.on?'':'name'}">${esc(r.line)}</span>${r.product&&r.product!==r.line?`<div class="meta">${esc(r.product)}</div>`:''}${r.price?` <span class="meta">${esc(r.price)}</span>`:''}</td>
+      <td><span class="${r.on?'':'name'}">${esc(r.line)}</span>${r.product&&r.product!==r.line?`<div class="meta">${esc(r.product)}</div>`:''}</td>
       <td><input list="ingList" data-rv="${k}" data-f="ingredient" value="${esc(r.ingredient)}" placeholder="not food / skip" style="width:150px;padding:6px 8px"></td>
       <td><input type="number" min="0" step="any" data-rv="${k}" data-f="count" value="${r.count}" style="width:64px"> × ${esc(r.size.label)}</td>
+      <td><input type="text" inputmode="decimal" data-rv="${k}" data-f="price" value="${esc(r.price||'')}" placeholder="$" style="width:72px;padding:6px 8px">${r.lb?`<div class="meta">${r.lb} lb</div>`:''}</td>
       <td class="meta">${r.ingredient?esc(fmtAmt(r.count*r.size.q,r.size.u)):'—'}</td>
       <td><select data-rv="${k}" data-f="where" style="font-size:12.5px;padding:4px 6px">${['fridge','freezer','pantry'].map(l=>`<option value="${l}" ${l===r.where?'selected':''}>${STORE_ICON[l]} ${cap(l)}</option>`).join('')}</select></td></tr>`).join('')}</table></div>`
     :'<p class="meta">No item lines could be read. Try a flatter, brighter photo, or add items from your usuals.</p>'}
@@ -2358,7 +2360,17 @@ async function saveReview(){
     rows.push({ingredient:i,q,u,location:a.where===defaultStore(i)?null:a.where,updated_by:me.user_id,updated_at:now});
   }
   if(!rows.length) return toast('Nothing ticked to add');
-  if(await DB.run(sb.from('pantry').upsert(rows))){ if(review.inboxId) await markInbox(review.inboxId); toast(`Added to At Home: ${rows.map(r=>r.ingredient).join(', ')}`,4000); review=null; usualsPick.clear(); usualsOpen=false; }
+  // A receipt (photo or email) also updates what each item costs: per pound for weighed items,
+  // otherwise per package. The package size already on file is kept.
+  const priced=[];
+  if(review.source==='receipt') for(const r of review.rows){ const i=r.ingredient.trim().toLowerCase(), paid=parseFloat(String(r.price||'').replace(/[^0-9.]/g,''));
+    if(!r.on||!i||!(paid>0)||priced.some(x=>x.ingredient===i)) continue;
+    const old=S.prices[i]||{};
+    const price=r.lb?`$${(paid/r.lb).toFixed(2)} / lb`:`$${(paid/Math.max(1,r.count||1)).toFixed(2)}`;
+    priced.push({ingredient:i, price, item:old.item||r.product||r.line, size:old.size||(r.lb?'per lb':(r.size.label!=='1 package'?r.size.label:null)),
+      source:'Receipt', link:old.link||FAIRWAY(i), updated_by:me.user_id, updated_at:now}); }
+  if(priced.length){ const {error}=await sb.from('prices').upsert(priced); if(error) toast('Prices not saved: '+error.message); }
+  if(await DB.run(sb.from('pantry').upsert(rows))){ if(review.inboxId) await markInbox(review.inboxId); toast(`Added to At Home: ${rows.map(r=>r.ingredient).join(', ')}${priced.length?` · ${priced.length} price${priced.length>1?'s':''} updated`:''}`,5000); review=null; usualsPick.clear(); usualsOpen=false; }
   renderAll(); renderReview(); renderUsuals(); renderInbox();
 }
 document.addEventListener('change',e=>{
@@ -2366,10 +2378,14 @@ document.addEventListener('change',e=>{
   if(el.id==='receiptFile'&&el.files[0]){ scanReceipt(el.files[0]); el.value=''; return; }
   if(el.dataset.rv!==undefined&&review){ const r=review.rows[+el.dataset.rv], f=el.dataset.f;
     if(f==='on') r.on=el.checked; else if(f==='count') r.count=parseFloat(el.value)||0; else if(f==='where') r.where=el.value;
+    else if(f==='price'){ const v=parseFloat(el.value.replace(/[^0-9.]/g,'')); r.price=v>0?'$'+v.toFixed(2):''; }
     else if(f==='ingredient'){ r.ingredient=el.value.trim().toLowerCase(); r.on=!!r.ingredient; if(r.ingredient) r.where=storeOf(r.ingredient); }
     renderReview(); }
 });
 document.addEventListener('input',e=>{ if(e.target.id==='usualsSearch') renderUsuals(); });
+document.addEventListener('click',e=>{ if(!e.target.closest('[data-scanreceipt]')) return;
+  if(shopMode){ shopMode=false; renderShopMode(); }
+  document.querySelector('[data-p="pantry"]')?.click(); $('#receiptFile').click(); });
 document.addEventListener('click',e=>{
   const t=e.target.closest('#usualsToggle,#usualsClose,#usualsReview,#reviewSave,#reviewCancel,[data-usual],[data-inbox],[data-inboxskip]'); if(!t) return;
   if(t.dataset.inbox){ openInbox(+t.dataset.inbox); return; }
