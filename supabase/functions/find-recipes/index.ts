@@ -154,7 +154,18 @@ Deno.serve(async (req) => {
     // At Home names can be product names ("certified organic tahini", "red kidney beans"): count each
     // as the plain ingredient recipes use too, so nothing in the house is missed.
     // Only the main name (tuna steak → tuna, not steak too); dried things don't stand in for fresh ones.
-    const main1 = (x: string) => { const n = lineNames(x)[0]; return n && !(/\bdried\b/.test(x) && !/dried/.test(n)) ? n : null; };
+    // A processed form isn't the fresh thing (pickled carrots aren't carrots, sushi ginger isn't ginger):
+    // such a word only passes if the plain name has it too (rice vinegar, red curry paste).
+    const PROCESSED = /\b(pickled|pickle|dried|dehydrated|freeze dried|canned|tinned|jarred|powder|paste|flakes|jam|jelly|preserves|chutney|relish|sauce|salsa|seasoning|rub|flavored|flavour|bar|bars|chips|crisp|crisps|juice|syrup|extract|oil|vinegar|sushi|candied|crystallized|spread|butter|cookie|cookies|pie|drink|soda|tea|bites|mix|puree|purée|concentrate|zest)\b/g;
+    // Things that only ever come pickled/canned (pepperoncini, chickpeas) still count.
+    const OK_PROCESSED: Record<string, RegExp> = { pepperoncini: /pickled|pickle|jarred/, capers: /pickled|jarred/, olives: /pickled|jarred|canned/,
+      chickpeas: /canned|tinned/, "kidney beans": /canned|tinned/, "black beans": /canned|tinned/, "cannellini beans": /canned|tinned/, beans: /canned|tinned/,
+      lentils: /canned|tinned/, tuna: /canned|tinned/, "coconut milk": /canned|tinned/, chipotle: /canned|tinned/ };
+    const main1 = (x: string) => {
+      const ns = lineNames(x).filter((n) => n !== "steak" || lineNames(x).length === 1);
+      if (ns.length !== 1) return null;                 // "apple cinnamon oats": two foods named, so it's only itself
+      const n = ns[0], words = x.match(PROCESSED) || [];
+      return words.some((w) => !new RegExp("\\b" + w + "\\b").test(n) && !(OK_PROCESSED[n] && OK_PROCESSED[n].test(w))) ? null : n; };
     const plain = (x: string) => [main1(x) || x];
     const both = (xs: string[]) => [...new Set(xs.flatMap((x) => [x, main1(x) || x]))];
     const raw = (k: string) => (body[k] || []).map((s: string) => String(s).toLowerCase().trim()).filter(Boolean);
