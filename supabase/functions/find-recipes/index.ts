@@ -156,17 +156,18 @@ Deno.serve(async (req) => {
       if (!lines.length) return null;
       const ings = names(lines).filter((i) => !staples.has(i));
       const uses = ings.filter((i) => main.includes(i));
-      // Only recipes whose main ingredients are ALL at home (herbs, spices, staples are optional).
-      if (!uses.length || ings.some((i) => !have.includes(i))) return null;
+      // Recipes that use something from home and need at most 3 other things (staples don't count).
+      const need = ings.filter((i) => !have.includes(i));
+      if (!uses.length || need.length > 3 || uses.length < Math.min(2, main.length) && need.length > 1) return null;
       let image = recipe.image; if (Array.isArray(image)) image = image[0]; if (image && typeof image === "object") image = image.url || image.contentUrl;
       const host = new URL(url).hostname.replace(/^www\./, "");
       perSite[host] = (perSite[host] || 0) + 1;
       return { url, title: decode(recipe.name || meta(html, "og:title") || ""), image: image || meta(html, "og:image") || null,
         site: meta(html, "og:site_name") ? decode(meta(html, "og:site_name")) : host,
-        uses, fresh: uses.filter((i) => fresh.includes(i)), need: ings.filter((i) => !have.includes(i)) };
+        uses, fresh: uses.filter((i) => fresh.includes(i)), need };
     }))).filter(Boolean) as any[];
-    results.sort((a, b) => b.fresh.length - a.fresh.length || b.uses.length - a.uses.length);
-    return json({ results: results.slice(0, 20), searched: queries, candidates: cand.length, perSite });
+    results.sort((a, b) => a.need.length - b.need.length || b.fresh.length - a.fresh.length || b.uses.length - a.uses.length);
+    return json({ results: results.slice(0, 30), searched: queries, candidates: cand.length, perSite });
   } catch (e) {
     return json({ error: "Search failed: " + (e as Error).message }, 200);
   }
