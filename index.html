@@ -822,7 +822,12 @@ function canonOf(i){
   }
   return _canon.get(i);
 }
-function homeSet(items){ const out=new Set(); for(const i of items){ out.add(i); const c=canonOf(i); if(c) out.add(c); } return out; }
+// Pasta shapes swap freely: any pasta at home covers a recipe's linguine, penne, etc.
+const PASTA_SHAPES=["pasta","spaghetti","linguine","bucatini","fettuccine","angel hair","capellini","penne","rigatoni","fusilli","farfalle","orecchiette","ditalini","orzo","macaroni","elbow macaroni","short pasta","pappardelle","tagliatelle","ziti","shells","conchiglie","gemelli","campanelle","cavatappi","radiatori","paccheri","lasagna noodles","pastina"];
+const PASTA_RE=/\b(pasta|noodles?|spaghetti|linguine|penne|rigatoni|fusilli|orzo|ditalini|angel hair|capellini|macaroni|fettuccine|bucatini|farfalle|orecchiette|ziti|shells)\b/;
+function homeSet(items){ const out=new Set(); for(const i of items){ out.add(i); const c=canonOf(i); if(c) out.add(c); }
+  if([...out].some(x=>PASTA_SHAPES.includes(x)||PASTA_RE.test(x))) PASTA_SHAPES.forEach(x=>out.add(x));
+  return out; }
 function ingFrom(text){
   const t=' '+String(text).toLowerCase().replace(/[^a-z0-9 ]+/g,' ').replace(/\s+/g,' ')+' ';
   // Recipe ingredient names and the phrases above, longest first, so "almond butter" beats "butter".
@@ -2134,12 +2139,12 @@ async function findOnline(force){
   const {have,fresh,key}=useupInputs();
   if(!$('#useup').classList.contains('on')&&!force){ renderWeb(); return; }
   if(!have.length){ web=null; renderWeb(); return; }
-  if(webBusy||(!force&&web&&web.key===key&&web.v===6)){ renderWeb(); return; }   // v2: results include near-misses
+  if(webBusy||(!force&&web&&web.key===key&&web.v===7)){ renderWeb(); return; }   // v2: results include near-misses
   webBusy=true; renderWeb();
   const {data,error}=await sb.functions.invoke('find-recipes',{body:{focus:webFocus||undefined,offset:force?++webOffset:webOffset,have:[...homeSet(S.pantry.filter(p=>+p.q>0).map(p=>p.ingredient))],main:[...new Set(have.map(canonOf))],fresh:[...new Set(fresh.map(canonOf))],staples:[...STAPLES,...[...HERBS].filter(i=>!FRESH_HERBS.has(i))],exclude:S.recipes.map(r=>r.url)}});
   await finishWebProgress();
   webBusy=false;
-  web={v:6,key,at:Date.now(),results:data?.results||[],error:error?'The search didn\'t go through. Try again in a minute.':data?.error||null};
+  web={v:7,key,at:Date.now(),results:data?.results||[],error:error?'The search didn\'t go through. Try again in a minute.':data?.error||null};
   LS.set('web',web); renderWeb();
 }
 // While the web search runs: a bar that fills left to right with Parker's cat or Amy's dog walking

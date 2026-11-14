@@ -172,6 +172,8 @@ Deno.serve(async (req) => {
     const have: string[] = both(raw("have"));
     const main: string[] = [...new Set((body.main ? raw("main") : raw("have")).flatMap(plain))];
     const fresh: string[] = [...new Set(raw("fresh").flatMap(plain))].filter((s: string) => main.includes(s));
+    const PASTA = new Set<string>(["pasta","spaghetti","linguine","bucatini","fettuccine","angel hair","capellini","penne","rigatoni","fusilli","farfalle","orecchiette","ditalini","orzo","macaroni","elbow macaroni","short pasta","pappardelle","tagliatelle","ziti","shells","conchiglie","gemelli","campanelle","cavatappi","radiatori","paccheri","lasagna noodles","pastina"]);
+    const havePasta = have.some((h) => PASTA.has(h) || /\b(pasta|noodles?|spaghetti|linguine|penne|rigatoni|fusilli|orzo|ditalini|angel hair|capellini|macaroni|fettuccine|bucatini|farfalle|orecchiette|ziti|shells)\b/.test(h));
     const staples = new Set<string>((body.staples || []).map((s: string) => String(s).toLowerCase()));
     const skip = new Set<string>(body.exclude || []);
     if (!have.length) return json({ results: [], searched: [] });
@@ -217,7 +219,8 @@ Deno.serve(async (req) => {
       const ings = names(lines).filter((i) => !staples.has(i));
       const uses = ings.filter((i) => main.includes(i));
       // Recipes that use something from home and need at most 3 other things (staples don't count).
-      const need = ings.filter((i) => !have.includes(i));
+      // Pasta shapes swap freely: any pasta at home covers a recipe's linguine, penne, etc.
+      const need = ings.filter((i) => !have.includes(i) && !(PASTA.has(i) && havePasta));
       if (focus && !ings.includes(focus)) return null;
       if (!uses.length || need.length > 3 || !focus && uses.length < Math.min(2, main.length) && need.length > 1) return null;
       let image = recipe.image; if (Array.isArray(image)) image = image[0]; if (image && typeof image === "object") image = image.url || image.contentUrl;
