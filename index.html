@@ -336,6 +336,7 @@ body.shopping{overflow:hidden}
 .today{display:grid;grid-template-columns:1.2fr 1.4fr 1fr auto;gap:18px;align-items:center;background:var(--card);border:1px solid var(--line);border-radius:22px;padding:18px 20px;margin:18px 0 12px}
 .today .tdin,.today .tnext{display:flex;flex-direction:column;gap:3px}
 .today .tdin b{font:700 18px var(--display)}
+.today .tdin b.tdish .who{display:inline;font-size:12px;font-weight:700;margin-right:6px;color:var(--pc,var(--muted));vertical-align:2px}
 .today .okline{color:var(--green);font-size:13.5px}.today .needprice{font-size:13.5px}
 .trow{display:flex;gap:10px;align-items:baseline;padding:2px 0}.trow>b{min-width:52px;font-size:13.5px}
 .tchip{display:inline-block;font-size:13px;margin:0 8px 2px 0}
@@ -1104,7 +1105,9 @@ function mealsSummary(){
   const tonight=S.meals.find(m=>m.planned_for===TODAY&&isDin(m)&&!m.leftover_of)||S.meals.find(m=>m.planned_for===TODAY&&isDin(m));
   const buy=(()=>{try{const w=week;week=mondayOf(TODAY);const n=shopRows().filter(o=>o.buy>0).length;week=w;return n;}catch(e){return 0}})();
   const home=S.pantry.filter(p=>+p.q>0).length;
-  return [tonight?`Tonight: ${esc(dTitle(tonight))}${tonight.leftover_of?' (leftovers)':''}`:'Nothing planned for tonight', `${buy} to buy this week · ${home} items at home`].join('<br>');
+  const dins=S.meals.filter(m=>m.planned_for===TODAY&&m.meal==='dinner'), ids=new Set(dins.map(m=>String(m.id)));
+  const more=dins.filter(m=>m!==tonight&&!(m.leftover_of&&ids.has(String(m.leftover_of))&&m.recipe_id)).length;
+  return [tonight?`Tonight: ${esc(dTitle(tonight))}${tonight.leftover_of?' (leftovers)':''}${more?` + ${more} more`:''}`:'Nothing planned for tonight', `${buy} to buy this week · ${home} items at home`].join('<br>');
 }
 // ---- Schedule: the shared iCloud calendar (read through the calendar-feed function) ----
 let cal=null, calBusy=false;
@@ -1187,13 +1190,23 @@ document.addEventListener('click',async e=>{ const t=e.target.closest('#tvReload
   t.disabled=true; toast('Sending to the TV…'); const r=await tvSend(t.dataset.tv); t.disabled=false; toast(r||'No answer from the bridge. Is the PC on?',5000); tvStatus(); });
 function renderToday(){
   const el=$('#todayCard'); if(!el) return;
-  const tonight=S.meals.find(m=>m.planned_for===TODAY&&isDin(m));
+  // Every dinner item tonight: the household dinner, each person's own, and photo-logged ones.
+  // A recipe both of us share is one entry (its partner row points back at it), so show it once.
+  const dins=S.meals.filter(m=>m.planned_for===TODAY&&(m.meal==='dinner'||(isScan(m)&&m.slot==='dinner')));
+  const ids=new Set(dins.map(m=>String(m.id)));
+  const tonightAll=dins.filter(m=>!(m.leftover_of&&ids.has(String(m.leftover_of))&&m.recipe_id))
+    .sort((a,b)=>(a.person?1:0)-(b.person?1:0)||PEOPLE.indexOf(a.person)-PEOPLE.indexOf(b.person)||a.id-b.id);
+  const tonight=tonightAll.find(isDin)||tonightAll[0];
+  const both=m=>!m.person||dins.some(x=>String(x.leftover_of)===String(m.id)&&x.person!==m.person);
+  const ttl=m=>isScan(m)?(m.note||'Photo'):m.person?(rec(m.recipe_id)?.title||(isScr(m)||isOutDin(m)?dTitle(m):m.note)||''):dTitle(m);
+  const icon=m=>m.leftover_of&&!ids.has(String(m.leftover_of))?'🍱 ':isScr(m)?'🫙 ':isOutDin(m)?'🍽️ ':isScan(m)?'📷 ':'';
   let missing=[]; try{ const w=week; week=mondayOf(TODAY); missing=shopRows().filter(o=>o.buy>0&&o.uses.some(m=>m.planned_for===TODAY)).map(o=>o.i); week=w; }catch(e){}
   const line=p=>{ const ms=personMeals(p,TODAY).filter(m=>m.when!=='Dinner');
     return `<div class="trow" data-who="${p}"><b class="who">${p}</b><span>${ms.length?ms.map(m=>`<span class="tchip">${m.when==='Snackies'?'🍪':m.when==='Breakfast'?'☀️':'🥪'} ${esc(m.scan||m.out?(m.note||'out'):m.r?.title||'')}</span>`).join(''):'<span class="meta">nothing logged yet</span>'}</span></div>`; };
   el.innerHTML=`<div class="today">
-    <div class="tdin"><span class="meta">Tonight</span>${tonight?`<b>${tonight.leftover_of?'🍱 ':isScr(tonight)?'🫙 ':isOutDin(tonight)?'🍽️ ':''}${esc(dTitle(tonight))}</b>
-        <span class="${missing.length&&rec(tonight.recipe_id)?'needprice':'okline'}">${isOutDin(tonight)?(isRest(tonight)?`<a href="${mapsUrl(restName(tonight))}" target="_blank" rel="noopener">Eating out · map</a>`:'Eating out'):isScr(tonight)?'Whatever’s at home':tonight.leftover_of?'Leftovers, nothing to buy':missing.length?`Still need ${missing.slice(0,4).map(esc).join(', ')}${missing.length>4?'…':''}`:'Everything is at home ✓'}</span>`
+    <div class="tdin"><span class="meta">Tonight</span>${tonight?`${tonightAll.map(m=>`<b class="tdish">${both(m)?'':`<span class="who" data-who="${m.person}">${m.person}</span>`}${icon(m)}${esc(ttl(m))}</b>`).join('')}
+        <span class="${missing.length&&rec(tonight.recipe_id)?'needprice':'okline'}">${isOutDin(tonight)?(isRest(tonight)?`<a href="${mapsUrl(restName(tonight))}" target="_blank" rel="noopener">Eating out · map</a>`:'Eating out'):isScr(tonight)?'Whatever’s at home':tonight.leftover_of?'Leftovers, nothing to buy':missing.length?`Still need ${missing.slice(0,4).map(esc).join(', ')}${missing.length>4?'…':''}`:'Everything is at home ✓'}</span>
+        <button class="btn small" data-add="${TODAY}||dinner" type="button" style="margin-top:6px">＋ Add to dinner</button>`
       :`<b>Nothing planned</b><button class="btn small" data-add="${TODAY}||dinner" type="button">＋ Add dinner</button>`}</div>
     <div class="tmeals">${PEOPLE.map(line).join('')}</div>
     <div class="tnext"><span class="meta">Next up</span><span>${schedSummary().replace(/^Next: /,'')}</span></div>
