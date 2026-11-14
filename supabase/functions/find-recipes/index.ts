@@ -141,20 +141,24 @@ Deno.serve(async (req) => {
       qs.push(focus);
       for (const x of lead.filter((h) => h !== focus).slice(0, 6)) qs.push(`${focus} ${x}`);
     } else {
+      // Every item at home gets its own search, plus a few fridge pairs.
       if (lead.length >= 2) qs.push(`${lead[0]} ${lead[1]}`);
-      if (lead.length >= 3) qs.push(`${lead[0]} ${lead[2]}`);
-      for (const x of lead.slice(0, 10)) qs.push(x);
+      if (lead.length >= 3) qs.push(`${lead[0]} ${lead[2]}`, `${lead[1]} ${lead[2]}`);
+      for (const x of lead) qs.push(x);
     }
-    const queries = [...new Set(qs)].slice(0, 12);
+    const queries = [...new Set(qs)].slice(0, 36);
 
-    const pages = await Promise.all(queries.flatMap((q) => SITES.map(async (s) => ({ s, html: await get(s.search(q)) }))));
+    // Fetch in small batches so dozens of searches don't overwhelm the site or this function.
+    const inBatches = async <T, R>(xs: T[], n: number, f: (x: T) => Promise<R>) => { const out: R[] = []; for (let i = 0; i < xs.length; i += n) out.push(...await Promise.all(xs.slice(i, i + n).map(f))); return out; };
+    const pages = await inBatches(queries.flatMap((q) => SITES.map((s) => ({ s, q }))), 12, async ({ s, q }) => ({ s, html: await get(s.search(q)) }));
     const cand: string[] = [], seen = new Set<string>(), perSite: Record<string, number> = {};
     // Interleave sites so one site doesn't crowd out the others.
     const lists = pages.map(({ s, html }) => [...html.matchAll(s.link)].map((m) => ((s as any).base || "") + m[1].replace(/\/$/, "")));
+    // Round-robin: every search contributes its best few before any contributes more.
     for (let k = 0; k < 15; k++) for (const l of lists) { const u = l[k]; if (u && !seen.has(u) && !skip.has(u)) { seen.add(u); cand.push(u); } }
-    const pick = cand.slice(0, 60);
+    const pick = cand.slice(0, Math.max(60, Math.min(100, queries.length * 3)));
 
-    const results = (await Promise.all(pick.map(async (url) => {
+    const results = (await inBatches(pick, 15, async (url: string) => {
       const html = await get(url, 8000); if (!html) return null;
       let recipe: any = null;
       for (const m of html.matchAll(/<script[^>]*application\/ld\+json[^>]*>([\s\S]*?)<\/script>/gi)) {
@@ -175,9 +179,10 @@ Deno.serve(async (req) => {
       return { url, title: decode(recipe.name || meta(html, "og:title") || ""), image: image || meta(html, "og:image") || null,
         site: meta(html, "og:site_name") ? decode(meta(html, "og:site_name")) : host,
         uses, fresh: uses.filter((i) => fresh.includes(i)), need };
-    }))).filter(Boolean) as any[];
-    results.sort((a, b) => a.need.length - b.need.length || b.fresh.length - a.fresh.length || b.uses.length - a.uses.length);
-    return json({ results: results.slice(0, 30), searched: queries, candidates: cand.length, perSite });
+    })).filter(Boolean) as any[];
+    // Best first: needs the fewest extra things, then uses the most from home (fridge items count extra).
+    results.sort((a, b) => a.need.length - b.need.length || (b.uses.length + b.fresh.length) - (a.uses.length + a.fresh.length));
+    return json({ results: results.slice(0, 40), searched: queries, candidates: cand.length, perSite });
   } catch (e) {
     return json({ error: "Search failed: " + (e as Error).message }, 200);
   }
