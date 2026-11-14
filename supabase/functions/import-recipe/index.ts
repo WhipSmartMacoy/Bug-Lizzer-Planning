@@ -48,7 +48,7 @@ const KW: [string, string][] = ([
   ["chile crisp","chile crisp"],["chili crisp","chile crisp"],["red pepper flakes","red pepper flakes"],["chile flakes","red pepper flakes"],["chile","fresh chiles"],["chili","fresh chiles"],
   ["lemon","lemons"],["lime","limes"],["orange","oranges"],["apple","apples"],["melon","melon"],["cantaloupe","melon"],["peach","peaches"],["berr","berries"],["banana","bananas"],
   ["basil","basil"],["parsley","parsley"],["cilantro","cilantro"],["dill","dill"],["mint","mint"],["thyme","thyme"],["oregano","oregano"],["rosemary","rosemary"],
-  ["chive","chives"],["tarragon","tarragon"],["sage","sage"],["bay lea","bay leaves"],
+  ["dried oregano","dried oregano"],["dried thyme","dried thyme"],["dried basil","dried basil"],["dried rosemary","dried rosemary"],["dried dill","dried dill"],["dried bay","dried bay leaves"],["italian seasoning","italian seasoning"],["chive","chives"],["tarragon","tarragon"],["sage","sage"],["bay lea","bay leaves"],
   ["capers","capers"],["olive oil","olive oil"],["olive","olives"],["toasted sesame oil","sesame oil"],["sesame oil","sesame oil"],["vegetable oil","neutral oil"],
   ["canola oil","neutral oil"],["neutral oil","neutral oil"],["peanut oil","neutral oil"],["soy sauce","soy sauce"],["tamari","soy sauce"],["fish sauce","fish sauce"],
   ["oyster sauce","oyster sauce"],["hoisin","hoisin"],["miso","miso"],["gochujang","gochujang"],["sriracha","sriracha"],["hot sauce","hot sauce"],

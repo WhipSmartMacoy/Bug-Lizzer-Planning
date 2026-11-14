@@ -625,12 +625,14 @@ html[data-theme="dark"] input, html[data-theme="dark"] select, html[data-theme="
 const CFG = window.BLP_CONFIG || {};
 const ONLINE = !!(CFG.url && CFG.key && window.supabase);
 const sb = ONLINE ? window.supabase.createClient(CFG.url, CFG.key) : null;
-const STAPLES = new Set(["water","salt","pepper","black pepper","rice","vegetable oil","canola oil","chili powder","smoked paprika","garam masala","curry powder","cardamom","cloves","allspice","fennel seeds","mustard seeds","red pepper","olive oil","garlic","butter","sugar","brown sugar","flour","neutral oil","soy sauce","red pepper flakes","cumin","paprika","cayenne","oregano","turmeric","cinnamon","nutmeg","honey","mustard","rice vinegar","sesame oil","baking soda","baking powder","vanilla","coriander","cornstarch","bay leaves"]);
+const STAPLES = new Set(["water","salt","pepper","black pepper","rice","vegetable oil","canola oil","chili powder","smoked paprika","garam masala","curry powder","cardamom","cloves","allspice","fennel seeds","mustard seeds","red pepper","olive oil","garlic","butter","sugar","brown sugar","flour","neutral oil","soy sauce","red pepper flakes","cumin","paprika","cayenne","dried oregano","turmeric","cinnamon","nutmeg","honey","mustard","rice vinegar","sesame oil","baking soda","baking powder","vanilla","coriander","cornstarch","dried bay leaves","dried thyme","dried basil","dried rosemary","dried dill","italian seasoning"]);
 // Herbs and spices: optional for "Make it now" (pick them up or leave them out).
 const HERBS = new Set(["basil","parsley","cilantro","dill","mint","thyme","rosemary","sage","chives","tarragon","oregano","bay leaves","marjoram","lemongrass",
   "cumin","paprika","smoked paprika","cayenne","cinnamon","nutmeg","coriander","turmeric","garam masala","curry powder","chili powder","cardamom","cloves","allspice",
   "fennel seeds","mustard seeds","red pepper flakes","sesame seeds","star anise","saffron","za'atar","sumac","five-spice","vanilla","fresh chiles","jalapeño","serrano peppers"]);
-const optional = i => STAPLES.has(i)||HERBS.has(i);
+// Fresh herbs and chiles are real groceries; only staples and dried spices are assumed to be at home.
+const FRESH_HERBS = new Set(["basil","parsley","cilantro","dill","mint","thyme","rosemary","sage","chives","tarragon","oregano","bay leaves","marjoram","lemongrass","fresh chiles","jalapeño","serrano peppers"]);
+const optional = i => STAPLES.has(i)||(HERBS.has(i)&&!FRESH_HERBS.has(i));
 const COLORS = ["#3f6b4a","#b9772b","#5a6fa8","#a6463a","#7a5c99","#2f7f86","#8a6d3b"];
 const FAIRWAY = q => 'https://shop.fairwaymarket.com/store/fairway/s?k='+encodeURIComponent(q);
 const LS = { get:(k,d)=>{try{return JSON.parse(localStorage.getItem('blp.'+k))??d}catch(e){return d}}, set:(k,v)=>{try{localStorage.setItem('blp.'+k,JSON.stringify(v))}catch(e){}} };
@@ -1986,7 +1988,7 @@ async function findOnline(force){
   if(!have.length){ web=null; renderWeb(); return; }
   if(webBusy||(!force&&web&&web.key===key)){ renderWeb(); return; }
   webBusy=true; renderWeb();
-  const {data,error}=await sb.functions.invoke('find-recipes',{body:{have:S.pantry.filter(p=>+p.q>0).map(p=>p.ingredient),main:have,fresh,staples:[...STAPLES,...HERBS],exclude:S.recipes.map(r=>r.url)}});
+  const {data,error}=await sb.functions.invoke('find-recipes',{body:{have:S.pantry.filter(p=>+p.q>0).map(p=>p.ingredient),main:have,fresh,staples:[...STAPLES,...[...HERBS].filter(i=>!FRESH_HERBS.has(i))],exclude:S.recipes.map(r=>r.url)}});
   webBusy=false;
   web={key,at:Date.now(),results:data?.results||[],error:error?'The search didn\'t go through. Try again in a minute.':data?.error||null};
   LS.set('web',web); renderWeb();
