@@ -2150,6 +2150,7 @@ function renderPantry(){
   const item=p=>{const loc=storeOf(p.ingredient), open=editingPantry===p.ingredient;
     return `<div class="hitem ${open?'open':''}"><button type="button" class="hrow" data-hopen="${esc(p.ingredient)}"><b>${esc(cap(p.ingredient))}</b><span class="amt">${amtOf(p)}</span><span class="chev">›</span></button>${open?`<div class="hmore">
       <form class="row" data-panedit="${esc(p.ingredient)}"><input name="q" type="number" step="any" min="0" value="${(()=>{const L=p.unit_label&&UNITS[p.unit_label]; return round(L&&L[0]===p.u?+p.q/L[1]:+p.q,100);})()}" aria-label="Amount"><select name="u">${Object.keys(UNITS).map(u=>`<option ${(p.unit_label&&UNITS[p.unit_label]?.[0]===p.u)?(u===p.unit_label?'selected':''):(UNITS[u][0]===p.u&&UNITS[u][1]===1?'selected':'')}>${u}</option>`).join('')}</select><button class="btn small primary">Save</button></form>
+      <form class="row" data-panrename="${esc(p.ingredient)}"><input name="n" type="text" list="ingList" value="${esc(p.ingredient)}" aria-label="Name" style="flex:1 1 140px"><button class="btn small">Rename</button></form>
       <div class="row"><select data-moveto="${esc(p.ingredient)}" aria-label="Kept in">${LOCS.map(l=>`<option value="${l}" ${l===loc?'selected':''}>${STORE_ICON[l]} ${cap(l)}</option>`).join('')}</select><button type="button" class="btn small" data-panzero="${esc(p.ingredient)}">Used up</button></div>
       <span class="meta">Updated ${p.updated_by?'by '+esc(nameOf(p.updated_by))+' ':''}${ago(p.updated_at)}</span></div>`:''}</div>`;};
   const group=(loc,rows)=>{const main=rows.filter(p=>!optional(p.ingredient)), basics=rows.filter(p=>optional(p.ingredient));
@@ -2241,6 +2242,22 @@ document.addEventListener('submit',async e=>{
     const i=$('#panIng').value.trim().toLowerCase(), [u,mult]=UNITS[$('#panU').value]; const q=parseFloat($('#panQ').value)*mult;
     if(!i||isNaN(q)) return; const pk=pkgOf(i); const D=pk.u==='pkg'&&u!=='pkg'?u:pk.u; const v=u==='pkg'?conv(q,'pkg',D,i,pk)??q:conv(q,u,D,i,pk);
     await DB.setPantry(i,v,D,$('#panLoc').value||null); f.reset(); toast('At Home updated'); renderAll(); return;
+  }
+  if(f.dataset.panrename!==undefined){
+    const from=f.dataset.panrename, to=f.n.value.trim().toLowerCase().replace(/\s+/g,' ');
+    if(!to||to===from) return;
+    const p=pantryOf(from), into=pantryOf(to); if(!p) return;
+    let q=+p.q, u=p.u;
+    if(into){ // already have something by that name: add them together when the units allow
+      const v=conv(+p.q,p.u,into.u,to,pkgOf(to)); if(v==null&&into.u!==p.u&&+into.q>0) return toast(`Already have ${to} measured differently. Change one amount first.`,4000);
+      q=+into.q+(v??+p.q); u=into.u; }
+    const now=new Date().toISOString();
+    const {error}=await sb.from('pantry').upsert({ingredient:to,q,u,location:into?into.location:p.location,unit_label:into?into.unit_label:p.unit_label,updated_by:me.user_id,updated_at:now});
+    if(error) return toast('Could not rename: '+error.message);
+    await sb.from('pantry').delete().eq('ingredient',from);
+    // bring its price along if the new name doesn't have one yet
+    const pr=S.prices[from]; if(pr&&!S.prices[to]){ const {ingredient,...rest}=pr; await sb.from('prices').upsert({...rest,ingredient:to}); }
+    editingPantry=to; await DB.load(); renderAll(); toast(`Renamed ${from} → ${to}${into?' (added to what was there)':''}`); return;
   }
   if(f.dataset.panedit!==undefined){
     const i=f.dataset.panedit, [u,mult]=UNITS[f.u.value]; const q=parseFloat(f.q.value)*mult; const p=pantryOf(i);
