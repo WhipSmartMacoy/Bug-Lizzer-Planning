@@ -504,7 +504,6 @@ html[data-theme="dark"] input, html[data-theme="dark"] select, html[data-theme="
     <div class="row">
       <button class="btn primary" id="shopModeBtn" type="button">🛒 Shopping mode</button>
       <button class="btn primary" id="shareList">Share this list</button>
-      <label class="meta"><input type="checkbox" id="hideStaples" checked> Hide pantry staples</label>
     </div>
     <div id="shopList"></div>
   </section>
@@ -851,12 +850,28 @@ function shopPlan(){
   }
   return Object.values(out);
 }
+// Staples (salt, butter, garlic…) are assumed to be at home, so they sit in a "Check you have these"
+// section until someone taps Need to buy; then they're on the list like anything else.
+const stapleNeed=()=>new Set((S.stapleNeed||{})[week]||[]);
+function shopRows(){
+  const got=new Set(S.have.filter(h=>h.week_start===week).map(h=>h.ingredient)), need=stapleNeed();
+  return shopPlan().map(o=>{ if(!STAPLES.has(o.i)) return o;
+    const needed=need.has(o.i); return {...o, staple:true, needed, buy: needed&&!got.has(o.i)?Math.max(1,o.buy):0}; });
+}
+async function setStapleNeed(i,on){
+  const all={...(S.stapleNeed||{})}, cur=new Set(all[week]||[]); on?cur.add(i):cur.delete(i); all[week]=[...cur];
+  for(const k of Object.keys(all)) if(k<addDays(mondayOf(TODAY),-14)) delete all[k];   // keep it small
+  S.stapleNeed=all;
+  const {error}=await sb.from('app_settings').upsert({key:'staples_need',value:JSON.stringify(all),updated_at:new Date().toISOString()});
+  if(error) toast('Could not save: '+error.message);
+  renderAll();
+}
 
 
 // ---------------- data ----------------
 const DB = {
   async load(){
-    const [r,p,m,h,mem,act,pan,us,ppl,inb]=await Promise.all([
+    const [r,p,m,h,mem,act,pan,us,ppl,inb,sn]=await Promise.all([
       sb.from('recipes').select('*').order('added_at',{ascending:false}),
       sb.from('prices').select('*'),
       sb.from('meal_plan').select('*').order('planned_for').order('added_at'),
@@ -866,10 +881,11 @@ const DB = {
       sb.from('pantry').select('*').order('ingredient'),
       sb.from('fairway_usuals').select('*').order('rank'),
       sb.from('people').select('*'),
-      sb.from('receipt_inbox').select('id,received_at,sender,subject,body').is('handled_at',null).order('received_at',{ascending:false}).limit(10)
+      sb.from('receipt_inbox').select('id,received_at,sender,subject,body').is('handled_at',null).order('received_at',{ascending:false}).limit(10),
+      sb.from('app_settings').select('value').eq('key','staples_need').maybeSingle()
     ]);
     for(const x of [r,p,m,h,mem,act,pan]) if(x.error) console.warn(x.error.message);
-    S.pantry=pan.data||[]; S.usuals=us.error?[]:(us.data||[]); S.people=ppl.error?[]:(ppl.data||[]); S.inbox=inb.error?[]:(inb.data||[]);
+    S.pantry=pan.data||[]; S.usuals=us.error?[]:(us.data||[]); S.people=ppl.error?[]:(ppl.data||[]); S.inbox=inb.error?[]:(inb.data||[]); try{ S.stapleNeed=sn.data?.value?JSON.parse(sn.data.value):{}; }catch(e){ S.stapleNeed={}; }
     S.recipes=r.data||[]; S.prices=Object.fromEntries((p.data||[]).map(x=>[x.ingredient,x]));
     S.meals=m.data||[]; S.have=h.data||[]; S.members=mem.data||[]; S.activity=act.data||[];
     byId=Object.fromEntries(S.recipes.map(x=>[String(x.id),x]));
@@ -1083,7 +1099,7 @@ const AREAS=[
 let area='launch', sub=null;
 function mealsSummary(){
   const tonight=S.meals.find(m=>m.planned_for===TODAY&&isDin(m)&&!m.leftover_of)||S.meals.find(m=>m.planned_for===TODAY&&isDin(m));
-  const buy=(()=>{try{const w=week;week=mondayOf(TODAY);const n=shopPlan().filter(o=>o.buy>0&&!STAPLES.has(o.i)).length;week=w;return n;}catch(e){return 0}})();
+  const buy=(()=>{try{const w=week;week=mondayOf(TODAY);const n=shopRows().filter(o=>o.buy>0).length;week=w;return n;}catch(e){return 0}})();
   const home=S.pantry.filter(p=>+p.q>0).length;
   return [tonight?`Tonight: ${esc(dTitle(tonight))}${tonight.leftover_of?' (leftovers)':''}`:'Nothing planned for tonight', `${buy} to buy this week · ${home} items at home`].join('<br>');
 }
@@ -1169,7 +1185,7 @@ document.addEventListener('click',async e=>{ const t=e.target.closest('#tvReload
 function renderToday(){
   const el=$('#todayCard'); if(!el) return;
   const tonight=S.meals.find(m=>m.planned_for===TODAY&&isDin(m));
-  let missing=[]; try{ const w=week; week=mondayOf(TODAY); missing=shopPlan().filter(o=>o.buy>0&&!STAPLES.has(o.i)&&o.uses.some(m=>m.planned_for===TODAY)).map(o=>o.i); week=w; }catch(e){}
+  let missing=[]; try{ const w=week; week=mondayOf(TODAY); missing=shopRows().filter(o=>o.buy>0&&o.uses.some(m=>m.planned_for===TODAY)).map(o=>o.i); week=w; }catch(e){}
   const line=p=>{ const ms=personMeals(p,TODAY).filter(m=>m.when!=='Dinner');
     return `<div class="trow" data-who="${p}"><b class="who">${p}</b><span>${ms.length?ms.map(m=>`<span class="tchip">${m.when==='Snackies'?'🍪':m.when==='Breakfast'?'☀️':'🥪'} ${esc(m.scan||m.out?(m.note||'out'):m.r?.title||'')}</span>`).join(''):'<span class="meta">nothing logged yet</span>'}</span></div>`; };
   el.innerHTML=`<div class="today">
@@ -1819,9 +1835,10 @@ function renderShopMode(){
   let el=$('#shopModeEl'); if(!shopMode){ el?.remove(); document.body.classList.remove('shopping'); return; }
   if(!el){ el=document.createElement('div'); el.id='shopModeEl'; document.body.appendChild(el); }
   document.body.classList.add('shopping');
-  const rows=shopPlan().filter(o=>!STAPLES.has(o.i)); window._shop=Object.fromEntries(rows.map(o=>[o.i,o]));
+  const all=shopRows(); window._shop=Object.fromEntries(all.map(o=>[o.i,o]));
   const got=new Set(S.have.filter(h=>h.week_start===week).map(h=>h.ingredient));
-  const items=rows.filter(o=>o.buy>0||got.has(o.i));
+  const items=all.filter(o=>(!o.staple||o.needed)&&(o.buy>0||got.has(o.i)));
+  const check=all.filter(o=>o.staple&&!o.needed&&!got.has(o.i)).sort((a,b)=>a.i.localeCompare(b.i));
   const left=items.filter(o=>o.buy>0).length;
   // Estimated cost: packages to buy × the Fairway price. Checked items keep what they were going to cost.
   const cost=o=>{ const n=o.buy>0?o.buy:(o.need?Math.max(1,Math.ceil(o.need/(o.pk.q||1))):1); return o.pk.price!=null?n*o.pk.price:null; };
@@ -1834,8 +1851,13 @@ function renderShopMode(){
       return `<h3>${ic} ${name}${sub?` <span class="meta" style="float:right;font-weight:500">≈ $${sub.toFixed(2)}</span>`:''}</h3>${xs.map(o=>{ const done=o.buy<=0, c=cost(o);
         return `<label class="sitem ${done?'done':''}"><input type="checkbox" ${done?'checked':''} data-shopcheck="${esc(o.i)}"><span><b>${esc(cap(o.i))}</b><span class="meta">${done?'in the cart':`${o.pk.u==='each'&&o.pk.label==='1'?o.buy:`${o.buy} × ${esc(o.pk.label)}`}`}</span></span><span class="sprice ${c==null?'none':''}">${c==null?'no price yet':'$'+c.toFixed(2)}</span></label>`; }).join('')}`; }).join('')
       :'<p class="meta" style="padding:20px">Nothing to buy this week.</p>'}
+    ${check.length?`<h3>🧂 Check you have these</h3><p class="meta" style="padding:0 16px">Staples this week's recipes use. Tap one you're out of to add it to the list.</p>
+      <div class="chips" style="padding:4px 16px 8px">${check.map(o=>`<span class="chip" data-stapleneed="${esc(o.i)}" title="${esc(o.uses.map(m=>rec(m.recipe_id).title).join(', '))}">＋ ${esc(cap(o.i))}</span>`).join('')}</div>`:''}
     <p class="meta" style="padding:0 16px 24px">Checking an item adds it to At Home.</p>`;
 }
+document.addEventListener('click',e=>{
+  const sn=e.target.closest('[data-stapleneed]'); if(sn){ e.preventDefault(); setStapleNeed(sn.dataset.stapleneed,true); return; }
+  const sh=e.target.closest('[data-staplehave]'); if(sh){ e.preventDefault(); setStapleNeed(sh.dataset.staplehave,false); return; } });
 document.addEventListener('click',e=>{ if(e.target.id==='shopModeBtn'){ shopMode=true; renderShopMode(); } if(e.target.id==='shopModeX'){ shopMode=false; renderShopMode(); } });
 document.addEventListener('change',async e=>{ const i=e.target.dataset?.shopcheck; if(i===undefined) return;
   const o=window._shop?.[i], pk=pkgOf(i);
@@ -1845,15 +1867,15 @@ document.addEventListener('change',async e=>{ const i=e.target.dataset?.shopchec
 function renderShop(){
   if(shopMode) renderShopMode();
   if(!S.recipes.length){ $('#shopList').innerHTML='<div class="empty">The recipe box is empty. Add a recipe by pasting its link under <b>Recipe box</b>, then put it on a day.</div>'; return; }
-  const hideSt=$('#hideStaples').checked;
-  const rows=shopPlan().filter(o=>!(hideSt&&STAPLES.has(o.i)));
-  if(!rows.length){ $('#shopList').innerHTML='<div class="empty">Put recipes on days above and this week\'s shopping list fills in here.</div>'; return; }
+  const all=shopRows(), rows=all.filter(o=>!o.staple||o.needed);
+  const check=all.filter(o=>o.staple&&!o.needed).sort((a,b)=>a.i.localeCompare(b.i));
+  if(!all.length){ $('#shopList').innerHTML='<div class="empty">Put recipes on days above and this week\'s shopping list fills in here.</div>'; return; }
   const boughtRec=i=>S.have.find(h=>h.week_start===week&&h.ingredient===i);
   let total=0, unpriced=0; const toBuy=rows.filter(o=>o.buy>0);
   for(const o of toBuy){ if(o.pk.price==null) unpriced++; else total+=o.buy*o.pk.price; }
   const byDay={}; for(const o of rows) (byDay[o.first]=byDay[o.first]||[]).push(o);
-  window._shop=Object.fromEntries(rows.map(o=>[o.i,o]));
-  $('#shopList').innerHTML=`<div class="meta" style="margin-bottom:6px"><b>${toBuy.length}</b> to buy · ${rows.length-toBuy.length} already in the fridge, freezer or pantry${hideSt?' · staples hidden':''} · about <b>$${total.toFixed(2)}</b>${unpriced?` + ${unpriced} without a price`:''}</div>`+
+  window._shop=Object.fromEntries(all.map(o=>[o.i,o]));
+  $('#shopList').innerHTML=`<div class="meta" style="margin-bottom:6px"><b>${toBuy.length}</b> to buy · ${rows.length-toBuy.length} already in the fridge, freezer or pantry${check.length?` · ${check.length} staples to check`:''} · about <b>$${total.toFixed(2)}</b>${unpriced?` + ${unpriced} without a price`:''}</div>`+
     Object.keys(byDay).sort().map(d=>`<div class="needby">Needed by ${dayName(d,'long')} ${shortDate(d)}${d<TODAY?' (past)':''}</div>
     <table><tr><th>Ingredient</th><th>For</th><th>Need</th><th>At home</th><th>Buy</th><th>Price</th></tr>${byDay[d].sort((a,b)=>b.buy-a.buy||a.i.localeCompare(b.i)).map(o=>{
       const br=boughtRec(o.i), price=o.pk.price;
@@ -1861,11 +1883,16 @@ function renderShop(){
         ? `<b>${o.pk.u==='each'&&o.pk.label==='1'?o.buy:`${o.buy} × ${esc(o.pk.label)}`}</b>${price!=null?`<div class="meta">$${(o.buy*price).toFixed(2)}</div>`:''}<button class="btn small" data-bought="${esc(o.i)}" style="margin-top:4px">Got it ✓</button>`
         : `<span style="color:var(--green)">${STORE_ICON[storeOf(o.i)]} In ${STORE_LABEL[storeOf(o.i)]}</span>${br?`<div class="meta">bought by ${esc(nameOf(br.marked_by))} · <a href="#" data-unbuy="${esc(o.i)}">undo</a></div>`:''}`;
       return `<tr class="${o.buy>0?'':'have'}">
-      <td><span class="${o.buy>0?'':'name'}">${esc(cap(o.i))}</span>${o.uses.length>1?` <span class="tag cooked">${o.uses.length} meals</span>`:''}</td>
+      <td><span class="${o.buy>0?'':'name'}">${esc(cap(o.i))}</span>${o.uses.length>1?` <span class="tag cooked">${o.uses.length} meals</span>`:''}${o.staple&&o.buy>0?`<div class="meta">staple · <a href="#" data-staplehave="${esc(o.i)}">we have it</a></div>`:''}</td>
       <td class="meta">${o.uses.map(m=>`${dayName(m.planned_for)} · ${esc(rec(m.recipe_id).title)}`).join('<br>')}</td>
       <td>${o.unknown&&!o.need?'<span class="meta">some</span>':esc(fmtAmt(o.need,o.D))}${o.unknown&&o.need?' <span class="meta">+ some</span>':''}</td>
       <td>${o.have>0?`${esc(fmtAmt(o.have,o.D))}<div class="meta">${STORE_ICON[storeOf(o.i)]} in ${STORE_LABEL[storeOf(o.i)]}</div>`:'0'}${o.left>0?`<div class="meta">${esc(fmtAmt(o.left,o.D))} left after</div>`:''}</td>
-      <td>${buyCell}</td><td>${priceCell(o.i)}</td></tr>`}).join('')}</table>`).join('');
+      <td>${buyCell}</td><td>${priceCell(o.i)}</td></tr>`}).join('')}</table>`).join('')+
+    (check.length?`<div class="needby">🧂 Check you have these</div><p class="meta" style="margin:2px 0 6px">Staples this week's recipes use. Out of one? Tap <b>Need to buy</b> and it joins the list.</p>
+    <table><tr><th>Staple</th><th>For</th><th>Need</th><th></th></tr>${check.map(o=>`<tr class="have"><td>${esc(cap(o.i))}</td>
+      <td class="meta">${o.uses.map(m=>`${dayName(m.planned_for)} · ${esc(rec(m.recipe_id).title)}`).join('<br>')}</td>
+      <td>${o.unknown&&!o.need?'<span class="meta">some</span>':esc(fmtAmt(o.need,o.D))}</td>
+      <td><button class="btn small" data-stapleneed="${esc(o.i)}" type="button">Need to buy</button></td></tr>`).join('')}</table>`:'');
 }
 function renderImport(){
   const el=$('#importPreview');
@@ -2107,8 +2134,8 @@ function publishStation(){
     const days=[0,1,2,3,4,5,6].map(i=>addDays(week,i));
     const dinners=days.map(d=>{ const m=S.meals.find(x=>x.planned_for===d&&isDin(x));
       return {d, day:dayName(d), what:m?dTitle(m):null, kind:m?(m.leftover_of?'leftovers':isScr(m)?'scrunge':isOutDin(m)?'out':'cook'):null, cooked:!!(m&&m.cooked_at)}; });
-    const plan=shopPlan(); week=w;
-    const buy=plan.filter(o=>o.buy>0&&!STAPLES.has(o.i)).map(o=>({i:o.i, aisle:aisleOf(o.i)[1], tonight:o.uses.some(m=>m.planned_for===TODAY)}));
+    const plan=shopRows(); week=w;
+    const buy=plan.filter(o=>o.buy>0).map(o=>({i:o.i, aisle:aisleOf(o.i)[1], tonight:o.uses.some(m=>m.planned_for===TODAY)}));
     const left=leftoverMeals(addDays(TODAY,1),1).map(m=>({id:m.id, what:rec(m.recipe_id).title, servings:leftoversOf(m), from:dayName(m.planned_for)}));
     const snap={dinners, buy, left, home:S.pantry.filter(p=>+p.q>0).length};
     const val=JSON.stringify(snap); if(val===stationLast) return; stationLast=val;
@@ -2244,7 +2271,6 @@ document.addEventListener('change',async e=>{
     if(m&&isDin(m)&&!m.recipe_id) for(const k of S.meals.filter(x=>x.planned_for===m.planned_for&&isPDin(x))) await sb.from('meal_plan').update({planned_for:el.value}).eq('id',k.id);
     await DB.move(el.dataset.move,el.value); renderAll(); return; }
   if(el.dataset.moveto!==undefined){ await DB.moveTo(el.dataset.moveto,el.value); toast('Moved to '+STORE_LABEL[el.value]); renderAll(); return; }
-  if(el.id==='hideStaples') renderShop();
   if(el.id==='recList'||el.id==='recSort') renderRecipes();
   if(el.name==='kind') renderImport();
 });

@@ -30,7 +30,7 @@ const KW: [string, string][] = ([
   ["goat cheese","goat cheese"],["cotija","cotija"],["monterey jack","monterey jack"],["fontina","fontina"],
   ["greek yogurt","yogurt"],["yogurt","yogurt"],["heavy cream","heavy cream"],["sour cream","sour cream"],["coconut milk","coconut milk"],
   ["buttermilk","buttermilk"],["milk","milk"],["butter","butter"],
-  ["gnocchi","gnocchi"],["orzo","orzo"],["couscous","couscous"],["farro","farro"],["quinoa","quinoa"],["rice vinegar","rice vinegar"],["rice noodle","rice noodles"],
+  ["gnocchi","gnocchi"],["orzo","orzo"],["couscous","couscous"],["farro","farro"],["quinoa","quinoa"],["rice wine vinegar","rice vinegar"],["rice vinegar","rice vinegar"],["pepperoncini","pepperoncini"],["coconut oil","neutral oil"],["avocado oil","neutral oil"],["rice noodle","rice noodles"],
   ["rice","rice"],["spaghetti","spaghetti"],["linguine","linguine"],["bucatini","bucatini"],["rigatoni","short pasta"],["penne","short pasta"],["orecchiette","short pasta"],
   ["pastina","pastina"],["noodle","noodles"],["ramen","noodles"],["udon","noodles"],["pasta","pasta"],["tortilla","tortillas"],["pita","pita"],
   ["puff pastry","puff pastry"],["dumpling","dumplings"],["panko","panko"],["breadcrumb","breadcrumbs"],["bread","bread"],["baguette","bread"],
@@ -57,7 +57,7 @@ const KW: [string, string][] = ([
   ["honey","honey"],["maple","maple syrup"],["brown sugar","brown sugar"],["sugar","sugar"],["peanut butter","peanut butter"],["tahini","tahini"],
   ["peanut","peanuts"],["cashew","cashews"],["walnut","walnuts"],["pecan","pecans"],["almond","almonds"],["pine nut","pine nuts"],["pistachio","pistachios"],
   ["sesame seed","sesame seeds"],["nori","nori"],["white wine","white wine"],["red wine","red wine"],["shaoxing","shaoxing wine"],["mirin","mirin"],
-  ["old bay","old bay"],["cumin","cumin"],["coriander","coriander"],["turmeric","turmeric"],["garam masala","garam masala"],["smoked paprika","paprika"],
+  ["old bay","old bay"],[" oil","neutral oil"],["cumin","cumin"],["coriander","coriander"],["turmeric","turmeric"],["garam masala","garam masala"],["smoked paprika","paprika"],
   ["paprika","paprika"],["cayenne","cayenne"],["cinnamon","cinnamon"],["nutmeg","nutmeg"],["vanilla","vanilla"],["chocolate","chocolate"],["cocoa","cocoa"],
 ] as [string, string][]).sort((a, b) => b[0].length - a[0].length);
 
@@ -75,9 +75,24 @@ function lineNames(raw: string): string[] {
   return found.sort((a, b) => +a.split("\u0000")[1] - +b.split("\u0000")[1]).map((x) => x.split("\u0000")[0]);
 }
 
+// A line none of the names above match (e.g. "1 cup kimchi"): keep it as a plain name rather than
+// dropping it, so it still reaches the shopping list. Amounts, sizes and prep notes are stripped.
+const UNITS = "cups?|tablespoons?|tbsps?|teaspoons?|tsps?|ounces?|oz|pounds?|lbs?|grams?|g|kilograms?|kg|ml|liters?|quarts?|pints?|cans?|jars?|packages?|pkgs?|bunch(?:es)?|heads?|cloves?|sprigs?|stalks?|slices?|pieces?|sheets?|pinch(?:es)?|dash(?:es)?|large|medium|small|whole|handful|knob";
+function plainName(raw: string): string {
+  let l = raw.toLowerCase().replace(/\(.*?\)/g, " ").split(/,| for | to serve| plus /)[0];
+  l = l.replace(/[\d½⅓⅔¼¾⅛\/.\-–]+/g, " ").replace(new RegExp("\\b(" + UNITS + ")\\b", "g"), " ")
+    .replace(/\b(of|about|fresh|freshly|finely|roughly|thinly|chopped|minced|diced|sliced|grated|peeled|trimmed|optional|or more|to taste|store-bought|homemade|a few|a|an)\b/g, " ")
+    .replace(/[^a-zà-ÿ' ]/g, " ").replace(/\s+/g, " ").trim();
+  return l.length >= 3 && l.length <= 40 && !/^(salt|pepper|water|ice)$/.test(l) ? l : "";
+}
+
 function names(lines: string[]): string[] {
   const out = new Set<string>();
-  for (const raw of lines) for (const n of lineNames(raw)) out.add(n);
+  for (const raw of lines) {
+    const found = lineNames(raw);
+    if (found.length) for (const n of found) out.add(n);
+    else if (!/\b(salt|pepper)\b/i.test(raw) && !/^\s*water\b/i.test(raw)) { const p = plainName(raw); if (p) out.add(p); }
+  }
   // A specific pasta shape makes the generic "pasta" redundant.
   if (["short pasta","spaghetti","linguine","bucatini","orzo","lasagna noodles","pastina"].some((x) => out.has(x))) out.delete("pasta");
   return [...out].sort();
