@@ -121,7 +121,7 @@ tr.have td.name{text-decoration:line-through}
 @media (max-width:820px){.two{grid-template-columns:1fr}}
 h2{font:700 18px Georgia,serif;margin:6px 0 10px}
 .note{font-size:13px;color:var(--muted);background:var(--warm2);border-radius:10px;padding:10px 12px;margin:12px 0}
-.toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);background:var(--solid);color:#fff;padding:10px 16px;border-radius:10px;font-size:14px;opacity:0;transition:.2s;pointer-events:none;z-index:20}
+.toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);background:var(--solid);color:#fff;padding:10px 16px;border-radius:10px;font-size:14px;opacity:0;transition:.2s;pointer-events:none;z-index:500}
 .toast.on{pointer-events:auto}
 .toast.on{opacity:1}
 .empty{color:var(--muted);padding:20px;text-align:center;border:1px dashed var(--line);border-radius:var(--r)}
@@ -2407,7 +2407,7 @@ async function addBarcode(code){
   const p=await lookupBarcode(code); if(!bc) return;
   const name=p?[p.brand,p.name].filter(Boolean).join(' '):'';
   const row=toReviewRow({line:p?`${p.name} ${p.qty}`:''});
-  bc.card={code, found:!!p, name, ingredient:p?row.ingredient:'', count:1, sizeText:p&&p.qty?p.qty:(row.size.label!=='1 package'?row.size.label:''), price:'', where:row.ingredient?row.where:'pantry'};
+  bc.card={code, found:!!p, name, ingredient:p?(row.ingredient||p.name.toLowerCase().replace(/[^a-z0-9' &-]/g,' ').replace(/\s+/g,' ').trim()):'', count:1, sizeText:p&&p.qty?p.qty:(row.size.label!=='1 package'?row.size.label:''), price:'', where:row.ingredient?row.where:'pantry'};
   renderBc();
   setTimeout(()=>{ const f=$(bc&&bc.card&&!bc.card.ingredient?'#bcIng':'#bcCount'); f&&f.focus&&!('ontouchstart' in window)&&f.focus(); },50);
 }
@@ -2415,7 +2415,7 @@ function renderBc(){
   const el=$('#bcOverlay'); if(!el||!bc) return;
   const c=bc.card, box=el.querySelector('.bclist');
   el.classList.toggle('carding',!!c);
-  if(c&&c.loading){ box.innerHTML=`<b>Looking up ${esc(c.code)}…</b>`; return; }
+  if(c&&c.loading){ box.innerHTML=`<b>${c.saving?'Adding…':`Looking up ${esc(c.code)}…`}</b>`; return; }
   if(c){ box.innerHTML=`<div class="bccard">
       <div class="meta">${c.found?'Found':'Not in the product database: tell us what it is'} · ${esc(c.code)}</div>
       <label>Name<input type="text" id="bcName" value="${esc(c.name)}" placeholder="e.g. Fairway Large Eggs"></label>
@@ -2424,19 +2424,24 @@ function renderBc(){
         <label>Each is<input type="text" id="bcSize" value="${esc(c.sizeText)}" placeholder="e.g. 12 ct, 32 oz, 1 lb"></label></div>
       <div class="bc2"><label>Price paid (each)<input type="text" inputmode="decimal" id="bcPrice" value="${esc(c.price)}" placeholder="$ optional"></label>
         <label>Kept in<select id="bcWhere">${['fridge','freezer','pantry'].map(l=>`<option value="${l}" ${l===c.where?'selected':''}>${STORE_ICON[l]} ${cap(l)}</option>`).join('')}</select></label></div>
+      <div class="needprice" id="bcErr" style="display:none"></div>
       <div class="bcrow"><button class="btn primary" type="button" id="bcAdd">Add to At Home</button><button class="btn" type="button" id="bcSkip">Skip</button></div></div>`; return; }
   box.innerHTML=bc.added.length?`<div class="meta">Added: ${bc.added.map(esc).join(', ')}</div><div class="meta">Scan the next item, or tap Done.</div>`:'<span class="meta">Hold the barcode inside the box, about a hand\'s length away (closer is blurry). You\'ll check each item before it\'s added.</span>';
 }
 async function confirmBarcode(){
   const c=bc&&bc.card; if(!c||c.loading) return;
-  const i=$('#bcIng').value.trim().toLowerCase(); if(!i) return toast('Type what it is (the ingredient), e.g. eggs');
+  const err=m=>{ const e=$('#bcErr'); if(e){ e.textContent=m; e.style.display=''; } else toast(m,4000); };
+  // keep what was typed if we have to show the card again
+  Object.assign(c,{name:$('#bcName').value,ingredient:$('#bcIng').value,count:$('#bcCount').value,sizeText:$('#bcSize').value,price:$('#bcPrice').value,where:$('#bcWhere').value});
+  const i=$('#bcIng').value.trim().toLowerCase(); if(!i){ $('#bcIng').focus(); return err('Type what it is under Ingredient (e.g. eggs, milk, cereal), then Add.'); }
   const count=parseFloat($('#bcCount').value)||1, sizeText=$('#bcSize').value.trim(), name=$('#bcName').value.trim()||i;
   const paid=parseFloat($('#bcPrice').value.replace(/[^0-9.]/g,'')), where=$('#bcWhere').value;
   let size=sizeFrom(sizeText||'',i); if(!sizeText) size=sizeFrom(name,i);
   const saved=review; review={source:'barcode',rows:[{line:name,product:name,ingredient:i,count,size,lb:null,price:paid>0?'$'+(paid*count).toFixed(2):'',where,on:true}]};   // saveReview divides by how many
-  bc.card={loading:true,code:c.code}; renderBc();
-  await saveReview({quiet:true});
+  bc.card={loading:true,saving:true,code:c.code}; renderBc();
+  let ok=false; try{ ok=await saveReview({quiet:true}); }catch(e){ console.error(e); }
   review=saved; if(!bc) return;
+  if(!ok){ bc.card=c; renderBc(); return err('Couldn\'t save that. Check your connection and tap Add again.'); }
   bc.added.push(`${count>1?count+' × ':''}${i}`); bc.card=null; renderBc(); toast(`Added ${i}${paid>0?` · $${paid.toFixed(2)}`:''}`,1500);
 }
 function stopBarcode(){ if(!bc) return; try{ bc.stop&&bc.stop(); }catch(e){} try{ bc.stream&&bc.stream.getTracks().forEach(t=>t.stop()); }catch(e){} }
@@ -2503,7 +2508,7 @@ async function saveReview(opt={}){
     if(p&&+p.q>0){ const d=conv(a.q,a.u,p.u,i,pkgOf(i)); if(d!=null){ q=+p.q+d; u=p.u; } }
     rows.push({ingredient:i,q,u,location:a.where===defaultStore(i)?null:a.where,updated_by:me.user_id,updated_at:now});
   }
-  if(!rows.length) return toast('Nothing ticked to add');
+  if(!rows.length){ toast('Nothing ticked to add'); return false; }
   // A receipt (photo or email) also updates what each item costs: per pound for weighed items,
   // otherwise per package. The package size already on file is kept.
   const priced=[];
@@ -2514,8 +2519,10 @@ async function saveReview(opt={}){
     priced.push({ingredient:i, price, item:old.item||r.product||r.line, size:old.size||(r.lb?'per lb':(r.size.label!=='1 package'?r.size.label:null)),
       source:'Receipt', link:old.link||FAIRWAY(i), updated_by:me.user_id, updated_at:now}); }
   if(priced.length){ const {error}=await sb.from('prices').upsert(priced); if(error) toast('Prices not saved: '+error.message); }
-  if(await DB.run(sb.from('pantry').upsert(rows))){ if(review.inboxId) await markInbox(review.inboxId); if(!opt.quiet) toast(`Added to At Home: ${rows.map(r=>r.ingredient).join(', ')}${priced.length?` · ${priced.length} price${priced.length>1?'s':''} updated`:''}`,5000); review=null; usualsPick.clear(); usualsOpen=false; }
-  renderAll(); renderReview(); renderUsuals(); renderInbox();
+  const saved=await DB.run(sb.from('pantry').upsert(rows));
+  if(saved){ if(review.inboxId) await markInbox(review.inboxId); if(!opt.quiet) toast(`Added to At Home: ${rows.map(r=>r.ingredient).join(', ')}${priced.length?` · ${priced.length} price${priced.length>1?'s':''} updated`:''}`,5000); review=null; usualsPick.clear(); usualsOpen=false; }
+  try{ renderAll(); renderReview(); renderUsuals(); renderInbox(); }catch(e){ console.error(e); }
+  return saved;
 }
 document.addEventListener('change',e=>{
   const el=e.target;
