@@ -605,6 +605,10 @@ html[data-theme="dark"] .shophead{background:rgba(15,21,18,.95)}
     <div class="card" style="max-width:760px;margin-bottom:16px"><h2 style="margin-top:0">Appearance</h2>
       <div class="themepick" id="themePick"><button type="button" data-theme-set="auto">Auto</button><button type="button" data-theme-set="light">Light</button><button type="button" data-theme-set="dark">Dark</button></div>
       <p class="meta" style="margin:8px 0 0">Auto follows your phone's light/dark setting. Saved on this device.</p></div>
+    <div class="card" style="max-width:760px;margin-bottom:16px"><h2 style="margin-top:0">App version</h2>
+      <p class="meta" style="margin:0 0 8px" id="verInfo"></p>
+      <button class="btn" type="button" id="forceUpdate">⟳ Force update</button>
+      <p class="meta" style="margin:8px 0 0">Loads the newest version right now, skipping anything your phone has saved. Nothing you've added is lost.</p></div>
     <div class="card" style="max-width:760px;margin-bottom:16px"><h2 style="margin-top:0">Your password</h2>
       <p class="meta" style="margin:0 0 8px">Needed to sign in from the app on your iPhone home screen (email links open in Safari instead).</p>
       <form id="setPwForm" class="row" style="margin:0"><input type="text" autocomplete="username" style="display:none"><input id="newPw" type="password" minlength="8" autocomplete="new-password" placeholder="New password (8+ characters)" style="flex:1 1 240px"><button class="btn primary">Save password</button></form></div>
@@ -2067,7 +2071,7 @@ document.addEventListener('submit',async e=>{ if(e.target.id!=='calForm') return
   if(error) return toast('Could not save: '+error.message);
   $('#calUrl').value=''; toast('Calendar linked'); cal=null; renderCalSetting(); loadCal(true); },true);
 function renderSettings(){
-  renderCalSetting();
+  renderCalSetting(); try{ renderVer(); }catch(e){}
   const all=allIngredients(); const linked=all.filter(i=>isFair(S.prices[i]?.link)); const need=all.filter(i=>!isFair(S.prices[i]?.link));
   const times=Object.values(S.prices).map(p=>p.checked_at).filter(Boolean).sort(); const last=times[times.length-1];
   const oos=all.filter(i=>S.prices[i]?.available===false);
@@ -2493,9 +2497,18 @@ async function checkForUpdate(){
     if(lm<=pageStamp+2000) return;
     const busy=shopMode||review||bc||(typeof addS!=='undefined'&&addS)||document.querySelector('#bcOverlay,.sheet.open,dialog[open]')||(document.activeElement&&/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName));
     if(busy){ setTimeout(checkForUpdate,30000); return; }
-    location.reload();
+    freshReload();
   }catch(e){}
 }
+// location.reload() can be answered from the phone's cache; a new URL can't. Clear any service-worker caches too.
+async function freshReload(){
+  try{ if(window.caches) for(const k of await caches.keys()) await caches.delete(k); }catch(e){}
+  try{ const regs=await navigator.serviceWorker?.getRegistrations?.(); for(const r of regs||[]) await r.unregister(); }catch(e){}
+  location.replace(location.pathname+'?v='+Date.now()+location.hash);
+}
+if(/[?&]v=\d/.test(location.search)) history.replaceState(null,'',location.pathname+location.hash);
+document.addEventListener('click',async e=>{ if(e.target.id!=='forceUpdate') return; e.target.disabled=true; e.target.textContent='Updating…'; freshReload(); });
+function renderVer(){ const el=$('#verInfo'); if(el) el.textContent=`This copy was published ${new Date(pageStamp).toLocaleString(undefined,{weekday:'short',month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})}.`; }
 checkForUpdate(); setInterval(checkForUpdate,5*60*1000);
 document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='visible') checkForUpdate(); });
 
