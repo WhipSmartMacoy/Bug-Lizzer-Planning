@@ -476,6 +476,7 @@ html[data-theme="dark"] .shophead{background:rgba(15,21,18,.95)}
 #bcOverlay .bccard label{display:flex;flex-direction:column;gap:3px;font-size:13px;color:var(--muted);flex:1;min-width:0}
 #bcOverlay .bccard input,#bcOverlay .bccard select{font-size:16px;width:100%;box-sizing:border-box}
 #bcOverlay .bc2{display:flex;gap:8px}
+#bcOverlay .bcamt{display:flex;gap:4px}#bcOverlay .bcamt input{flex:1 1 60px;min-width:0}#bcOverlay .bcamt select{flex:0 0 auto;width:auto}
 </style>
 </head>
 <body>
@@ -954,7 +955,11 @@ const DB = {
     if(rows.length) await DB.run(sb.from('pantry').upsert(rows));
     return rows;
   },
-  setPantry:(ingredient,q,u,location)=>DB.run(sb.from('pantry').upsert({ingredient,q:Math.max(0,q),u,location:location||null,updated_by:me.user_id,updated_at:new Date().toISOString()})),
+  // location and the unit someone picked are kept unless given: changing an amount mustn't move the item.
+  setPantry:(ingredient,q,u,location,label)=>{ const old=pantryOf(ingredient)||{};
+    const loc=location===undefined?(old.location??null):(location||null);
+    let lab=label===undefined?(old.unit_label??null):(label||null); if(lab&&(!UNITS[lab]||UNITS[lab][0]!==u)) lab=null;
+    return DB.run(sb.from('pantry').upsert({ingredient,q:Math.max(0,q),u,location:loc,unit_label:lab,updated_by:me.user_id,updated_at:new Date().toISOString()})); },
   moveTo:(ingredient,location)=>DB.run(sb.from('pantry').update({location,updated_by:me.user_id,updated_at:new Date().toISOString()}).eq('ingredient',ingredient)),
   removePantry:i=>DB.run(sb.from('pantry').delete().eq('ingredient',i)),
   async bought(o,v){
@@ -2092,7 +2097,7 @@ function renderSettings(){
    (r.changed.length?`<table><tr><th>Ingredient</th><th>Was</th><th>Now</th></tr>${r.changed.map(c=>`<tr><td>${esc(cap(c.ingredient))}</td><td>${esc(c.from||'—')}</td><td><b>${esc(c.to)}</b></td></tr>`).join('')}</table>`:'')+
    (r.failed.length?`<p class="meta">Couldn't read: ${r.failed.map(f=>esc(f.ingredient)).join(', ')}. Their last price is kept.</p>`:'');
 }
-const UNITS={cups:['ml',236.6],tbsp:['ml',14.79],tsp:['ml',4.93],'fl oz':['ml',29.57],quarts:['ml',946],ml:['ml',1],oz:['g',28.35],lb:['g',453.6],g:['g',1],each:['each',1],packages:['pkg',1]};
+const UNITS={cups:['ml',236.6],tbsp:['ml',14.79],tsp:['ml',4.93],'fl oz':['ml',29.57],quarts:['ml',946],gallons:['ml',3785],ml:['ml',1],liters:['ml',1000],oz:['g',28.35],lb:['g',453.6],g:['g',1],kg:['g',1000],each:['each',1],packages:['pkg',1]};
 const unitOpts=()=>Object.keys(UNITS).map(u=>`<option>${u}</option>`).join('');
 let editingPantry=null, homeLoc='all', homeQ='';
 // ---- Leftovers on the Home tab: give a serving to someone, or throw them out ----
@@ -2139,11 +2144,12 @@ function renderPantry(){
   $('#homeFilt').innerHTML=onHand.length?['all',...LOCS].map(l=>`<button type="button" data-homeloc="${l}" class="${homeLoc===l?'on':''}">${l==='all'?'All':STORE_ICON[l]+' '+cap(l)}<span>${count(l)}</span></button>`).join(''):'';
   const q=homeQ.trim().toLowerCase();
   const shown=onHand.filter(p=>(homeLoc==='all'||storeOf(p.ingredient)===homeLoc)&&(!q||p.ingredient.includes(q)));
-  const amtOf=p=>{const pk=pkgOf(p.ingredient);
+  const amtOf=p=>{const pk=pkgOf(p.ingredient), L=p.unit_label&&UNITS[p.unit_label];
+    if(L&&L[0]===p.u) return esc(`${round(+p.q/L[1],100)} ${p.unit_label}`)+(!p.location&&FRIDGE_ONCE_OPEN.has(p.ingredient)&&storeOf(p.ingredient)==='fridge'?' <span class="meta">· opened</span>':'');
     return esc(fmtAmt(+p.q,p.u))+(pk.u===p.u&&pk.q&&pk.u!=='pkg'&&pk.label!=='1'?` <span class="meta">· ${round(+p.q/pk.q,4)} ${esc(pk.label)}</span>`:'')+(!p.location&&FRIDGE_ONCE_OPEN.has(p.ingredient)&&storeOf(p.ingredient)==='fridge'?' <span class="meta">· opened</span>':'');};
   const item=p=>{const loc=storeOf(p.ingredient), open=editingPantry===p.ingredient;
     return `<div class="hitem ${open?'open':''}"><button type="button" class="hrow" data-hopen="${esc(p.ingredient)}"><b>${esc(cap(p.ingredient))}</b><span class="amt">${amtOf(p)}</span><span class="chev">›</span></button>${open?`<div class="hmore">
-      <form class="row" data-panedit="${esc(p.ingredient)}"><input name="q" type="number" step="any" min="0" value="${round(+p.q,100)}" aria-label="Amount"><select name="u">${Object.keys(UNITS).map(u=>`<option ${UNITS[u][0]===p.u&&UNITS[u][1]===1?'selected':''}>${u}</option>`).join('')}</select><button class="btn small primary">Save</button></form>
+      <form class="row" data-panedit="${esc(p.ingredient)}"><input name="q" type="number" step="any" min="0" value="${(()=>{const L=p.unit_label&&UNITS[p.unit_label]; return round(L&&L[0]===p.u?+p.q/L[1]:+p.q,100);})()}" aria-label="Amount"><select name="u">${Object.keys(UNITS).map(u=>`<option ${(p.unit_label&&UNITS[p.unit_label]?.[0]===p.u)?(u===p.unit_label?'selected':''):(UNITS[u][0]===p.u&&UNITS[u][1]===1?'selected':'')}>${u}</option>`).join('')}</select><button class="btn small primary">Save</button></form>
       <div class="row"><select data-moveto="${esc(p.ingredient)}" aria-label="Kept in">${LOCS.map(l=>`<option value="${l}" ${l===loc?'selected':''}>${STORE_ICON[l]} ${cap(l)}</option>`).join('')}</select><button type="button" class="btn small" data-panzero="${esc(p.ingredient)}">Used up</button></div>
       <span class="meta">Updated ${p.updated_by?'by '+esc(nameOf(p.updated_by))+' ':''}${ago(p.updated_at)}</span></div>`:''}</div>`;};
   const group=(loc,rows)=>{const main=rows.filter(p=>!optional(p.ingredient)), basics=rows.filter(p=>optional(p.ingredient));
@@ -2238,7 +2244,9 @@ document.addEventListener('submit',async e=>{
   }
   if(f.dataset.panedit!==undefined){
     const i=f.dataset.panedit, [u,mult]=UNITS[f.u.value]; const q=parseFloat(f.q.value)*mult; const p=pantryOf(i);
-    const v=conv(q,u,p.u,i,pkgOf(i)); editingPantry=null; await DB.setPantry(i,v??q,v==null?u:p.u); renderAll(); return;
+    // Keep it in the kind of unit you picked (300 ml stays 300 ml, not "3 bottles"); only same-kind
+    // units are folded into the one already on file (cups → ml, oz → g).
+    editingPantry=null; await DB.setPantry(i,q,u,undefined,f.u.value); renderAll(); return;
   }
   if(f.dataset.priceform!==undefined){
     const i=f.dataset.priceform; let price=f.price.value.trim(); if(price&&!price.startsWith('$')) price='$'+price;
@@ -2407,7 +2415,8 @@ async function addBarcode(code){
   const p=await lookupBarcode(code); if(!bc) return;
   const name=p?[p.brand,p.name].filter(Boolean).join(' '):'';
   const row=toReviewRow({line:p?`${p.name} ${p.qty}`:''});
-  bc.card={code, found:!!p, name, ingredient:p?(row.ingredient||p.name.toLowerCase().replace(/[^a-z0-9' &-]/g,' ').replace(/\s+/g,' ').trim()):'', count:1, sizeText:p&&p.qty?p.qty:(row.size.label!=='1 package'?row.size.label:''), price:'', where:row.ingredient?row.where:'pantry'};
+  const [sn,su]=bcSizeOf(p?p.qty:'');
+  bc.card={code, found:!!p, name, sizeN:sn, sizeU:su, ingredient:p?(row.ingredient||p.name.toLowerCase().replace(/[^a-z0-9' &-]/g,' ').replace(/\s+/g,' ').trim()):'', count:1, sizeText:p&&p.qty?p.qty:(row.size.label!=='1 package'?row.size.label:''), price:'', where:row.ingredient?row.where:'pantry'};
   renderBc();
   setTimeout(()=>{ const f=$(bc&&bc.card&&!bc.card.ingredient?'#bcIng':'#bcCount'); f&&f.focus&&!('ontouchstart' in window)&&f.focus(); },50);
 }
@@ -2421,27 +2430,43 @@ function renderBc(){
       <label>Name<input type="text" id="bcName" value="${esc(c.name)}" placeholder="e.g. Fairway Large Eggs"></label>
       <label>Ingredient<input type="text" id="bcIng" list="ingList" value="${esc(c.ingredient)}" placeholder="e.g. eggs"></label>
       <div class="bc2"><label>How many<input type="number" min="0" step="any" id="bcCount" value="${c.count}"></label>
-        <label>Each is<input type="text" id="bcSize" value="${esc(c.sizeText)}" placeholder="e.g. 12 ct, 32 oz, 1 lb"></label></div>
+        <label>Each is<span class="bcamt"><input type="number" min="0" step="any" id="bcSizeN" value="${esc(c.sizeN)}" placeholder="size"><select id="bcSizeU">${BC_UNITS.map(([u])=>`<option ${u===c.sizeU?'selected':''}>${u}</option>`).join('')}</select></span></label></div>
       <div class="bc2"><label>Price paid (each)<input type="text" inputmode="decimal" id="bcPrice" value="${esc(c.price)}" placeholder="$ optional"></label>
         <label>Kept in<select id="bcWhere">${['fridge','freezer','pantry'].map(l=>`<option value="${l}" ${l===c.where?'selected':''}>${STORE_ICON[l]} ${cap(l)}</option>`).join('')}</select></label></div>
       <div class="needprice" id="bcErr" style="display:none"></div>
       <div class="bcrow"><button class="btn primary" type="button" id="bcAdd">Add to At Home</button><button class="btn" type="button" id="bcSkip">Skip</button></div></div>`; return; }
   box.innerHTML=bc.added.length?`<div class="meta">Added: ${bc.added.map(esc).join(', ')}</div><div class="meta">Scan the next item, or tap Done.</div>`:'<span class="meta">Hold the barcode inside the box, about a hand\'s length away (closer is blurry). You\'ll check each item before it\'s added.</span>';
 }
+// Package sizes on the barcode card: a number and a unit. Stored as ml (volume), g (weight) or a count.
+const BC_UNITS=[['oz','g',28.35],['fl oz','ml',29.57],['lb','g',453.6],['g','g',1],['kg','g',1000],['ml','ml',1],['L','ml',1000],['gal','ml',3785],['qt','ml',946],['pt','ml',473],['ct','each',1],['each','each',1],['package','pkg',1]];
+function bcSizeOf(t){
+  t=String(t||'').toLowerCase().replace(/fl\.?\s*oz/g,'fl oz');
+  const m=t.match(/([\d.]+)\s*(fl oz|oz|lbs?|kg|g|ml|l|liters?|gal|gallons?|qt|quarts?|pt|pints?|ct|count)\b/);
+  if(!m) return ['','each'];
+  const u={lbs:'lb',l:'L',liter:'L',liters:'L',gallon:'gal',gallons:'gal',quart:'qt',quarts:'qt',pint:'pt',pints:'pt',count:'ct'}[m[2]]||m[2];
+  return [m[1],u];
+}
+function bcSize(n,u){
+  const d=BC_UNITS.find(x=>x[0]===u)||BC_UNITS[11];
+  if(!(n>0)) return d[1]==='pkg'||d[1]==='each'?{q:1,u:d[1],label:d[0]==='package'?'1 package':'1'}:{q:1,u:'pkg',label:'1 package'};
+  return {q:n*d[2],u:d[1],label:`${n} ${u}`};
+}
 async function confirmBarcode(){
   const c=bc&&bc.card; if(!c||c.loading) return;
   const err=m=>{ const e=$('#bcErr'); if(e){ e.textContent=m; e.style.display=''; } else toast(m,4000); };
   // keep what was typed if we have to show the card again
-  Object.assign(c,{name:$('#bcName').value,ingredient:$('#bcIng').value,count:$('#bcCount').value,sizeText:$('#bcSize').value,price:$('#bcPrice').value,where:$('#bcWhere').value});
+  Object.assign(c,{name:$('#bcName').value,ingredient:$('#bcIng').value,count:$('#bcCount').value,sizeN:$('#bcSizeN').value,sizeU:$('#bcSizeU').value,price:$('#bcPrice').value,where:$('#bcWhere').value});
   const i=$('#bcIng').value.trim().toLowerCase(); if(!i){ $('#bcIng').focus(); return err('Type what it is under Ingredient (e.g. eggs, milk, cereal), then Add.'); }
-  const count=parseFloat($('#bcCount').value)||1, sizeText=$('#bcSize').value.trim(), name=$('#bcName').value.trim()||i;
+  const count=parseFloat($('#bcCount').value)||1, name=$('#bcName').value.trim()||i;
   const paid=parseFloat($('#bcPrice').value.replace(/[^0-9.]/g,'')), where=$('#bcWhere').value;
-  let size=sizeFrom(sizeText||'',i); if(!sizeText) size=sizeFrom(name,i);
+  const size=bcSize(parseFloat($('#bcSizeN').value),$('#bcSizeU').value);
   const saved=review; review={source:'barcode',rows:[{line:name,product:name,ingredient:i,count,size,lb:null,price:paid>0?'$'+(paid*count).toFixed(2):'',where,on:true}]};   // saveReview divides by how many
   bc.card={loading:true,saving:true,code:c.code}; renderBc();
   let ok=false; try{ ok=await saveReview({quiet:true}); }catch(e){ console.error(e); }
   review=saved; if(!bc) return;
   if(!ok){ bc.card=c; renderBc(); return err('Couldn\'t save that. Check your connection and tap Add again.'); }
+  { const lab={oz:'oz','fl oz':'fl oz',lb:'lb',g:'g',kg:'kg',ml:'ml',L:'liters',gal:'gallons',qt:'quarts',ct:'each',each:'each',package:'packages'}[$('#bcSizeU')?.value||c.sizeU];
+    const row=pantryOf(i); if(lab&&row&&UNITS[lab][0]===row.u&&row.unit_label!==lab){ await sb.from('pantry').update({unit_label:lab}).eq('ingredient',i); row.unit_label=lab; } }
   bc.added.push(`${count>1?count+' × ':''}${i}`); bc.card=null; renderBc(); toast(`Added ${i}${paid>0?` · $${paid.toFixed(2)}`:''}`,1500);
 }
 function stopBarcode(){ if(!bc) return; try{ bc.stop&&bc.stop(); }catch(e){} try{ bc.stream&&bc.stream.getTracks().forEach(t=>t.stop()); }catch(e){} }
