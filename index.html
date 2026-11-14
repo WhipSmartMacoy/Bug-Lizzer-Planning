@@ -492,6 +492,7 @@ html[data-theme="dark"] .shophead{background:rgba(15,21,18,.95)}
 @keyframes wpwalkc{to{background-position:-224px 0}}
 @keyframes wpwalkd{to{background-position:-208px 0}}
 @media (prefers-reduced-motion:reduce){.wppet{animation:none}.wpfill,.wppet{transition:none}}
+.almost{margin:14px 0}.almost>summary{cursor:pointer;color:var(--muted);font-size:14px;padding:6px 0}
 </style>
 </head>
 <body>
@@ -2065,9 +2066,11 @@ function renderUseup(){
     .filter(x=>x.hit.length&&x.buy.length<=3).sort((a,b)=>a.buy.length-b.buy.length||b.f.length-a.f.length||b.hit.length-a.hit.length).slice(0,30);
   const ready=scored.filter(x=>!x.buy.length), almost=scored.filter(x=>x.buy.length);
   const body=x=>`<div class="meta"><b style="color:var(--green)">Uses ${x.hit.length}</b> from home: ${x.hit.map(i=>(fresh.has(i)?'🧊 ':'')+esc(i)).join(', ')}<br>${x.buy.length?`<b style="color:var(--rust,#b5542b)">Need ${x.buy.length}:</b> ${x.buy.map(esc).join(', ')} <span class="meta">(plan it and they go on the shopping list)</span>`:'<b>Everything else is At Home</b>'}</div>`;
-  $('#useupResults').innerHTML=(ready.length?`<h3 class="tierh">✅ Make now</h3>`+ready.map(x=>card(x.r,body(x))).join(''):'')
-    +(almost.length?`<h3 class="tierh">🛒 Almost: missing a few things</h3>`+almost.map(x=>card(x.r,body(x))).join(''):'')
-    ||'<div class="empty">Nothing in the recipe box uses what\'s At Home yet. The web search below looks further.</div>';
+  // Cook is for "what can we make without leaving the house": only recipes with nothing to buy.
+  // Near-misses stay tucked away, closed, for when someone's going shopping anyway.
+  $('#useupResults').innerHTML=(ready.length?`<h3 class="tierh">✅ From your recipe box</h3>`+ready.map(x=>card(x.r,body(x))).join('')
+      :'<div class="empty">Nothing in the recipe box can be made with only what\'s At Home. The web search below looks further.</div>')
+    +(almost.length?`<details class="almost"><summary>Show ${almost.length} from the box that need 1–3 things</summary>${almost.map(x=>card(x.r,body(x))).join('')}</details>`:'');
 }
 // A recipe found online goes on the plan as "new"; it joins the recipe box once it's cooked.
 async function importWeb(url){
@@ -2157,15 +2160,18 @@ function renderWeb(){
   if(!web){ $('#webStatus').textContent=''; $('#webResults').innerHTML=''; return; }
   const inBox=new Set(S.recipes.map(r=>r.url));
   const atHome=new Set(S.pantry.filter(p=>+p.q>0).map(p=>p.ingredient));
-  const list=web.results.filter(x=>!inBox.has(x.url)).map(x=>({...x,need:x.need.filter(i=>!atHome.has(i)&&!optional(i))})).filter(x=>x.need.length<=3).sort((a,b)=>a.need.length-b.need.length||(b.uses.length+b.fresh.length)-(a.uses.length+a.fresh.length));
-  $('#webStatus').innerHTML=web.error?esc(web.error):`${list.length} recipe${list.length===1?'':'s'}${webFocus?` with <b>${esc(webFocus)}</b>`:''} found ${ago(web.at)}${web.key!==key?' · At Home has changed since, so <b>Search again</b>':''}`;
-  $('#webResults').innerHTML=list.map(x=>`<div class="card">
+  const all=web.results.filter(x=>!inBox.has(x.url)).map(x=>({...x,need:x.need.filter(i=>!atHome.has(i)&&!optional(i))})).filter(x=>x.need.length<=3).sort((a,b)=>a.need.length-b.need.length||(b.uses.length+b.fresh.length)-(a.uses.length+a.fresh.length));
+  const list=all.filter(x=>!x.need.length), near=all.filter(x=>x.need.length);
+  $('#webStatus').innerHTML=web.error?esc(web.error):`${list.length} recipe${list.length===1?'':'s'} you can make now, found ${ago(web.at)}${web.key!==key?' · At Home has changed since, so <b>Search again</b>':''}`;
+  const wcard=x=>`<div class="card">
     ${x.image?`<a href="${esc(x.url)}" target="_blank" rel="noopener"><img class="thumb" src="${esc(x.image)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()"></a>`:''}
     <h3><a href="${esc(x.url)}" target="_blank" rel="noopener">${esc(x.title)}</a></h3>
     <div class="meta">${esc(x.site)}</div>
     <div class="meta"><b style="color:var(--green)">Uses ${x.uses.length}</b> from home: ${x.uses.map(i=>(x.fresh.includes(i)?'🧊 ':'')+esc(i)).join(', ')}<br>${x.need.length?`<b style="color:var(--rust,#b5542b)">Need ${x.need.length}:</b> ${x.need.map(esc).join(', ')}`:'<b>✅ Everything else is At Home</b>'}</div>
-    <div class="actions"><a class="btn small" href="${esc(x.url)}" target="_blank" rel="noopener">Open recipe</a><button type="button" class="btn small" data-websave="${esc(x.url)}">＋ Save to recipe box</button><select class="btn small" data-webplan-sel="${esc(x.url)}"><option value="">+ Plan for…</option>${dayOptions()}</select></div></div>`).join('')
-    ||(web.error?'':'<div class="empty">Nothing online fits what\'s At Home yet. Try <b>Search again</b>, or add more of what you have.</div>');
+    <div class="actions"><a class="btn small" href="${esc(x.url)}" target="_blank" rel="noopener">Open recipe</a><button type="button" class="btn small" data-websave="${esc(x.url)}">＋ Save to recipe box</button><select class="btn small" data-webplan-sel="${esc(x.url)}"><option value="">+ Plan for…</option>${dayOptions()}</select></div></div>`;
+  $('#webResults').innerHTML=list.map(wcard).join('')
+    ||(web.error?'':'<div class="empty">Nothing online can be made with only what\'s At Home this time. <b>Search again</b> tries more recipes.</div>');
+  if(near.length&&!web.error) $('#webResults').innerHTML+=`<details class="almost"><summary>Show ${near.length} online that need 1–3 things</summary>${near.map(wcard).join('')}</details>`;
 }
 document.addEventListener('click',e=>{
   const ws=e.target.closest('[data-websave]'); if(ws){ ws.disabled=true; ws.textContent='Saving…'; importWeb(ws.dataset.websave).then(async r=>{ if(r){ await DB.load(); renderAll(); toast(`Saved to the recipe box: ${r.title}`,4000); } else { ws.disabled=false; ws.textContent='＋ Save to recipe box'; } }); return; }
