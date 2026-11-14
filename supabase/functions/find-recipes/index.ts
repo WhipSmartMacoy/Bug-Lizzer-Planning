@@ -34,7 +34,7 @@ const KW: [string, string][] = ([
   ["rice","rice"],["spaghetti","spaghetti"],["linguine","linguine"],["bucatini","bucatini"],["rigatoni","short pasta"],["penne","short pasta"],["orecchiette","short pasta"],
   ["pastina","pastina"],["noodle","noodles"],["ramen","noodles"],["udon","noodles"],["pasta","pasta"],["tortilla","tortillas"],["pita","pita"],
   ["puff pastry","puff pastry"],["dumpling","dumplings"],["panko","panko"],["breadcrumb","breadcrumbs"],["bread","bread"],["baguette","bread"],
-  ["all-purpose flour","flour"],["flour","flour"],["cornstarch","cornstarch"],["cornmeal","cornmeal"],["polenta","cornmeal"],["grits","cornmeal"],["baking soda","baking soda"],["baking powder","baking powder"],
+  ["all-purpose flour","flour"],["flour","flour"],["cornstarch","cornstarch"],["red curry paste","red curry paste"],["green curry paste","green curry paste"],["curry paste","red curry paste"],["chili flakes","red pepper flakes"],["chile flakes","red pepper flakes"],["pepper flakes","red pepper flakes"],["pepperoncini","pepperoncini"],["peperoncini","pepperoncini"],["cornmeal","cornmeal"],["polenta","cornmeal"],["grits","cornmeal"],["baking soda","baking soda"],["baking powder","baking powder"],
   ["chickpea","chickpeas"],["garbanzo","chickpeas"],["cannellini","white beans"],["white bean","white beans"],["black bean","black beans"],
   ["kidney bean","kidney beans"],["lentil","lentils"],["edamame","edamame"],["snap pea","sugar snap peas"],["snow pea","snow peas"],["peas","peas"],
   ["zucchini","zucchini"],["asparagus","asparagus"],["green bean","green beans"],["broccoli rabe","broccoli rabe"],["broccolini","broccolini"],["broccoli","broccoli"],
@@ -151,9 +151,16 @@ Deno.serve(async (req) => {
     if (!ok) return json({ error: "Only approved household members can search." }, 403);
 
     const body = await req.json();
-    const have: string[] = (body.have || []).map((s: string) => String(s).toLowerCase()).slice(0, 40);
-    const main: string[] = (body.main || have).map((s: string) => String(s).toLowerCase());
-    const fresh: string[] = (body.fresh || []).map((s: string) => String(s).toLowerCase()).filter((s: string) => main.includes(s));
+    // At Home names can be product names ("certified organic tahini", "red kidney beans"): count each
+    // as the plain ingredient recipes use too, so nothing in the house is missed.
+    // Only the main name (tuna steak → tuna, not steak too); dried things don't stand in for fresh ones.
+    const main1 = (x: string) => { const n = lineNames(x)[0]; return n && !(/\bdried\b/.test(x) && !/dried/.test(n)) ? n : null; };
+    const plain = (x: string) => [main1(x) || x];
+    const both = (xs: string[]) => [...new Set(xs.flatMap((x) => [x, main1(x) || x]))];
+    const raw = (k: string) => (body[k] || []).map((s: string) => String(s).toLowerCase().trim()).filter(Boolean);
+    const have: string[] = both(raw("have"));
+    const main: string[] = [...new Set((body.main ? raw("main") : raw("have")).flatMap(plain))];
+    const fresh: string[] = [...new Set(raw("fresh").flatMap(plain))].filter((s: string) => main.includes(s));
     const staples = new Set<string>((body.staples || []).map((s: string) => String(s).toLowerCase()));
     const skip = new Set<string>(body.exclude || []);
     if (!have.length) return json({ results: [], searched: [] });

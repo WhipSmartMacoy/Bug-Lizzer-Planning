@@ -803,6 +803,11 @@ const ING_SYN = {'chicken stock':'broth','vegetable stock':'broth','beef stock':
 // Things on a usual / receipt that are never recipe ingredients, so they're never suggested.
 const NOT_FOOD = /\b(?:shopping bag|hair|roller|filters?|supplement|ipa|beer|seltzer|sparkling|water|soda|kombucha|energy drink|juice(?! company)|gummy|candy|chips|crackers|pretzel|bar|coffee|tea bags|oats|shake|dumplings?|burek|cutlets|dip|jello|gelatin|cheezit|sunpopped|snacks?|seaweed|noodle soup|cookie|brownie|baking soda)s?\b/i;
 const SYN_KEYS = Object.keys(ING_SYN).sort((a,b)=>b.length-a.length);
+// At Home items saved as product names ("certified organic tahini", "chicken thigs") also count as the
+// plain ingredient recipes ask for (tahini, chicken), so Cook doesn't miss what's in the house.
+const _canon=new Map();
+function canonOf(i){ if(!_canon.has(i)) _canon.set(i, ingFrom(i)||i); return _canon.get(i); }
+function homeSet(items){ const out=new Set(); for(const i of items){ out.add(i); const c=canonOf(i); if(c) out.add(c); } return out; }
 function ingFrom(text){
   const t=' '+String(text).toLowerCase().replace(/[^a-z0-9 ]+/g,' ').replace(/\s+/g,' ')+' ';
   // Recipe ingredient names and the phrases above, longest first, so "almond butter" beats "butter".
@@ -1931,7 +1936,7 @@ function renderTomorrow(){
       body=`<div class="row" style="margin-top:6px;align-items:center"><span>🍱 <b>Leftovers: ${esc(r.title)}</b> <span class="meta">${n} servings left from ${dayName(lo.planned_for,'long')}</span></span>
         <button class="btn small primary" data-lo="${lo.id}" type="button">Plan leftovers for tomorrow</button></div>`;
     } else {
-      const atHome=new Set(S.pantry.filter(p=>+p.q>0).map(p=>p.ingredient));
+      const atHome=homeSet(S.pantry.filter(p=>+p.q>0).map(p=>p.ingredient));
       const box=S.recipes.filter(r=>r.status==='past').filter(r=>r.ingredients.some(i=>atHome.has(i)&&!optional(i))&&r.ingredients.every(i=>atHome.has(i)||optional(i)))
         .sort((a,b)=>b.ingredients.filter(i=>atHome.has(i)&&storeOf(i)==='fridge').length-a.ingredients.filter(i=>atHome.has(i)&&storeOf(i)==='fridge').length||(lastCooked(a.id)?.cooked_at||'').localeCompare(lastCooked(b.id)?.cooked_at||''))[0];
       const inBox=new Set(S.recipes.map(r=>r.url));
@@ -2048,19 +2053,19 @@ function renderRecipes(){
 }
 // What "Make it now" offers: recipes from the box that can be made entirely from what's At Home, plus the web finds for today's At Home.
 function makeableNow(){
-  const on=S.pantry.filter(p=>+p.q>0&&!optional(p.ingredient)), have=new Set(on.map(p=>p.ingredient));
-  const fresh=new Set(on.filter(p=>storeOf(p.ingredient)==='fridge').map(p=>p.ingredient)), haveAll=new Set(S.pantry.filter(p=>+p.q>0).map(p=>p.ingredient));
+  const on=S.pantry.filter(p=>+p.q>0&&!optional(p.ingredient)), have=homeSet(on.map(p=>p.ingredient));
+  const fresh=homeSet(on.filter(p=>storeOf(p.ingredient)==='fridge').map(p=>p.ingredient)), haveAll=homeSet(S.pantry.filter(p=>+p.q>0).map(p=>p.ingredient));
   return S.recipes.filter(r=>r.status==='past').map(r=>({r,hit:r.ingredients.filter(i=>have.has(i)),f:r.ingredients.filter(i=>fresh.has(i)),buy:r.ingredients.filter(i=>!haveAll.has(i)&&!optional(i))}))
     .filter(x=>x.hit.length&&!x.buy.length).sort((a,b)=>b.f.length-a.f.length||b.hit.length-a.hit.length);
 }
 const webNow=()=>{ try{ return web&&web.key===useupInputs().key?(web.results||[]):[]; }catch(e){ return []; } };
 function renderUseup(){
   const on=S.pantry.filter(p=>+p.q>0&&!optional(p.ingredient));
-  const fresh=new Set(on.filter(p=>storeOf(p.ingredient)==='fridge').map(p=>p.ingredient)), have=new Set(on.map(p=>p.ingredient));
+  const fresh=homeSet(on.filter(p=>storeOf(p.ingredient)==='fridge').map(p=>p.ingredient)), have=homeSet(on.map(p=>p.ingredient));
   $('#useupHave').innerHTML=on.length?`<div class="meta">Ideas from all ${on.length} things At Home.</div>`:'';
   findOnline();
   if(!on.length){$('#useupResults').innerHTML='<div class="empty">Nothing is tracked At Home yet. Scan a receipt, add from your usual Fairway items, or tap <b>Got it ✓</b> after shopping, and ideas show up here.</div>';return;}
-  const haveAll=new Set(S.pantry.filter(p=>+p.q>0).map(p=>p.ingredient));
+  const haveAll=homeSet(S.pantry.filter(p=>+p.q>0).map(p=>p.ingredient));
   // Every saved recipe that uses something from home: ready now first, then ones missing 1–3 things.
   const scored=S.recipes.map(r=>{const hit=r.ingredients.filter(i=>have.has(i)), f=hit.filter(i=>fresh.has(i)), buy=r.ingredients.filter(i=>!haveAll.has(i)&&!optional(i)); return {r,hit,f,buy}})
     .filter(x=>x.hit.length&&x.buy.length<=3).sort((a,b)=>a.buy.length-b.buy.length||b.f.length-a.f.length||b.hit.length-a.hit.length).slice(0,30);
@@ -2114,12 +2119,12 @@ async function findOnline(force){
   const {have,fresh,key}=useupInputs();
   if(!$('#useup').classList.contains('on')&&!force){ renderWeb(); return; }
   if(!have.length){ web=null; renderWeb(); return; }
-  if(webBusy||(!force&&web&&web.key===key&&web.v===4)){ renderWeb(); return; }   // v2: results include near-misses
+  if(webBusy||(!force&&web&&web.key===key&&web.v===5)){ renderWeb(); return; }   // v2: results include near-misses
   webBusy=true; renderWeb();
-  const {data,error}=await sb.functions.invoke('find-recipes',{body:{focus:webFocus||undefined,offset:force?++webOffset:webOffset,have:S.pantry.filter(p=>+p.q>0).map(p=>p.ingredient),main:have,fresh,staples:[...STAPLES,...[...HERBS].filter(i=>!FRESH_HERBS.has(i))],exclude:S.recipes.map(r=>r.url)}});
+  const {data,error}=await sb.functions.invoke('find-recipes',{body:{focus:webFocus||undefined,offset:force?++webOffset:webOffset,have:[...homeSet(S.pantry.filter(p=>+p.q>0).map(p=>p.ingredient))],main:[...new Set(have.map(canonOf))],fresh:[...new Set(fresh.map(canonOf))],staples:[...STAPLES,...[...HERBS].filter(i=>!FRESH_HERBS.has(i))],exclude:S.recipes.map(r=>r.url)}});
   await finishWebProgress();
   webBusy=false;
-  web={v:4,key,at:Date.now(),results:data?.results||[],error:error?'The search didn\'t go through. Try again in a minute.':data?.error||null};
+  web={v:5,key,at:Date.now(),results:data?.results||[],error:error?'The search didn\'t go through. Try again in a minute.':data?.error||null};
   LS.set('web',web); renderWeb();
 }
 // While the web search runs: a bar that fills left to right with Parker's cat or Amy's dog walking
@@ -2159,7 +2164,7 @@ function renderWeb(){
   if(!have.length){ $('#webStatus').textContent=''; $('#webResults').innerHTML=''; return; }
   if(!web){ $('#webStatus').textContent=''; $('#webResults').innerHTML=''; return; }
   const inBox=new Set(S.recipes.map(r=>r.url));
-  const atHome=new Set(S.pantry.filter(p=>+p.q>0).map(p=>p.ingredient));
+  const atHome=homeSet(S.pantry.filter(p=>+p.q>0).map(p=>p.ingredient));
   const all=web.results.filter(x=>!inBox.has(x.url)).map(x=>({...x,need:x.need.filter(i=>!atHome.has(i)&&!optional(i))})).filter(x=>x.need.length<=3).sort((a,b)=>a.need.length-b.need.length||(b.uses.length+b.fresh.length)-(a.uses.length+a.fresh.length));
   const list=all.filter(x=>!x.need.length), near=all.filter(x=>x.need.length);
   $('#webStatus').innerHTML=web.error?esc(web.error):`${list.length} recipe${list.length===1?'':'s'} you can make now, found ${ago(web.at)}${web.key!==key?' · At Home has changed since, so <b>Search again</b>':''}`;
