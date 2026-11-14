@@ -634,6 +634,9 @@ html[data-theme="dark"] .shophead{background:rgba(15,21,18,.95)}
       <p class="meta" style="margin:0">Find the product on Fairway, copy its page link, then tap <b>Set price</b> and paste it in. The price fills in automatically.</p>
       <div id="needLinks"></div>
     </div>
+      <div class="card" style="max-width:760px;margin-bottom:16px"><h2 style="margin-top:0">Sign out</h2>
+      <p class="meta" style="margin:0 0 8px">Signs this device out. You'll need your email or password to get back in.</p>
+      <button class="btn" type="button" id="signOut">Sign out of this device</button></div>
   </section>
 
   <div class="note" id="syncNote"></div>
@@ -1320,7 +1323,7 @@ function labelTables(root=document){
   });
 }
 new MutationObserver(()=>{ clearTimeout(window.__lt); window.__lt=setTimeout(()=>labelTables(),30); }).observe(document.body,{childList:true,subtree:true});
-function renderWho(){ $('#who').innerHTML=me?`${av(me.user_id)}<span>${esc(me.name)}</span><button class="btn small" id="signOut">Sign out</button>`:''; }
+function renderWho(){ $('#who').innerHTML=me?`${av(me.user_id)}<span>${esc(me.name)}</span>`:''; }
 
 let phoneDay=TODAY;
 function renderPlan(){
