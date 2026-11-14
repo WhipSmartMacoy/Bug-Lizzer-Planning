@@ -461,6 +461,13 @@ html[data-theme="dark"] input, html[data-theme="dark"] select, html[data-theme="
 .themepick{display:inline-grid;grid-template-columns:repeat(3,auto);gap:4px;background:var(--tint2);padding:4px;border-radius:12px}
 .themepick button{font:inherit;font-size:14px;border:0;background:none;color:var(--ink);padding:8px 14px;border-radius:9px;cursor:pointer}
 .themepick button.on{background:var(--card);box-shadow:0 1px 3px rgba(0,0,0,.15);font-weight:600}
+#bcOverlay{position:fixed;inset:0;z-index:300;background:#000;display:flex;flex-direction:column}
+#bcOverlay video{flex:1;width:100%;object-fit:cover;min-height:0}
+#bcOverlay .bcframe{position:absolute;left:10%;right:10%;top:32%;height:22%;border:3px solid rgba(255,255,255,.85);border-radius:16px;box-shadow:0 0 0 9999px rgba(0,0,0,.35);pointer-events:none}
+#bcOverlay .bcbar{position:relative;z-index:2;background:var(--card,#fff);color:var(--ink,#111);padding:12px 14px calc(12px + env(safe-area-inset-bottom));display:flex;flex-direction:column;gap:8px}
+#bcOverlay .bclist{font-size:14px;max-height:120px;overflow:auto}
+#bcOverlay .bcrow{display:flex;gap:8px;align-items:center}
+#bcOverlay .bcrow input{flex:1}
 </style>
 </head>
 <body>
@@ -515,6 +522,7 @@ html[data-theme="dark"] input, html[data-theme="dark"] select, html[data-theme="
     <div id="homeLeft"></div>
     <div class="hometop">
       <input type="search" id="homeQ" placeholder="Search what's at home" autocomplete="off">
+      <button class="btn" type="button" id="barcodeBtn" title="Scan a barcode">▥ Scan</button>
       <button class="btn primary" type="button" id="homeAddBtn">＋ Add</button>
     </div>
     <div class="homefilt" id="homeFilt"></div>
@@ -533,6 +541,7 @@ html[data-theme="dark"] input, html[data-theme="dark"] select, html[data-theme="
       </form>
       <h3>Or bring in a shop</h3>
       <div class="picks">
+        <button class="pick" type="button" data-barcode><span class="pickic">▥</span><span><b>Scan barcodes</b><span class="meta">Point the camera at each item's barcode</span></span></button>
         <label class="pick" for="receiptFile"><span class="pickic">📷</span><span><b>Scan a receipt</b><span class="meta">Take a photo and review what it found</span></span></label>
         <button class="pick" id="usualsToggle" type="button"><span class="pickic">⭐</span><span><b>Our usual Fairway items</b><span class="meta">Tick what you bought</span></span></button>
       </div>
@@ -2312,7 +2321,7 @@ function renderReview(){
   if(review.status){ el.innerHTML=`<div class="card" style="margin:8px 0"><b>Reading the receipt…</b><span class="meta">${esc(review.status)}</span></div>`; return; }
   const ings=allIngredients();
   el.innerHTML=`<div class="card" style="margin:8px 0">
-    <div class="row" style="justify-content:space-between"><b>${review.source==='receipt'?'From your receipt':'Add to At Home'}</b><span class="meta">${review.rows.filter(r=>r.on).length} of ${review.rows.length} will be added · check and fix anything off</span></div>
+    <div class="row" style="justify-content:space-between"><b>${review.source==='receipt'?'From your receipt':review.source==='barcode'?'Scanned items':'Add to At Home'}</b><span class="meta">${review.rows.filter(r=>r.on).length} of ${review.rows.length} will be added · check and fix anything off</span></div>
     ${review.rows.length?`<div style="overflow:auto"><table><tr><th></th><th>${review.source==='receipt'?'Receipt line':'Item'}</th><th>Ingredient</th><th>How many</th><th>Paid</th><th>Adds</th><th>Kept in</th></tr>
     ${review.rows.map((r,k)=>`<tr class="${r.on?'':'have'}"><td><input type="checkbox" data-rv="${k}" data-f="on" ${r.on?'checked':''}></td>
       <td><span class="${r.on?'':'name'}">${esc(r.line)}</span>${r.product&&r.product!==r.line?`<div class="meta">${esc(r.product)}</div>`:''}</td>
@@ -2364,6 +2373,66 @@ async function scanReceipt(file){
   }catch(err){ review=null; toast(err.message||'Could not read that photo'); }
   renderReview();
 }
+// ---- barcodes: camera → barcode → Open Food Facts product → review rows (like a receipt) ----
+let bc=null;   // {stream, stop, seen:Map(code→row)}
+async function lookupBarcode(code){
+  try{ const r=await fetch(`https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(code)}.json?fields=product_name,generic_name,brands,quantity`);
+    const j=await r.json(); const p=j.product; if(j.status!==1||!p) return null;
+    const name=(p.product_name||p.generic_name||'').trim(); if(!name) return null;
+    return {name, brand:(p.brands||'').split(',')[0].trim(), qty:(p.quantity||'').trim()}; }catch(e){ return null; }
+}
+async function addBarcode(code){
+  if(!bc) return;
+  const have=bc.seen.get(code); if(have){ have.count+=1; renderBc(`${have.line}: ${have.count}`); return; }
+  bc.seen.set(code,{line:'Looking up '+code+'…',count:1,pending:true}); renderBc();
+  const p=await lookupBarcode(code); if(!bc) return;
+  const prev=bc.seen.get(code), line=p?[p.brand,p.name,p.qty].filter(Boolean).join(' · '):`Barcode ${code} (not found, type what it is)`;
+  const row=toReviewRow({line:p?`${p.name} ${p.qty}`:line}); row.line=line; row.count=prev.count; row.code=code;
+  if(!p){ row.ingredient=''; row.on=false; }
+  bc.seen.set(code,row); renderBc(p?`Added ${p.name}`:'Not in the product database: type it in after');
+}
+function renderBc(msg){
+  const el=$('#bcOverlay'); if(!el||!bc) return;
+  const rows=[...bc.seen.values()];
+  el.querySelector('.bclist').innerHTML=rows.length?rows.map(r=>`<div>• ${esc(r.line)}${r.count>1?` × ${r.count}`:''}${r.ingredient?` <span class="meta">→ ${esc(r.ingredient)}</span>`:''}</div>`).join(''):'<span class="meta">Point at a barcode. Each item you scan is listed here.</span>';
+  if(msg) toast(msg,1500);
+}
+function stopBarcode(){ if(!bc) return; try{ bc.stop&&bc.stop(); }catch(e){} try{ bc.stream&&bc.stream.getTracks().forEach(t=>t.stop()); }catch(e){} }
+function closeBarcode(review_){
+  stopBarcode(); const rows=bc?[...bc.seen.values()].filter(r=>!r.pending):[]; bc=null; $('#bcOverlay')?.remove();
+  if(review_&&rows.length){ document.querySelector('[data-p="pantry"]')?.click(); review={source:'barcode',rows}; renderReview(); setTimeout(()=>$('#receiptReview').scrollIntoView({behavior:'smooth',block:'start'}),60); }
+}
+async function openBarcode(){
+  if(bc) return; bc={seen:new Map()};
+  const el=document.createElement('div'); el.id='bcOverlay';
+  el.innerHTML=`<video playsinline muted autoplay></video><div class="bcframe"></div>
+    <div class="bcbar"><b>Scan barcodes</b><div class="bclist"></div>
+      <form class="bcrow" id="bcManual"><input type="text" inputmode="numeric" placeholder="or type the number under the barcode" id="bcCode"><button class="btn small">Add</button></form>
+      <div class="bcrow"><button class="btn primary" type="button" id="bcDone">Review &amp; add to At Home</button><button class="btn" type="button" id="bcCancel">Cancel</button></div></div>`;
+  document.body.appendChild(el); renderBc();
+  const video=el.querySelector('video'); let last='', lastAt=0;
+  const hit=code=>{ code=String(code||'').replace(/\D/g,''); if(code.length<8) return; const t=Date.now(); if(code===last&&t-lastAt<2500) return; last=code; lastAt=t; try{ navigator.vibrate&&navigator.vibrate(60); }catch(e){} addBarcode(code); };
+  try{
+    if('BarcodeDetector' in window){
+      const det=new BarcodeDetector({formats:['ean_13','ean_8','upc_a','upc_e']});
+      bc.stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'}}); video.srcObject=bc.stream; await video.play();
+      let on=true; bc.stop=()=>{on=false};
+      (async function loop(){ while(on&&bc){ try{ const r=await det.detect(video); if(r[0]) hit(r[0].rawValue); }catch(e){} await new Promise(r=>setTimeout(r,250)); } })();
+    } else {
+      await loadScript('https://cdn.jsdelivr.net/npm/@zxing/browser@0.1.5/umd/zxing-browser.min.js');
+      const reader=new ZXingBrowser.BrowserMultiFormatReader();
+      const ctrl=await reader.decodeFromVideoDevice(undefined,video,(res)=>{ if(res) hit(res.getText()); });
+      bc.stop=()=>ctrl.stop();
+    }
+  }catch(err){ toast('Camera not available: '+(err.message||err)+'. You can type the numbers instead.',5000); }
+}
+document.addEventListener('click',e=>{
+  if(e.target.closest('#barcodeBtn,[data-barcode]')){ e.preventDefault(); openBarcode(); }
+  else if(e.target.id==='bcDone') closeBarcode(true);
+  else if(e.target.id==='bcCancel') closeBarcode(false);
+});
+document.addEventListener('submit',e=>{ if(e.target.id!=='bcManual') return; e.preventDefault(); const v=$('#bcCode').value; $('#bcCode').value=''; const c=v.replace(/\D/g,''); if(c.length>=8) addBarcode(c); else toast('Type the full number under the barcode'); });
+
 async function saveReview(){
   const add={};
   for(const r of review.rows){ const i=r.ingredient.trim().toLowerCase(); if(!r.on||!i||!(r.count>0)) continue;
