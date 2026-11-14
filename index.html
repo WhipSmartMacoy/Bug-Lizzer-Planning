@@ -483,6 +483,15 @@ html[data-theme="dark"] .shophead{background:rgba(15,21,18,.95)}
 .recedit .reing input[data-f="name"]{flex:1 1 120px;min-width:0}
 .recedit .reing input[data-f="q"]{width:64px;flex:0 0 64px}
 .recedit .reing select{flex:0 0 92px;width:92px}
+.wprog{margin:4px 0 8px;padding-top:44px}
+.wptrack{position:relative;height:12px;border-radius:99px;background:var(--tint,#eee);margin:0 0 6px;overflow:visible}
+.wpfill{height:100%;width:0;border-radius:99px;background:var(--green);transition:width .25s linear}
+.wppet{position:absolute;bottom:2px;left:-28px;image-rendering:pixelated;transform:scaleX(-1);transition:left .25s linear;pointer-events:none}
+.wppet.cat{width:56px;height:64px;background:url(sprites/cat.png) 0 0/224px 64px no-repeat;animation:wpwalkc .56s steps(4) infinite;bottom:-2px;transform:scaleX(-1) scale(.7);transform-origin:bottom center}
+.wppet.dog{width:52px;height:46px;background:url(sprites/dog.png) 0 0/208px 46px no-repeat;animation:wpwalkd .56s steps(4) infinite;transform:scaleX(-1) scale(.8);transform-origin:bottom center}
+@keyframes wpwalkc{to{background-position:-224px 0}}
+@keyframes wpwalkd{to{background-position:-208px 0}}
+@media (prefers-reduced-motion:reduce){.wppet{animation:none}.wpfill,.wppet{transition:none}}
 </style>
 </head>
 <body>
@@ -581,7 +590,7 @@ html[data-theme="dark"] .shophead{background:rgba(15,21,18,.95)}
   <section class="panel" id="recipes">
     <div class="addbox">
       <h2 style="margin-top:0">Add a recipe we've cooked</h2>
-      <p class="meta" style="margin:0 0 10px">The recipe box only holds recipes we've actually made. Paste the link to one from NYT Cooking, Serious Eats or any other site; the box saves the title, photo and ingredient names, and links back to the original. Something new to try? Plan it from <b>Make it now</b>, and it joins the box once it's cooked.</p>
+      <p class="meta" style="margin:0 0 10px">Paste the link to a recipe from NYT Cooking, Serious Eats or any other site; the box saves the title, photo and ingredient names, and links back to the original. Ideas from <b>Cook</b> can be saved here too; they're marked <i>New · not cooked yet</i> until you make them.</p>
       <form id="importForm" class="row" style="margin:0"><input type="url" id="importUrl" required placeholder="https://cooking.nytimes.com/recipes/…" style="flex:1 1 320px"><button class="btn primary" id="importBtn">Get recipe</button></form>
       <div id="importPreview"></div>
     </div>
@@ -590,6 +599,8 @@ html[data-theme="dark"] .shophead{background:rgba(15,21,18,.95)}
       <select id="recList">
         <option value="">All recipes</option>
         <option value="planned">Planned before</option>
+        <option value="cooked">Cooked</option>
+        <option value="new">Not cooked yet</option>
       </select>
       <select id="recSort">
         <option value="new">Newest first</option>
@@ -2026,11 +2037,13 @@ function renderImport(){
 function renderRecipes(){
   renderImport();
   const q=$('#recSearch').value.toLowerCase(), f=$('#recList').value, s=$('#recSort').value;
-  let list=S.recipes.filter(r=>r.status==='past').filter(r=>!q||r.title.toLowerCase().includes(q)||r.ingredients.some(i=>i.includes(q)));
+  let list=S.recipes.filter(r=>!q||r.title.toLowerCase().includes(q)||r.ingredients.some(i=>i.includes(q)));
   if(f==='planned') list=list.filter(r=>timesPlanned(r.id));
+  if(f==='cooked') list=list.filter(r=>r.status==='past');
+  if(f==='new') list=list.filter(r=>r.status!=='past');
   if(s==='made') list.sort((a,b)=>timesPlanned(b.id)-timesPlanned(a.id)||a.title.localeCompare(b.title));
   if(s==='name') list.sort((a,b)=>a.title.localeCompare(b.title));
-  $('#recGrid').innerHTML=list.map(r=>card(r)).join('')||`<div class="empty">${S.recipes.some(r=>r.status==='past')?'No matches.':'The recipe box is empty. Paste the link to a recipe you\'ve cooked above.'}</div>`;
+  $('#recGrid').innerHTML=list.map(r=>card(r)).join('')||`<div class="empty">${S.recipes.length?'No matches.':'The recipe box is empty. Paste the link to a recipe you\'ve cooked above.'}</div>`;
 }
 // What "Make it now" offers: recipes from the box that can be made entirely from what's At Home, plus the web finds for today's At Home.
 function makeableNow(){
@@ -2105,9 +2118,30 @@ async function findOnline(force){
   web={v:3,key,at:Date.now(),results:data?.results||[],error:error?'The search didn\'t go through. Try again in a minute.':data?.error||null};
   LS.set('web',web); renderWeb();
 }
+// While the web search runs: a bar that fills left to right with Parker's cat or Amy's dog walking
+// along its front edge (sprites from Fish with Friends). The search takes longer the more is At Home,
+// so the bar paces itself on that and waits near the end until the results arrive.
+let webProg=null;
+function renderWebProgress(n){
+  const el=$('#webStatus'); if(!el) return;
+  if(!webProg){ webProg={t0:Date.now(), est:Math.min(90,18+n*1.4)*1000};
+    const pet=/^amy/i.test(me?.name||'')?'dog':'cat';
+    el.innerHTML=`<div class="wprog" role="progressbar" aria-label="Searching recipe sites" aria-valuemin="0" aria-valuemax="100">
+      <div class="wptrack"><div class="wpfill"></div><span class="wppet ${pet}"></span></div>
+      <div class="meta wptext">Searching recipe sites with all ${n} things At Home…</div></div>`;
+    webProg.timer=setInterval(tickWebProgress,250); }
+  tickWebProgress();
+}
+function tickWebProgress(){
+  const el=$('#webStatus .wprog'); if(!webProg||!el) return;
+  const x=(Date.now()-webProg.t0)/webProg.est, pct=Math.min(96, x<1? x*90 : 90+6*(1-Math.exp(-(x-1)*2)));   // ease toward the end, never "done" early
+  el.querySelector('.wpfill').style.width=pct+'%'; el.querySelector('.wppet').style.left=`calc(${pct}% - 28px)`; el.setAttribute('aria-valuenow',Math.round(pct));
+}
+function stopWebProgress(){ if(webProg){ clearInterval(webProg.timer); webProg=null; } }
 function renderWeb(){
   const {have,key}=useupInputs();
-  if(webBusy){ $('#webStatus').textContent=`Searching recipe sites with all ${have.length} things At Home (up to a minute)`; return; }
+  if(webBusy){ renderWebProgress(have.length); return; }
+  stopWebProgress();
   if(!have.length){ $('#webStatus').textContent=''; $('#webResults').innerHTML=''; return; }
   if(!web){ $('#webStatus').textContent=''; $('#webResults').innerHTML=''; return; }
   const inBox=new Set(S.recipes.map(r=>r.url));
@@ -2119,10 +2153,11 @@ function renderWeb(){
     <h3><a href="${esc(x.url)}" target="_blank" rel="noopener">${esc(x.title)}</a></h3>
     <div class="meta">${esc(x.site)}</div>
     <div class="meta"><b style="color:var(--green)">Uses ${x.uses.length}</b> from home: ${x.uses.map(i=>(x.fresh.includes(i)?'🧊 ':'')+esc(i)).join(', ')}<br>${x.need.length?`<b style="color:var(--rust,#b5542b)">Need ${x.need.length}:</b> ${x.need.map(esc).join(', ')}`:'<b>✅ Everything else is At Home</b>'}</div>
-    <div class="actions"><a class="btn small" href="${esc(x.url)}" target="_blank" rel="noopener">Open recipe</a><select class="btn small" data-webplan-sel="${esc(x.url)}"><option value="">+ Plan for…</option>${dayOptions()}</select></div></div>`).join('')
+    <div class="actions"><a class="btn small" href="${esc(x.url)}" target="_blank" rel="noopener">Open recipe</a><button type="button" class="btn small" data-websave="${esc(x.url)}">＋ Save to recipe box</button><select class="btn small" data-webplan-sel="${esc(x.url)}"><option value="">+ Plan for…</option>${dayOptions()}</select></div></div>`).join('')
     ||(web.error?'':'<div class="empty">Nothing online fits what\'s At Home yet. Try <b>Search again</b>, or add more of what you have.</div>');
 }
 document.addEventListener('click',e=>{
+  const ws=e.target.closest('[data-websave]'); if(ws){ ws.disabled=true; ws.textContent='Saving…'; importWeb(ws.dataset.websave).then(async r=>{ if(r){ await DB.load(); renderAll(); toast(`Saved to the recipe box: ${r.title}`,4000); } else { ws.disabled=false; ws.textContent='＋ Save to recipe box'; } }); return; }
   const fc=e.target.closest('[data-webfocus]'); if(fc){ webFocus=fc.dataset.webfocus; renderUseup(); findOnline(true); $('#webStatus')?.scrollIntoView({behavior:'smooth',block:'start'}); return; }
   const t=e.target.closest('#webAgain,[data-webadd],[data-webplan],[data-p="useup"]'); if(!t) return;
   if(t.dataset.webplan){ planFromWeb(t.dataset.webplan,t.dataset.day); return; }
