@@ -34,7 +34,7 @@ const KW: [string, string][] = ([
   ["rice","rice"],["spaghetti","spaghetti"],["linguine","linguine"],["bucatini","bucatini"],["rigatoni","short pasta"],["penne","short pasta"],["orecchiette","short pasta"],
   ["pastina","pastina"],["noodle","noodles"],["ramen","noodles"],["udon","noodles"],["pasta","pasta"],["tortilla","tortillas"],["pita","pita"],
   ["puff pastry","puff pastry"],["dumpling","dumplings"],["panko","panko"],["breadcrumb","breadcrumbs"],["bread","bread"],["baguette","bread"],
-  ["all-purpose flour","flour"],["flour","flour"],["cornstarch","cornstarch"],["baking soda","baking soda"],["baking powder","baking powder"],
+  ["all-purpose flour","flour"],["flour","flour"],["cornstarch","cornstarch"],["cornmeal","cornmeal"],["polenta","cornmeal"],["grits","cornmeal"],["baking soda","baking soda"],["baking powder","baking powder"],
   ["chickpea","chickpeas"],["garbanzo","chickpeas"],["cannellini","white beans"],["white bean","white beans"],["black bean","black beans"],
   ["kidney bean","kidney beans"],["lentil","lentils"],["edamame","edamame"],["snap pea","sugar snap peas"],["snow pea","snow peas"],["peas","peas"],
   ["zucchini","zucchini"],["asparagus","asparagus"],["green bean","green beans"],["broccoli rabe","broccoli rabe"],["broccolini","broccolini"],["broccoli","broccoli"],
@@ -61,15 +61,26 @@ const KW: [string, string][] = ([
   ["paprika","paprika"],["cayenne","cayenne"],["cinnamon","cinnamon"],["nutmeg","nutmeg"],["vanilla","vanilla"],["chocolate","chocolate"],["cocoa","cocoa"],
 ] as [string, string][]).sort((a, b) => b[0].length - a[0].length);
 
+const RE_CACHE = new Map<string, RegExp>();
+function wordRe(k: string): RegExp {
+  let r = RE_CACHE.get(k);
+  if (!r) { r = new RegExp("(^|[^a-zà-ÿ])" + k.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "(?=[a-zà-ÿ]{0,3}(?![a-zà-ÿ]))"); RE_CACHE.set(k, r); }
+  return r;
+}
 function lineNames(raw: string): string[] {
   const found: string[] = [];
   let l = " " + raw.toLowerCase().replace(/\(.*?\)/g, " ")
     .replace(/(chicken|vegetable|beef)( or (chicken|vegetable|beef))+ (broth|stock)/g, "broth") + " ";
   for (const [k, v] of KW) {
-    if (l.includes(k)) {
+    // Whole words only: the name must start a word and may end with at most a short plural/stem
+    // ending (chive→chives, anchov→anchovies), so "cornmeal" doesn't count as corn.
+    const re = wordRe(k);
+    const m = re.exec(l);
+    if (m) {
+      const at = m.index + m[1].length;
       // Remember where the word appeared so the first-mentioned ingredient is treated as the main one.
-      if (v && !found.includes(v)) found.push(v + "\u0000" + l.indexOf(k));
-      l = l.split(k).join(" ".repeat(k.length));
+      if (v && !found.some((f) => f.split("\u0000")[0] === v)) found.push(v + "\u0000" + at);
+      l = l.replace(new RegExp(re.source, "g"), (all, pre) => pre + " ".repeat(all.length - pre.length));
     }
   }
   return found.sort((a, b) => +a.split("\u0000")[1] - +b.split("\u0000")[1]).map((x) => x.split("\u0000")[0]);
