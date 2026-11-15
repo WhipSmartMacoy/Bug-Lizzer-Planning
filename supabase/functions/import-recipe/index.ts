@@ -18,7 +18,7 @@ const KW: [string, string][] = ([
   ["bread crumb","breadcrumbs"],["butter lettuce","lettuce"],["paneer","paneer"],["lasagna noodle","lasagna noodles"],["lasagna","lasagna noodles"],["juniper berr","juniper berries"],
   ["potato gnocchi","gnocchi"],["egg noodle","noodles"],["egg yolk","eggs"],["chicken bouillon","broth"],["bouillon","broth"],
   ["garlic powder","garlic"],["onion powder","onion"],["coconut cream","coconut milk"],["half-and-half","heavy cream"],
-  ["rotisserie chicken","rotisserie chicken"],["chicken breast","chicken breast"],["chicken thigh","chicken"],
+  ["rotisserie chicken","rotisserie chicken"],["chicken breast","chicken breast"],["chicken thigh","chicken thighs"],["chicken thig","chicken thighs"],["chicken leg","chicken legs"],["chicken quarter","chicken legs"],["chicken wing","chicken wings"],["chicken drumstick","chicken drumsticks"],["drumstick","chicken drumsticks"],["chicken tender","chicken tenders"],["whole chicken","whole chicken"],["spatchcock","whole chicken"],
   ["ground chicken","ground chicken"],["ground turkey","ground turkey"],["ground beef","ground beef"],["ground pork","ground pork"],
   ["chicken broth","broth"],["chicken stock","broth"],["vegetable broth","broth"],["vegetable stock","broth"],["beef broth","broth"],
   ["broth","broth"],["stock","broth"],["chicken","chicken"],["pork","pork"],["bacon","bacon"],["sausage","sausage"],["prosciutto","prosciutto"],
@@ -69,6 +69,8 @@ function wordRe(k: string): RegExp {
 }
 function lineNames(raw: string): string[] {
   const found: string[] = [];
+  // "1 (4-pound) chicken" with no cut named is a whole bird.
+  if (/^\s*(1|one|2|two)\s*\(\s*[\d½¼¾.\s–-]+(?:to\s*[\d½¼¾.]+\s*)?-?\s*(pound|lb)/i.test(raw) && /\bchicken\b/i.test(raw) && !/thigh|breast|wing|drumstick|leg|tender|ground|broth|stock/i.test(raw)) return ["whole chicken"];
   let l = " " + raw.toLowerCase().replace(/\(.*?\)/g, " ")
     .replace(/(chicken|vegetable|beef)( or (chicken|vegetable|beef))+ (broth|stock)/g, "broth") + " ";
   for (const [k, v] of KW) {

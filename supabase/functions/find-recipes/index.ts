@@ -18,7 +18,7 @@ const KW: [string, string][] = ([
   ["bread crumb","breadcrumbs"],["butter lettuce","lettuce"],["paneer","paneer"],["lasagna noodle","lasagna noodles"],["lasagna","lasagna noodles"],["juniper berr","juniper berries"],
   ["potato gnocchi","gnocchi"],["egg noodle","noodles"],["egg yolk","eggs"],["chicken bouillon","broth"],["bouillon","broth"],
   ["garlic powder","garlic"],["onion powder","onion"],["coconut cream","coconut milk"],["half-and-half","heavy cream"],
-  ["rotisserie chicken","rotisserie chicken"],["chicken breast","chicken breast"],["chicken thigh","chicken"],
+  ["rotisserie chicken","rotisserie chicken"],["chicken breast","chicken breast"],["chicken thigh","chicken thighs"],["chicken thig","chicken thighs"],["chicken leg","chicken legs"],["chicken quarter","chicken legs"],["chicken wing","chicken wings"],["chicken drumstick","chicken drumsticks"],["drumstick","chicken drumsticks"],["chicken tender","chicken tenders"],["whole chicken","whole chicken"],["spatchcock","whole chicken"],
   ["ground chicken","ground chicken"],["ground turkey","ground turkey"],["ground beef","ground beef"],["ground pork","ground pork"],
   ["chicken broth","broth"],["chicken stock","broth"],["vegetable broth","broth"],["vegetable stock","broth"],["beef broth","broth"],
   ["broth","broth"],["stock","broth"],["chicken","chicken"],["pork","pork"],["bacon","bacon"],["sausage","sausage"],["prosciutto","prosciutto"],
@@ -69,6 +69,8 @@ function wordRe(k: string): RegExp {
 }
 function lineNames(raw: string): string[] {
   const found: string[] = [];
+  // "1 (4-pound) chicken" with no cut named is a whole bird.
+  if (/^\s*(1|one|2|two)\s*\(\s*[\d½¼¾.\s–-]+(?:to\s*[\d½¼¾.]+\s*)?-?\s*(pound|lb)/i.test(raw) && /\bchicken\b/i.test(raw) && !/thigh|breast|wing|drumstick|leg|tender|ground|broth|stock/i.test(raw)) return ["whole chicken"];
   let l = " " + raw.toLowerCase().replace(/\(.*?\)/g, " ")
     .replace(/(chicken|vegetable|beef)( or (chicken|vegetable|beef))+ (broth|stock)/g, "broth") + " ";
   for (const [k, v] of KW) {
@@ -172,6 +174,8 @@ Deno.serve(async (req) => {
     const have: string[] = both(raw("have"));
     const main: string[] = [...new Set((body.main ? raw("main") : raw("have")).flatMap(plain))];
     const fresh: string[] = [...new Set(raw("fresh").flatMap(plain))].filter((s: string) => main.includes(s));
+    const CHICKEN_CUTS = ["chicken thighs","chicken breast","chicken wings","chicken drumsticks","chicken legs","chicken tenders","whole chicken","rotisserie chicken"];
+    const haveChicken = have.some((h) => CHICKEN_CUTS.includes(h) && h !== "whole chicken" || h === "whole chicken");
     const PASTA = new Set<string>(["pasta","spaghetti","linguine","bucatini","fettuccine","angel hair","capellini","penne","rigatoni","fusilli","farfalle","orecchiette","ditalini","orzo","macaroni","elbow macaroni","short pasta","pappardelle","tagliatelle","ziti","shells","conchiglie","gemelli","campanelle","cavatappi","radiatori","paccheri","lasagna noodles","pastina"]);
     const havePasta = have.some((h) => PASTA.has(h) || /\b(pasta|noodles?|spaghetti|linguine|penne|rigatoni|fusilli|orzo|ditalini|angel hair|capellini|macaroni|fettuccine|bucatini|farfalle|orecchiette|ziti|shells)\b/.test(h));
     const staples = new Set<string>((body.staples || []).map((s: string) => String(s).toLowerCase()));
@@ -220,7 +224,8 @@ Deno.serve(async (req) => {
       const uses = ings.filter((i) => main.includes(i));
       // Recipes that use something from home and need at most 3 other things (staples don't count).
       // Pasta shapes swap freely: any pasta at home covers a recipe's linguine, penne, etc.
-      const need = ings.filter((i) => !have.includes(i) && !(PASTA.has(i) && havePasta));
+      // A recipe's plain "chicken" is covered by any chicken pieces at home; a specific cut needs that cut.
+      const need = ings.filter((i) => !have.includes(i) && !(PASTA.has(i) && havePasta) && !(i === "chicken" && haveChicken));
       if (focus && !ings.includes(focus)) return null;
       if (!uses.length || need.length > 3 || !focus && uses.length < Math.min(2, main.length) && need.length > 1) return null;
       let image = recipe.image; if (Array.isArray(image)) image = image[0]; if (image && typeof image === "object") image = image.url || image.contentUrl;
