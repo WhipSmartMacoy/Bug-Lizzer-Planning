@@ -374,7 +374,7 @@ nav.tabs button i{font-style:normal;display:none}
   /* Meals tabs become a bottom tab bar */
   nav.tabs{position:fixed;left:0;right:0;bottom:0;z-index:25;margin:0;border:0;border-top:1px solid var(--line);
     background:rgba(255,253,248,.94);-webkit-backdrop-filter:saturate(1.6) blur(14px);backdrop-filter:saturate(1.6) blur(14px);
-    padding:4px 2px calc(4px + var(--safe-bot));display:grid;grid-template-columns:repeat(7,1fr);gap:0;overflow:visible}
+    padding:4px 2px calc(4px + var(--safe-bot));display:grid;grid-auto-flow:column;grid-auto-columns:1fr;gap:0;overflow:visible}
   nav.tabs button{display:flex;flex-direction:column;align-items:center;gap:1px;padding:5px 0;border:0;font-size:9.5px;font-weight:600;text-align:center;white-space:normal;line-height:1.1}
   nav.tabs button i{display:block;font-size:20px;line-height:1.1;filter:grayscale(1);opacity:.55}
   nav.tabs button.on{color:var(--green)}nav.tabs button.on i{filter:none;opacity:1}
@@ -2263,7 +2263,8 @@ let editingPantry=null, homeLoc='all', homeQ='';
 let leftOpen=null, leftFix=false;
 function renderHomeLeft(){
   const el=$('#homeLeft'); if(!el) return;
-  const list=leftoverMeals(addDays(TODAY,1),1);
+  // Past meals count as made; today's only once they're marked cooked (not this morning's unmade biscuits).
+  const list=leftoverMeals(TODAY,1);
   // Recently cooked dinners, so the count can be corrected ("there's more in the fridge than the app thinks").
   const recent=S.meals.filter(m=>!m.leftover_of&&m.cooked_at&&rec(m.recipe_id)&&m.planned_for>=addDays(TODAY,-KEEP_DAYS)&&m.planned_for<=TODAY)
     .sort((a,b)=>b.planned_for.localeCompare(a.planned_for));
@@ -2342,7 +2343,7 @@ function publishStation(){
       return {d, day:dayName(d), what:m?dTitle(m):null, kind:m?(m.leftover_of?'leftovers':isScr(m)?'scrunge':isOutDin(m)?'out':'cook'):null, cooked:!!(m&&m.cooked_at)}; });
     const plan=shopRows(); week=w;
     const buy=plan.filter(o=>o.buy>0).map(o=>({i:o.i, aisle:aisleOf(o.i)[1], tonight:o.uses.some(m=>m.planned_for===TODAY)}));
-    const left=leftoverMeals(addDays(TODAY,1),1).map(m=>({id:m.id, what:rec(m.recipe_id).title, servings:leftoversOf(m), from:dayName(m.planned_for)}));
+    const left=leftoverMeals(TODAY,1).map(m=>({id:m.id, what:rec(m.recipe_id).title, servings:leftoversOf(m), from:dayName(m.planned_for)}));
     const snap={dinners, buy, left, home:S.pantry.filter(p=>+p.q>0).length};
     const val=JSON.stringify(snap); if(val===stationLast) return; stationLast=val;
     await sb.from('app_settings').upsert({key:'station', value:JSON.stringify({...snap, at:new Date().toISOString()}), updated_at:new Date().toISOString()});
