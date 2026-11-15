@@ -1964,10 +1964,13 @@ function renderTomorrow(){
   let body;
   if(planned.length) body=`<p class="meta" style="margin:6px 0 0">Planned: <b>${planned.map(m=>(m.leftover_of?'🍱 Leftovers: ':isScr(m)?'🫙 ':isOutDin(m)?'🍽️ ':'')+esc(dTitle(m))).join(', ')}</b></p>`;
   else{
-    const lo=leftoverMeals(T)[0];
-    if(lo){ const r=rec(lo.recipe_id), n=leftoversOf(lo);
-      body=`<div class="row" style="margin-top:6px;align-items:center"><span>🍱 <b>Leftovers: ${esc(r.title)}</b> <span class="meta">${n} servings left from ${dayName(lo.planned_for,'long')}</span></span>
-        <button class="btn small primary" data-lo="${lo.id}" type="button">Plan leftovers for tomorrow</button></div>`;
+    // Every cooked leftover, even a single serving. Enough for both → one tap makes it tomorrow's dinner;
+    // one serving → open tomorrow's dinner to give it to one of us.
+    const los=leftoverMeals(T,1);
+    if(los.length){
+      body=los.map(lo=>{ const r=rec(lo.recipe_id), n=leftoversOf(lo);
+        return `<div class="row" style="margin-top:6px;align-items:center"><span>🍱 <b>Leftovers: ${esc(r.title)}</b> <span class="meta">${n} serving${n===1?'':'s'} left from ${dayName(lo.planned_for,'long')}</span></span>
+        ${n>=EAT?`<button class="btn small primary" data-lo="${lo.id}" type="button">Plan for tomorrow's dinner</button>`:`<button class="btn small" data-add="${T}||dinner" type="button">Add to tomorrow…</button>`}</div>`; }).join('');
     } else {
       const atHome=homeSet(S.pantry.filter(p=>+p.q>0).map(p=>p.ingredient));
       const box=S.recipes.filter(r=>r.status==='past').filter(r=>r.ingredients.some(i=>atHome.has(i)&&!optional(i))&&r.ingredients.every(i=>atHome.has(i)||optional(i)))
