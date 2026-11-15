@@ -510,7 +510,6 @@ html[data-theme="dark"] .shophead{background:rgba(15,21,18,.95)}
     <button data-p="useup"><i>🍳</i><span>Make it now</span><em>Cook</em></button>
     <button data-p="recipes"><i>📖</i><span>Recipe box</span><em>Recipes</em></button>
     <button data-p="nutrition"><i>📊</i><span>Nutrition</span><em>Food</em></button>
-    <button data-p="discover"><i>✨</i><span>Discover</span><em>Ideas</em></button>
     <button data-p="settings"><i>⚙️</i><span>Settings</span><em>Settings</em></button>
   </nav>
 </header>
@@ -905,17 +904,26 @@ let usualsOpen=false, usualsPick=new Set();
 function shopPlan(){
   const end=addDays(week,6);
   const meals=S.meals.filter(m=>!m.cooked_at&&!m.leftover_of&&m.planned_for<=end&&rec(m.recipe_id)).sort((a,b)=>a.planned_for.localeCompare(b.planned_for));
-  const stock={}, out={};
+  const stock={}, out={}, pks={};
+  // No package size on file ("1 package")? Then compare in a real unit instead: the one At Home uses
+  // (861 g of thighs), or the recipe's. Otherwise grams at home can't be weighed against "packages" and
+  // everything looks missing. One "package" is then taken to be what the recipe needs.
+  const pkFor=(i,r)=>{ if(pks[i]) return pks[i]; const pk=pkgOf(i); if(pk.u!=='pkg') return pks[i]=pk;
+    const p=pantryOf(i), a=(r.amounts||{})[i], U=p&&p.u!=='pkg'&&+p.q>0?p.u:(a&&a.u!=='pkg'?a.u:null);
+    if(!U) return pks[i]=pk;
+    const q=a?conv(+a.q,a.u,U,i,pk):null;
+    return pks[i]={...pk,q:q>0?q:1,u:U,label:pk.label,guess:true}; };
   for(const m of meals){
     const r=rec(m.recipe_id), inWeek=m.planned_for>=week;
     for(const i of r.ingredients){
-      const pk=pkgOf(i), D=pk.u;
+      const pk=pkFor(i,r), D=pk.u;
       if(stock[i]==null) stock[i]=haveIn(i,D,pk);
       const a=(r.amounts||{})[i];
       let need=a?conv(+a.q,a.u,D,i,pk):null, unknown=need==null;
       if(unknown) need = stock[i]>0 ? 0 : 0.0001;               // amount not listed: make sure there's some
       const before=stock[i]; let buy=0;
-      if(stock[i]<need-1e-9){ buy=Math.max(1,Math.ceil((need-stock[i])/pk.q-1e-9)); stock[i]+=buy*pk.q; }
+      // Close counts: 1.9 lb at home for a 2 lb recipe is enough (packages never match recipes exactly).
+      if(stock[i]<need*0.9-1e-9){ buy=Math.max(1,Math.ceil((need-stock[i])/pk.q-1e-9)); stock[i]+=buy*pk.q; }
       stock[i]=Math.max(0,stock[i]-need);
       if(inWeek){
         const o=out[i]||(out[i]={i,pk,D,first:m.planned_for,have:before,need:0,buy:0,uses:[],unknown:false});
