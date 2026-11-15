@@ -1093,8 +1093,10 @@ function leftoversOf(m){
   const later=S.meals.filter(x=>String(x.leftover_of)===String(m.id)&&!(x.planned_for===m.planned_for&&x.meal===m.meal)).reduce((t,x)=>t+eaten(x),0);
   return Math.max(0, start-EAT*(+m.lunches||0)-later);
 }
-function leftoverMeals(day,min=EAT){   // meals cooked (or on the menu) before `day` — or already cooked earlier that day — with at least `min` servings left
-  return S.meals.filter(m=>!m.leftover_of&&(m.planned_for<day||(m.planned_for===day&&m.cooked_at))&&m.planned_for>=addDays(day,-KEEP_DAYS)&&rec(m.recipe_id)&&leftoversOf(m)>=min)
+// Leftovers are real food only: meals already cooked (or eaten on an earlier day). Nothing still on the
+// menu counts — tonight's dinner isn't a leftover for tomorrow until it's actually made.
+function leftoverMeals(day,min=EAT){
+  return S.meals.filter(m=>!m.leftover_of&&(m.cooked_at||m.planned_for<TODAY)&&m.planned_for<=day&&m.planned_for>=addDays(day,-KEEP_DAYS)&&rec(m.recipe_id)&&leftoversOf(m)>=min)
     .sort((a,b)=>b.planned_for.localeCompare(a.planned_for));
 }
 function usage(){ const u={}; for(const m of S.meals){ const r=rec(m.recipe_id); if(!r||m.leftover_of) continue; for(const i of r.ingredients){ u[i]=u[i]||{p:0,c:0}; u[i].p++; if(m.cooked_at) u[i].c++; } } return u; }
@@ -1743,7 +1745,7 @@ function renderAdd0(){
   let el=$('#addSheet'); if(!addS){ el?.remove(); return; }
   if(!el){ el=document.createElement('div'); el.id='addSheet'; el.className='sheetwrap'; document.body.appendChild(el); }
   const {d,p,meal,q}=addS, dinner=hhMode();
-  const lo=leftoverMeals(d,dinner?EAT:1).filter(x=>!(x.planned_for===d&&x.meal===meal)&&!(x.planned_for===d&&meal==='dinner'&&x.meal==='dinner'));
+  const lo=leftoverMeals(d,1).filter(x=>!(x.planned_for===d&&x.meal===meal)&&!(x.planned_for===d&&meal==='dinner'&&x.meal==='dinner'));
   const ql=q.toLowerCase();
   const recs=S.recipes.filter(r=>!ql||r.title.toLowerCase().includes(ql)||r.ingredients.some(i=>i.includes(ql)))
     .sort((a,b)=>(b.status==='past')-(a.status==='past')||(lastCooked(b.id)?.cooked_at||'').localeCompare(lastCooked(a.id)?.cooked_at||'')).slice(0,ql?20:8);
