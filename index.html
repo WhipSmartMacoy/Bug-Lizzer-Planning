@@ -844,9 +844,15 @@ function ingFrom(text){
   const t=' '+String(text).toLowerCase().replace(/[^a-z0-9 ]+/g,' ').replace(/\s+/g,' ')+' ';
   // Recipe ingredient names and the phrases above, longest first, so "almond butter" beats "butter".
   const keys=[...allIngredients().map(k=>[k,k]),...SYN_KEYS.map(k=>[k,ING_SYN[k]])].sort((a,b)=>b[0].length-a[0].length);
-  for(const [k,v] of keys){ const s=k.replace(/s$/,''); if(t.includes(' '+k+' ')||t.includes(' '+s+' ')||t.includes(' '+s+'s ')||t.includes(' '+s+'es ')) return v; }
+  for(const [k,v] of keys){ const s=k.replace(/s$/,'');
+    for(const f of [k,s,s+'s',s+'es']){ let at=t.indexOf(' '+f+' ');
+      while(at>=0){ const next=t.slice(at+f.length+2).split(' ')[0];
+        // "potato rolls", "apple juice", "tortilla chips": the next word makes it a different product.
+        if(!PRODUCT_NOUN.test(next)||k.split(' ').includes(next)) return v;
+        at=t.indexOf(' '+f+' ',at+1); } } }
   return null;
 }
+const PRODUCT_NOUN=/^(rolls?|buns?|breads?|chips?|crisps?|starch|flakes?|soups?|salads?|bars?|cookies?|crackers?|pies?|cakes?|muffins?|tortillas?|wraps?|pancakes?|waffles?|mix|puffs?|sticks?|fries|tots|pierogi(es)?|dumplings?|juice|sauce|jam|jelly|cider|bites|crumbs|cereal|snacks?|candy|candies|chews|gummies|drink|soda|tea|yogurt|ice|popsicles?|pops)$/;
 // Package size from a product name ("Kitchen Basics chicken stock 32 oz", "lemons 2 lb bag", "eggs 12 count").
 function sizeFrom(text,i){
   const s=String(text).toLowerCase();
