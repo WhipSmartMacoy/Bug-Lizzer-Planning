@@ -2296,7 +2296,8 @@ function renderHomeLeft(){
   // Past meals count as made; today's only once they're marked cooked (not this morning's unmade biscuits).
   const list=leftoverMeals(TODAY,1);
   // Recently cooked dinners, so the count can be corrected ("there's more in the fridge than the app thinks").
-  const recent=S.meals.filter(m=>!m.leftover_of&&m.cooked_at&&rec(m.recipe_id)&&m.planned_for>=addDays(TODAY,-KEEP_DAYS)&&m.planned_for<=TODAY)
+  // …including every leftover on the list (past meals count as made even if nobody tapped "cooked").
+  const recent=[...new Map([...list,...S.meals.filter(m=>!m.leftover_of&&m.cooked_at&&rec(m.recipe_id)&&m.planned_for>=addDays(TODAY,-KEEP_DAYS)&&m.planned_for<=TODAY)].map(m=>[m.id,m])).values()]
     .sort((a,b)=>b.planned_for.localeCompare(a.planned_for));
   const fix=leftFix?`<div class="hitem open"><div class="hmore" style="padding-top:12px"><b>How many servings are left?</b>${recent.length?recent.map(m=>`<div class="row" style="margin:0;align-items:center;gap:8px"><span style="flex:1">${esc(rec(m.recipe_id).title)} <span class="meta">· ${dayName(m.planned_for)}</span></span>${[0,1,2,3,4].map(n=>`<button type="button" class="btn small ${leftoversOf(m)===n?'primary':''}" data-leftset="${m.id}|${n}">${n}</button>`).join('')}</div>`).join(''):'<span class="meta">Nothing cooked in the last few days. Leftovers come from meals marked ✓ cooked.</span>'}
       <button type="button" class="btn small" data-leftfix style="align-self:flex-start">Done</button></div></div>`:'';
@@ -2304,7 +2305,8 @@ function renderHomeLeft(){
     return `<div class="hitem ${open?'open':''}"><button type="button" class="hrow" data-leftopen="${m.id}"><b>${esc(rec(m.recipe_id).title)}</b><span class="amt">${n} serving${n>1?'s':''} · ${dayName(m.planned_for)}</span><span class="chev">›</span></button>
       ${open?`<div class="hmore">${PEOPLE.map(p=>`<div class="lrow" data-who="${p}"><b class="who">${p}</b> <span class="leftto">${['breakfast','lunch','snack'].map(ml=>`<button type="button" class="btn small" data-leftgive="${m.id}|${p}|${ml}">${SLOT_LABEL[ml]}</button>`).join('')}</span></div>`).join('')}
         <div class="row" style="margin:0"><button type="button" class="btn small" data-leftdin="${m.id}">Dinner for 2 tonight</button><button type="button" class="btn small" data-lefttoss="${m.id}" style="margin-left:auto">🗑 Throw out</button></div>
-        <span class="meta">Gives one serving to that person today.</span></div>`:''}</div>`; }).join('')}</div></div>`;
+        <span class="meta">Gives one serving to that person today.</span>
+        <div class="row" style="margin:6px 0 0;align-items:center;gap:6px"><span class="meta">Actually left:</span>${Array.from({length:Math.max(5,n+2)},(_,k)=>k).map(k=>`<button type="button" class="btn small ${k===n?'primary':''}" data-leftset="${m.id}|${k}">${k}</button>`).join('')}</div></div>`:''}</div>`; }).join('')}</div></div>`;
 }
 document.addEventListener('click',async e=>{
   const t=e.target.closest('[data-leftopen],[data-leftgive],[data-lefttoss],[data-leftdin],[data-leftfix],[data-leftset]'); if(!t) return;
