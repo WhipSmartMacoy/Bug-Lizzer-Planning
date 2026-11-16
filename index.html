@@ -493,6 +493,11 @@ html[data-theme="dark"] .shophead{background:rgba(15,21,18,.95)}
 @keyframes wpwalkd{to{background-position:-208px 0}}
 @media (prefers-reduced-motion:reduce){.wppet{animation:none}.wpfill,.wppet{transition:none}}
 .almost{margin:14px 0}.almost>summary{cursor:pointer;color:var(--muted);font-size:14px;padding:6px 0}
+.hhrow{display:flex;align-items:center;gap:8px;padding:10px 12px}
+.hhname{all:unset;cursor:pointer;flex:1;min-width:0}
+.hhstat{display:flex;gap:4px;flex:0 0 auto}.hhstat .chip{margin:0;padding:5px 9px;font-size:12px}
+.hhstat .chip.on.st-low{background:#c98a00;border-color:#c98a00;color:#fff}.hhstat .chip.on.st-out{background:var(--rust,#b5542b);border-color:var(--rust,#b5542b);color:#fff}
+#house .hmore{padding:0 12px 12px}
 </style>
 </head>
 <body>
@@ -507,6 +512,7 @@ html[data-theme="dark"] .shophead{background:rgba(15,21,18,.95)}
   <nav class="tabs" id="tabs">
     <button data-p="plan" class="on"><i>🗓️</i><span>Plan &amp; shop</span><em>Plan</em></button>
     <button data-p="pantry"><i>🧊</i><span>At Home</span><em>Home</em></button>
+    <button data-p="house"><i>🧻</i><span>Household</span><em>House</em></button>
     <button data-p="useup"><i>🍳</i><span>Make it now</span><em>Cook</em></button>
     <button data-p="recipes"><i>📖</i><span>Recipe box</span><em>Recipes</em></button>
     <button data-p="nutrition"><i>📊</i><span>Nutrition</span><em>Food</em></button>
@@ -577,6 +583,10 @@ html[data-theme="dark"] .shophead{background:rgba(15,21,18,.95)}
     <div id="pantryList"></div>
   </section>
 
+  <section class="panel" id="house">
+    <p class="meta intro">Toilet paper, cleaning supplies and other non-food things. Mark something <b>Low</b> or <b>Out</b> and it goes on the shopping list; checking it off there marks it stocked again.</p>
+    <div id="houseList"></div>
+  </section>
   <section class="panel" id="useup">
     <p class="intro">Recipes that use up what's <b>At Home</b>, found on NYT Cooking. Plan one for a day and it joins the recipe box once it's cooked. Fridge items count first because they spoil soonest. Only recipes whose main ingredients are <b>all</b> At Home are shown. Herbs, spices and pantry staples (flour, oil, salt, pepper, rice) don't count, since you can pick those up or leave them out. These are links to the original sites; pick a day under <b>Plan for…</b> to try one.</p>
     <div id="useupHave" style="margin-bottom:12px"></div>
@@ -954,7 +964,7 @@ async function setStapleNeed(i,on){
 // ---------------- data ----------------
 const DB = {
   async load(){
-    const [r,p,m,h,mem,act,pan,us,ppl,inb,sn]=await Promise.all([
+    const [r,p,m,h,mem,act,pan,us,ppl,inb,sn,hh]=await Promise.all([
       sb.from('recipes').select('*').order('added_at',{ascending:false}),
       sb.from('prices').select('*'),
       sb.from('meal_plan').select('*').order('planned_for').order('added_at'),
@@ -965,10 +975,11 @@ const DB = {
       sb.from('fairway_usuals').select('*').order('rank'),
       sb.from('people').select('*'),
       sb.from('receipt_inbox').select('id,received_at,sender,subject,body').is('handled_at',null).order('received_at',{ascending:false}).limit(10),
-      sb.from('app_settings').select('value').eq('key','staples_need').maybeSingle()
+      sb.from('app_settings').select('value').eq('key','staples_need').maybeSingle(),
+      sb.from('household_items').select('*').order('name')
     ]);
     for(const x of [r,p,m,h,mem,act,pan]) if(x.error) console.warn(x.error.message);
-    S.pantry=pan.data||[]; S.usuals=us.error?[]:(us.data||[]); S.people=ppl.error?[]:(ppl.data||[]); S.inbox=inb.error?[]:(inb.data||[]); try{ S.stapleNeed=sn.data?.value?JSON.parse(sn.data.value):{}; }catch(e){ S.stapleNeed={}; }
+    S.pantry=pan.data||[]; S.usuals=us.error?[]:(us.data||[]); S.people=ppl.error?[]:(ppl.data||[]); S.inbox=inb.error?[]:(inb.data||[]); S.house=hh.error?[]:(hh.data||[]); try{ S.stapleNeed=sn.data?.value?JSON.parse(sn.data.value):{}; }catch(e){ S.stapleNeed={}; }
     S.recipes=r.data||[]; S.prices=Object.fromEntries((p.data||[]).map(x=>[x.ingredient,x]));
     S.meals=m.data||[]; S.have=h.data||[]; S.members=mem.data||[]; S.activity=act.data||[];
     byId=Object.fromEntries(S.recipes.map(x=>[String(x.id),x]));
@@ -2002,10 +2013,14 @@ function renderShopMode(){
   const got=new Set(S.have.filter(h=>h.week_start===week).map(h=>h.ingredient));
   const items=all.filter(o=>(!o.staple||o.needed)&&(o.buy>0||got.has(o.i)));
   const check=all.filter(o=>o.staple&&!o.needed&&!got.has(o.i)).sort((a,b)=>a.i.localeCompare(b.i));
-  const left=items.filter(o=>o.buy>0).length;
+  // Household supplies: their own aisle. Ones checked off this trip stay visible (ticked) until Done.
+  const hh=(S.house||[]).filter(x=>x.status!=='stocked'||hhTrip.has(x.id)).sort((a,b)=>a.name.localeCompare(b.name));
+  const hhPrice=x=>{ const v=parseFloat(String(x.price||'').replace(/[^0-9.]/g,'')); return v>0?v:null; };
+  const left=items.filter(o=>o.buy>0).length+hh.filter(x=>x.status!=='stocked').length;
   // Estimated cost: packages to buy × the Fairway price. Checked items keep what they were going to cost.
   const cost=o=>{ const n=o.buy>0?o.buy:(o.need?Math.max(1,Math.ceil(o.need/(o.pk.q||1))):1); return o.pk.price!=null?n*o.pk.price:null; };
   let toGo=0, inCart=0, noPrice=0; for(const o of items){ const c=cost(o); if(c==null){ if(o.buy>0) noPrice++; continue; } if(o.buy>0) toGo+=c; else inCart+=c; }
+  for(const x of hh){ const c=hhPrice(x), todo=x.status!=='stocked'; if(c==null){ if(todo) noPrice++; continue; } if(todo) toGo+=c; else inCart+=c; }
   el.innerHTML=`<div class="shophead"><button class="btn small" id="shopModeX" type="button">Done</button><button class="btn small" type="button" data-scanreceipt>📷 Receipt</button><b>🛒 ${left?`${left} to get`:'All done'}</b><span class="meta">${shortDate(week)}–${shortDate(addDays(week,6))}</span></div>
     <div class="shoptotal"><div><span class="meta">Still to get</span><b>≈ $${toGo.toFixed(2)}</b></div><div><span class="meta">In the cart</span><b>$${inCart.toFixed(2)}</b></div><div><span class="meta">Trip estimate</span><b>≈ $${(toGo+inCart).toFixed(2)}</b></div></div>
     ${noPrice?`<p class="meta" style="padding:0 16px">${noPrice} item${noPrice>1?'s have':' has'} no price yet, so the real total will be a bit higher.</p>`:''}
@@ -2013,7 +2028,9 @@ function renderShopMode(){
       const sub=xs.reduce((t,o)=>t+(cost(o)||0),0);
       return `<h3>${ic} ${name}${sub?` <span class="meta" style="float:right;font-weight:500">≈ $${sub.toFixed(2)}</span>`:''}</h3>${xs.map(o=>{ const done=o.buy<=0, c=cost(o);
         return `<label class="sitem ${done?'done':''}"><input type="checkbox" ${done?'checked':''} data-shopcheck="${esc(o.i)}"><span><b>${esc(cap(o.i))}</b><span class="meta">${done?'in the cart':`${o.pk.u==='each'&&o.pk.label==='1'?o.buy:`${o.buy} × ${esc(o.pk.label)}`}`}</span></span><span class="sprice ${c==null?'none':''}">${c==null?'no price yet':'$'+c.toFixed(2)}</span></label>`; }).join('')}`; }).join('')
-      :'<p class="meta" style="padding:20px">Nothing to buy this week.</p>'}
+      :(hh.length?'':'<p class="meta" style="padding:20px">Nothing to buy this week.</p>')}
+    ${hh.length?`<h3>🧻 Household${hh.some(hhPrice)?` <span class="meta" style="float:right;font-weight:500">≈ $${hh.reduce((t,x)=>t+(hhPrice(x)||0),0).toFixed(2)}</span>`:''}</h3>${hh.map(x=>{ const done=x.status==='stocked';
+      return `<label class="sitem ${done?'done':''}"><input type="checkbox" ${done?'checked':''} data-hhshop="${x.id}"><span><b>${esc(cap(x.name))}</b><span class="meta">${done?'in the cart':(x.status==='out'?'out':'running low')}</span></span><span class="sprice">${hhPrice(x)!=null?'$'+hhPrice(x).toFixed(2):''}</span></label>`; }).join('')}`:''}
     ${check.length?`<h3>🧂 Check you have these</h3><p class="meta" style="padding:0 16px">Staples this week's recipes use. Tap one you're out of to add it to the list.</p>
       <div class="chips" style="padding:4px 16px 8px">${check.map(o=>`<span class="chip" data-stapleneed="${esc(o.i)}" title="${esc(o.uses.map(m=>rec(m.recipe_id).title).join(', '))}">＋ ${esc(cap(o.i))}</span>`).join('')}</div>`:''}
     <p class="meta" style="padding:0 16px 24px">Checking an item adds it to At Home.</p>`;
@@ -2021,7 +2038,7 @@ function renderShopMode(){
 document.addEventListener('click',e=>{
   const sn=e.target.closest('[data-stapleneed]'); if(sn){ e.preventDefault(); setStapleNeed(sn.dataset.stapleneed,true); return; }
   const sh=e.target.closest('[data-staplehave]'); if(sh){ e.preventDefault(); setStapleNeed(sh.dataset.staplehave,false); return; } });
-document.addEventListener('click',e=>{ if(e.target.id==='shopModeBtn'){ shopMode=true; renderShopMode(); } if(e.target.id==='shopModeX'){ shopMode=false; renderShopMode(); } });
+document.addEventListener('click',e=>{ if(e.target.id==='shopModeBtn'){ shopMode=true; renderShopMode(); } if(e.target.id==='shopModeX'){ shopMode=false; hhTrip.clear(); renderShopMode(); } });
 document.addEventListener('change',async e=>{ const i=e.target.dataset?.shopcheck; if(i===undefined) return;
   const o=window._shop?.[i], pk=pkgOf(i);
   e.target.closest('.sitem')?.classList.toggle('done',e.target.checked);
@@ -2051,6 +2068,8 @@ function renderShop(){
       <td>${o.unknown&&!o.need?'<span class="meta">some</span>':esc(fmtAmt(o.need,o.D))}${o.unknown&&o.need?' <span class="meta">+ some</span>':''}</td>
       <td>${o.have>0?`${esc(fmtAmt(o.have,o.D))}<div class="meta">${STORE_ICON[storeOf(o.i)]} in ${STORE_LABEL[storeOf(o.i)]}</div>`:'0'}${o.left>0?`<div class="meta">${esc(fmtAmt(o.left,o.D))} left after</div>`:''}</td>
       <td>${buyCell}</td><td>${priceCell(o.i)}</td></tr>`}).join('')}</table>`).join('')+
+    (hhShopRows().length?`<div class="needby">🧻 Household</div><table><tr><th>Item</th><th>Status</th><th>Buy</th><th>Price</th></tr>${hhShopRows().map(x=>`<tr><td>${esc(cap(x.name))}</td><td class="meta">${x.status==='out'?'Out':'Low'}</td>
+      <td><button class="btn small" data-hhbuy="${x.id}|1" type="button">Got it ✓</button></td><td>${x.price?esc(x.price):'<span class="meta">-</span>'}</td></tr>`).join('')}</table>`:'')+
     (check.length?`<div class="needby">🧂 Check you have these</div><p class="meta" style="margin:2px 0 6px">Staples this week's recipes use. Out of one? Tap <b>Need to buy</b> and it joins the list.</p>
     <table><tr><th>Staple</th><th>For</th><th>Need</th><th></th></tr>${check.map(o=>`<tr class="have"><td>${esc(cap(o.i))}</td>
       <td class="meta">${o.uses.map(m=>`${dayName(m.planned_for)} · ${esc(rec(m.recipe_id).title)}`).join('<br>')}</td>
@@ -2347,18 +2366,68 @@ function publishStation(){
     const dinners=days.map(d=>{ const m=S.meals.find(x=>x.planned_for===d&&isDin(x));
       return {d, day:dayName(d), what:m?dTitle(m):null, kind:m?(m.leftover_of?'leftovers':isScr(m)?'scrunge':isOutDin(m)?'out':'cook'):null, cooked:!!(m&&m.cooked_at)}; });
     const plan=shopRows(); week=w;
-    const buy=plan.filter(o=>o.buy>0).map(o=>({i:o.i, aisle:aisleOf(o.i)[1], tonight:o.uses.some(m=>m.planned_for===TODAY)}));
+    const buy=plan.filter(o=>o.buy>0).map(o=>({i:o.i, aisle:aisleOf(o.i)[1], tonight:o.uses.some(m=>m.planned_for===TODAY)}))
+      .concat(hhToBuy().map(x=>({i:x.name, aisle:'Household', tonight:false})));
     const left=leftoverMeals(TODAY,1).map(m=>({id:m.id, what:rec(m.recipe_id).title, servings:leftoversOf(m), from:dayName(m.planned_for)}));
     const snap={dinners, buy, left, home:S.pantry.filter(p=>+p.q>0).length};
     const val=JSON.stringify(snap); if(val===stationLast) return; stationLast=val;
     await sb.from('app_settings').upsert({key:'station', value:JSON.stringify({...snap, at:new Date().toISOString()}), updated_at:new Date().toISOString()});
   }catch(e){ console.warn('station summary',e); } },4000);
 }
+// ---------------- Household supplies (not food: never touches recipes, Cook or leftovers) ----------------
+const HH_CATS=[['cleaning','🧽 Cleaning'],['paper','🧻 Paper goods'],['bathroom','🪥 Bathroom'],['laundry','🧺 Laundry'],['kitchen','🍽️ Kitchen supplies'],['other','📦 Other']];
+const HH_SUGGEST=[['toilet paper','paper'],['paper towels','paper'],['tissues','paper'],['napkins','paper'],['dish soap','cleaning'],['dishwasher pods','cleaning'],['all-purpose cleaner','cleaning'],['disinfecting wipes','cleaning'],['sponges','cleaning'],['glass cleaner','cleaning'],['bleach','cleaning'],
+  ['hand soap','bathroom'],['shampoo','bathroom'],['conditioner','bathroom'],['body wash','bathroom'],['toothpaste','bathroom'],['deodorant','bathroom'],['laundry detergent','laundry'],['dryer sheets','laundry'],['stain remover','laundry'],
+  ['trash bags','kitchen'],['aluminum foil','kitchen'],['plastic wrap','kitchen'],['zip-top bags','kitchen'],['parchment paper','kitchen'],['coffee filters','kitchen'],['batteries','other'],['light bulbs','other']];
+const hhToBuy=()=>(S.house||[]).filter(x=>x.status!=='stocked');
+let hhOpen=null;
+function renderHouse(){
+  const el=$('#houseList'); if(!el) return; const all=S.house||[], have=new Set(all.map(x=>x.name));
+  const STAT={stocked:'✓ Stocked',low:'Low',out:'Out'};
+  const row=x=>`<div class="hitem ${hhOpen===x.id?'open':''}"><div class="hhrow"><button type="button" class="hhname" data-hhopen="${x.id}"><b>${esc(cap(x.name))}</b>${x.status!=='stocked'?' <span class="tag">on the list</span>':''}</button>
+      <span class="hhstat">${['stocked','low','out'].map(st=>`<button type="button" class="chip ${x.status===st?'on':''} st-${st}" data-hhstat="${x.id}|${st}">${STAT[st]}</button>`).join('')}</span></div>
+      ${hhOpen===x.id?`<form class="hmore row" data-hhedit="${x.id}" style="gap:6px;flex-wrap:wrap;padding-top:8px"><input type="text" name="n" value="${esc(x.name)}" aria-label="Name" style="flex:1 1 140px">
+        <select name="c" aria-label="Kind">${HH_CATS.map(([k,l])=>`<option value="${k}" ${k===x.category?'selected':''}>${l}</option>`).join('')}</select>
+        <input type="text" name="p" value="${esc(x.price||'')}" placeholder="$ price" inputmode="decimal" style="width:80px"><button class="btn small primary">Save</button>
+        <button type="button" class="btn small danger" data-hhdel="${x.id}">Remove</button>${x.last_bought?`<span class="meta" style="flex-basis:100%">Last bought ${dayName(x.last_bought.slice(0,10))}</span>`:''}</form>`:''}</div>`;
+  const groups=HH_CATS.map(([k,l])=>{ const xs=all.filter(x=>(x.category||'other')===k); return xs.length?`<div class="hgroup"><h2>${l} <span class="meta">${xs.length}</span></h2><div class="hlist">${xs.map(row).join('')}</div></div>`:''; }).join('');
+  const sug=HH_SUGGEST.filter(([n])=>!have.has(n));
+  const toBuy=hhToBuy().length;
+  el.innerHTML=`${toBuy?`<p class="okline" style="margin:4px 0 10px">🛒 ${toBuy} on the shopping list</p>`:''}
+    <form class="row" id="hhAddForm" style="gap:6px;margin:6px 0 12px"><input type="text" name="n" placeholder="Add something (e.g. toilet paper)" style="flex:1 1 160px" required>
+      <select name="c" aria-label="Kind">${HH_CATS.map(([k,l])=>`<option value="${k}">${l}</option>`).join('')}</select><button class="btn primary">＋ Add</button></form>
+    ${groups||'<div class="empty">Nothing here yet. Add what you keep in the house, or tap the common ones below.</div>'}
+    ${sug.length?`<div class="meta" style="margin:14px 0 6px">Common things: tap to add</div><div class="chips">${sug.map(([n,c])=>`<span class="chip" data-hhsug="${esc(n)}|${c}">＋ ${esc(n)}</span>`).join('')}</div>`:''}`;
+}
+async function hhSave(row){ const {error}=await sb.from('household_items').upsert({...row,updated_by:me.user_id,updated_at:new Date().toISOString()},{onConflict:'name'}); if(error){ toast('Could not save: '+error.message); return false; } await DB.load(); renderAll(); return true; }
+async function hhSet(id,patch){ const {error}=await sb.from('household_items').update({...patch,updated_by:me.user_id,updated_at:new Date().toISOString()}).eq('id',id); if(error) return toast('Could not save: '+error.message); await DB.load(); renderAll(); }
+document.addEventListener('click',async e=>{
+  const t=e.target.closest('[data-hhstat],[data-hhopen],[data-hhsug],[data-hhdel],[data-hhbuy]'); if(!t) return;
+  if(t.dataset.hhstat){ const [id,st]=t.dataset.hhstat.split('|'); const x=S.house.find(h=>String(h.id)===id); if(!x||x.status===st) return; await hhSet(x.id,{status:st}); if(st!=='stocked') toast(`${cap(x.name)} is on the shopping list`); }
+  else if(t.dataset.hhopen){ hhOpen=hhOpen===+t.dataset.hhopen?null:+t.dataset.hhopen; renderHouse(); }
+  else if(t.dataset.hhsug){ const [n,c]=t.dataset.hhsug.split('|'); await hhSave({name:n,category:c,status:'stocked'}); toast(`Added ${n}. Tap Low or Out when you need more.`); }
+  else if(t.dataset.hhdel){ const x=S.house.find(h=>String(h.id)===t.dataset.hhdel); if(!x||!confirm(`Remove ${x.name}?`)) return; await sb.from('household_items').delete().eq('id',x.id); hhOpen=null; await DB.load(); renderAll(); }
+  else if(t.dataset.hhbuy!==undefined){ const [id,v]=t.dataset.hhbuy.split('|'); await hhSet(+id,v==='1'?{status:'stocked',last_bought:new Date().toISOString()}:{status:'out'}); }
+});
+document.addEventListener('submit',async e=>{
+  const f=e.target;
+  if(f.id==='hhAddForm'){ e.preventDefault(); e.stopImmediatePropagation(); const n=f.n.value.trim().toLowerCase(); if(!n) return;
+    const ex=(S.house||[]).find(x=>x.name===n); if(ex){ toast(`${cap(n)} is already on the list below`); return; }
+    if(await hhSave({name:n,category:f.c.value,status:'stocked'})) toast(`Added ${n}. Tap Low or Out when you need more.`); }
+  else if(f.dataset.hhedit){ e.preventDefault(); e.stopImmediatePropagation(); const id=+f.dataset.hhedit, n=f.n.value.trim().toLowerCase(); if(!n) return;
+    const v=parseFloat(f.p.value.replace(/[^0-9.]/g,'')); hhOpen=null; await hhSet(id,{name:n,category:f.c.value,price:v>0?'$'+v.toFixed(2):null}); }
+},true);
+const hhTrip=new Set();   // household items checked off during this shopping trip
+document.addEventListener('change',async e=>{ const t=e.target; if(!t.dataset||!t.dataset.hhshop) return; const id=+t.dataset.hhshop;
+  if(t.checked){ hhTrip.add(id); await hhSet(id,{status:'stocked',last_bought:new Date().toISOString()}); } else { await hhSet(id,{status:'out'}); }
+  renderShopMode(); });
+const hhShopRows=()=>hhToBuy().sort((a,b)=>HH_CATS.findIndex(c=>c[0]===a.category)-HH_CATS.findIndex(c=>c[0]===b.category)||a.name.localeCompare(b.name));
+
 function renderAll(){
   publishStation();
   renderLauncher();
   if(!window.__devRec&&me&&S.members.length){ window.__devRec=1; recordDevice(); }
-  renderWho();renderSettings();renderPantry();renderPlan();renderUseup();renderRecipes();renderNutrition();renderDiscover();renderActivity();renderInbox();
+  renderWho();renderSettings();renderPantry();renderPlan();renderUseup();renderRecipes();renderNutrition();renderDiscover();renderHouse();renderActivity();renderInbox();
   $('#shareList').style.display='none';
   $('#syncNote').innerHTML=`<b>Live:</b> everything you add, plan, tick or cook shows up for the whole household right away, with your name on it.`;
 }
