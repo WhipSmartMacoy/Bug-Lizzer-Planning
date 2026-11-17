@@ -2261,6 +2261,7 @@ function renderWeb(){
     <h3><a href="${esc(x.url)}" target="_blank" rel="noopener">${esc(x.title)}</a></h3>
     <div class="meta">${esc(x.site)}</div>
     <div class="meta"><b style="color:var(--green)">Uses ${x.uses.length}</b> from home: ${x.uses.map(i=>(x.fresh.includes(i)?'🧊 ':'')+esc(i)).join(', ')}<br>${x.need.length?`<b style="color:var(--rust,#b5542b)">Need ${x.need.length}:</b> ${x.need.map(esc).join(', ')}`:'<b>✅ Everything else is At Home</b>'}</div>
+    ${x.all?`<div class="meta">Full list, besides pantry basics: ${x.all.map(i=>x.need.includes(i)?`<b style="color:var(--rust,#b5542b)">${esc(i)}</b>`:esc(i)).join(', ')}</div>`:''}
     <div class="actions"><a class="btn small" href="${esc(x.url)}" target="_blank" rel="noopener">Open recipe</a><button type="button" class="btn small" data-websave="${esc(x.url)}">＋ Save to recipe box</button><select class="btn small" data-webplan-sel="${esc(x.url)}"><option value="">+ Plan for…</option>${dayOptions()}</select></div></div>`;
   $('#webResults').innerHTML=list.map(wcard).join('')
     ||(web.error?'':'<div class="empty">Nothing online can be made with only what\'s At Home this time. <b>Search now</b> tries more recipes. The 7 am search digs deeper too.</div>');

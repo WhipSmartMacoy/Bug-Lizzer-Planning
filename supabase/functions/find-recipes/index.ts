@@ -118,8 +118,10 @@ function names(lines: string[]): string[] {
     if (found.length) { for (const n of found) out.add(n); continue; }
     // Not a name we know: still count it (as needed) rather than pretend the recipe doesn't use it.
     // Garnishes and optional extras are left out.
-    if (/\boptional\b|for (garnish|serving)|to serve|\b(salt|pepper)\b|^\s*water\b/i.test(raw)) continue;
-    const p = plainName(raw); if (p) out.add(p);
+    // Salt, pepper and water are left out, but only those words: "chuck roast, seasoned with salt" is still a chuck roast.
+    if (/\boptional\b|for (garnish|serving)|to serve/i.test(raw)) continue;
+    const p = plainName(raw.replace(/\b(kosher|sea|flaky|coarse|table|fine|black|white|freshly|fresh|ground|cracked)?\s*\b(salt|pepper|peppercorns?|water)\b/gi, " ").replace(/\s+(and|or|&)\s*$/i, ""));
+    if (p && !/^(and|or|to taste|as needed|seasoned with|season)( .*)?$/.test(p)) out.add(p);
   }
   // A specific pasta shape makes the generic "pasta" redundant.
   if (["short pasta","spaghetti","linguine","bucatini","orzo","lasagna noodles","pastina"].some((x) => out.has(x))) out.delete("pasta");
@@ -285,7 +287,7 @@ async function search(body: any, daily: boolean) {
       perSite[host] = (perSite[host] || 0) + 1;
       return { url, title: decode(recipe.name || meta(html, "og:title") || ""), image: image || meta(html, "og:image") || null,
         site: meta(html, "og:site_name") ? decode(meta(html, "og:site_name")) : host,
-        uses, fresh: uses.filter((i) => fresh.includes(i)), need };
+        uses, fresh: uses.filter((i) => fresh.includes(i)), need, all: ings };
     })).filter(Boolean) as any[];
     // Best first: needs the fewest extra things, then uses the most from home (fridge items count extra).
     results.sort((a, b) => a.need.length - b.need.length || (b.uses.length + b.fresh.length) - (a.uses.length + a.fresh.length));
