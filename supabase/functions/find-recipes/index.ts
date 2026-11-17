@@ -160,6 +160,11 @@ async function get(url: string, ms = 9000): Promise<string> {
 const SITES = [
   { name: "NYT Cooking", search: (q: string) => { const [t, pg] = q.split("|"); return `https://cooking.nytimes.com/search?q=${encodeURIComponent(t)}${pg ? "&page=" + pg : ""}`; },
     link: /href="(\/recipes\/\d+-[a-z0-9-]+)"/g, base: "https://cooking.nytimes.com" },
+  // Allrecipes and Serious Eats share a search page layout: 24 results a page, next pages by offset.
+  { name: "Allrecipes", search: (q: string) => { const [t, pg] = q.split("|"); return `https://www.allrecipes.com/search?q=${encodeURIComponent(t)}${pg ? "&offset=" + (Number(pg) - 1) * 24 : ""}`; },
+    link: /href="(https:\/\/www\.allrecipes\.com\/recipe\/\d+\/[a-z0-9-]+)\/?"/g },
+  { name: "Serious Eats", search: (q: string) => { const [t, pg] = q.split("|"); return `https://www.seriouseats.com/search?q=${encodeURIComponent(t)}${pg ? "&offset=" + (Number(pg) - 1) * 24 : ""}`; },
+    link: /href="(https:\/\/www\.seriouseats\.com\/[a-z0-9-]*recipe[a-z0-9-]*)"/g },
 ];
 
 Deno.serve(async (req) => {
@@ -329,7 +334,7 @@ async function search(body: any, daily: boolean, round?: { queries: string[]; se
     // Protein searches are checked first (all of their results), then fresh-produce searches, then the rest,
     // taking turns between searches within each group so no single search crowds out the others.
     for (const tier of [48, 24, 12, 8, 5, 3]) for (let k = 0; k < 48; k++) lists.forEach((l, n) => { if (deep(qOf[n]) !== tier || k >= tier) return; const u = l[k]; if (u && !seen.has(u) && !skip.has(u)) { seen.add(u); cand.push(u); } });
-    const pick = cand.slice(0, round ? 160 : daily ? 220 : 150);
+    const pick = cand.slice(0, round ? 240 : daily ? 220 : 150);
 
     const results = (await inBatches(pick, daily ? 8 : 15, async (url: string) => {
       let html = await get(url, 8000); if (!html) return null;

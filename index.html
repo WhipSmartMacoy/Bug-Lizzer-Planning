@@ -2233,10 +2233,13 @@ async function findOnline(force){
   const {data,error}=await sb.functions.invoke('find-recipes',{body:webBody(webFocus,++webOffset)});
   await finishWebProgress();
   webBusy=false;
-  web={v:9,key,at:Date.now(),results:data?.results||[],error:error?'The search didn\'t go through. Try again in a minute.':data?.error||null};
+  // New finds are added to the list already there (the deeper 7 am search), never replacing it.
+  const prev=web&&web.v===9?web.results:[], found=data?.results||[], urls=new Set(found.map(x=>x.url));
+  const results=[...found,...prev.filter(x=>!urls.has(x.url))];
+  const err=error?'The search didn\'t go through. Try again in a minute.':data?.error||null;
+  web={v:9,key,at:Date.now(),daily:false,results:err?prev:results,error:err,added:found.filter(x=>!prev.some(p=>p.url===x.url)).length};
   LS.set('web',web); renderWeb();
-  // A full search (not one tapped ingredient) replaces the shared list for both of you.
-  if(!webFocus&&!web.error) sb.from('app_settings').upsert({key:'web_ideas',value:JSON.stringify({at:new Date().toISOString(),key,daily:false,results:web.results}),updated_at:new Date().toISOString()}).then(()=>{});
+  if(!webFocus&&!err) sb.from('app_settings').upsert({key:'web_ideas',value:JSON.stringify({at:new Date().toISOString(),key,daily:false,results}),updated_at:new Date().toISOString()}).then(()=>{});
 }
 // While the web search runs: a bar that fills left to right with Parker's cat or Amy's dog walking
 // along its front edge (sprites from Fish with Friends). The search takes longer the more is At Home,
