@@ -146,13 +146,44 @@ const SITES = [
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
   try {
+    // The daily 7 am run (pg_cron, see supabase/031_daily_ideas.sql) sends the household's own job key
+    // instead of a sign-in; it searches with what the app last saved and stores the results for both.
+    const dk = req.headers.get("x-daily-key");
+    if (dk) {
+      const adm = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+      const { data: k } = await adm.from("daily_job_key").select("key").limit(1).maybeSingle();
+      if (!k || k.key !== dk) return json({ error: "Not allowed." }, 403);
+      // Cron fires at 11:00 and 12:00 UTC; only the one that is 7 am in New York runs (daylight saving).
+      const hr = Number(new Intl.DateTimeFormat("en-US", { timeZone: "America/New_York", hour: "numeric", hour12: false }).format(new Date()));
+      const q = await req.json().catch(() => ({}));
+      if (hr !== 7 && !q.now) return json({ skipped: "not 7 am in New York" });
+      const { data: row } = await adm.from("app_settings").select("value").eq("key", "web_input").maybeSingle();
+      if (!row?.value) return json({ skipped: "nothing saved from the app yet" });
+      const input = JSON.parse(row.value);
+      const job = (async () => {
+        const out = await search(input, true);
+        await adm.from("app_settings").upsert({ key: "web_ideas", updated_at: new Date().toISOString(),
+          value: JSON.stringify({ at: new Date().toISOString(), key: input.key || null, daily: true, ...out }) });
+      })();
+      // Answer right away; the search keeps running after the reply.
+      (globalThis as any).EdgeRuntime?.waitUntil ? (globalThis as any).EdgeRuntime.waitUntil(job) : await job;
+      return json({ started: true });
+    }
+
     const sb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_ANON_KEY")!, {
       global: { headers: { Authorization: req.headers.get("Authorization") ?? "" } },
     });
     const { data: ok } = await sb.rpc("is_member");
     if (!ok) return json({ error: "Only approved household members can search." }, 403);
+    return json(await search(await req.json(), false));
+  } catch (e) {
+    return json({ error: "Search failed: " + (e as Error).message }, 200);
+  }
+});
 
-    const body = await req.json();
+// The search itself. daily=true is the unhurried morning run: more searches and more recipes checked.
+async function search(body: any, daily: boolean) {
+    const t0 = Date.now(), budget = daily ? 125000 : 100000;   // stop starting new fetches before the function's time limit
     // At Home names can be product names ("certified organic tahini", "red kidney beans"): count each
     // as the plain ingredient recipes use too, so nothing in the house is missed.
     // Only the main name (tuna steak → tuna, not steak too); dried things don't stand in for fresh ones.
@@ -180,7 +211,7 @@ Deno.serve(async (req) => {
     const havePasta = have.some((h) => PASTA.has(h) || /\b(pasta|noodles?|spaghetti|linguine|penne|rigatoni|fusilli|orzo|ditalini|angel hair|capellini|macaroni|fettuccine|bucatini|farfalle|orecchiette|ziti|shells)\b/.test(h));
     const staples = new Set<string>((body.staples || []).map((s: string) => String(s).toLowerCase()));
     const skip = new Set<string>(body.exclude || []);
-    if (!have.length) return json({ results: [], searched: [] });
+    if (!have.length) return { results: [], searched: [] };
 
     // Searches. With a focus ingredient (tapped in the app): that ingredient alone and paired with
     // others from home. Otherwise every item at home gets searched on its own (fridge items first,
@@ -198,14 +229,14 @@ Deno.serve(async (req) => {
       // their own search plus pairings with each other; then every other item at home gets a search.
       const fr = lead.filter((x) => fresh.includes(x)).slice(0, 8);
       for (const x of fr) qs.push(x);
-      for (let i = 0; i < fr.length; i++) for (let j = i + 1; j < fr.length && qs.length < 20; j++) qs.push(`${fr[i]} ${fr[j]}`);
+      for (let i = 0; i < fr.length; i++) for (let j = i + 1; j < fr.length && qs.length < (daily ? 36 : 20); j++) qs.push(`${fr[i]} ${fr[j]}`);
       for (const x of lead) qs.push(x);
     }
-    const queries = [...new Set(qs)].slice(0, 40);
+    const queries = [...new Set(qs)].slice(0, daily ? 60 : 40);
 
     // Fetch in small batches so dozens of searches don't overwhelm the site or this function.
-    const inBatches = async <T, R>(xs: T[], n: number, f: (x: T) => Promise<R>) => { const out: R[] = []; for (let i = 0; i < xs.length; i += n) out.push(...await Promise.all(xs.slice(i, i + n).map(f))); return out; };
-    const pages = await inBatches(queries.flatMap((q) => SITES.map((s) => ({ s, q }))), 12, async ({ s, q }) => ({ s, html: await get(s.search(q)) }));
+    const inBatches = async <T, R>(xs: T[], n: number, f: (x: T) => Promise<R>) => { const out: R[] = []; for (let i = 0; i < xs.length && Date.now() - t0 < budget; i += n) out.push(...await Promise.all(xs.slice(i, i + n).map(f))); return out; };
+    const pages = await inBatches(queries.flatMap((q) => SITES.map((s) => ({ s, q }))), daily ? 20 : 12, async ({ s, q }) => ({ s, html: await get(s.search(q)) }));
     const cand: string[] = [], seen = new Set<string>(), perSite: Record<string, number> = {};
     // Interleave sites so one site doesn't crowd out the others.
     const lists = pages.map(({ s, html }) => [...html.matchAll(s.link)].map((m) => ((s as any).base || "") + m[1].replace(/\/$/, "")));
@@ -213,10 +244,10 @@ Deno.serve(async (req) => {
     // (up to 12 recipes each) than the rest (3 each): those are the meals worth finding.
     const deep = (q: string) => fresh.some((f) => q.includes(f));
     const qOf = pages.map((_, n) => queries[Math.floor(n / SITES.length)] || "");
-    for (let k = 0; k < 15; k++) lists.forEach((l, n) => { if (k >= (deep(qOf[n]) ? 12 : 3)) return; const u = l[k]; if (u && !seen.has(u) && !skip.has(u)) { seen.add(u); cand.push(u); } });
-    const pick = cand.slice(0, 150);
+    for (let k = 0; k < 15; k++) lists.forEach((l, n) => { if (k >= (deep(qOf[n]) ? (daily ? 15 : 12) : (daily ? 5 : 3))) return; const u = l[k]; if (u && !seen.has(u) && !skip.has(u)) { seen.add(u); cand.push(u); } });
+    const pick = cand.slice(0, daily ? 220 : 150);
 
-    const results = (await inBatches(pick, 15, async (url: string) => {
+    const results = (await inBatches(pick, daily ? 20 : 15, async (url: string) => {
       const html = await get(url, 8000); if (!html) return null;
       let recipe: any = null;
       for (const m of html.matchAll(/<script[^>]*application\/ld\+json[^>]*>([\s\S]*?)<\/script>/gi)) {
@@ -242,8 +273,5 @@ Deno.serve(async (req) => {
     })).filter(Boolean) as any[];
     // Best first: needs the fewest extra things, then uses the most from home (fridge items count extra).
     results.sort((a, b) => a.need.length - b.need.length || (b.uses.length + b.fresh.length) - (a.uses.length + a.fresh.length));
-    return json({ results: results.slice(0, 40), searched: queries, candidates: cand.length, perSite });
-  } catch (e) {
-    return json({ error: "Search failed: " + (e as Error).message }, 200);
-  }
-});
+    return { results: results.slice(0, daily ? 60 : 40), searched: queries, candidates: cand.length, checked: results.length, perSite };
+}
