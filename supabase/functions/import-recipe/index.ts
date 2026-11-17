@@ -211,6 +211,40 @@ const decode = (s = "") => s.replace(/&amp;/g, "&").replace(/&#39;|&#x27;|&rsquo
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
   try {
+    // The Home Assistant laptop reads Allrecipes and Serious Eats recipes the app saved (those sites block
+    // this server) and sends their ingredient lines here; it signs in with its own token (ha_check, see 033).
+    const ht = req.headers.get("x-ha-token");
+    if (ht) {
+      const anon = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_ANON_KEY")!, { global: { headers: { "x-ha-token": ht } } });
+      const { data: okHa } = await anon.rpc("ha_check");
+      if (!okHa) return json({ error: "Not allowed." }, 403);
+      const adm = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+      const q = await req.json().catch(() => ({}));
+      const { data: row } = await adm.from("app_settings").select("value").eq("key", "home_read").maybeSingle();
+      let queue: string[] = []; try { queue = row?.value ? JSON.parse(row.value) : []; } catch { /* empty */ }
+      if (q.home === "queue") return json({ urls: queue });
+      if (q.home === "fill") {
+        let filled = 0; const done: string[] = [];
+        for (const r of (Array.isArray(q.items) ? q.items : []).slice(0, 50)) {
+          const lines: string[] = (Array.isArray(r.lines) ? r.lines : []).slice(0, 80).map((l: unknown) => String(l).slice(0, 300));
+          if (!r.url || !lines.length) continue;
+          const ings = names(lines), amts = amounts(lines);
+          const { data: rec } = await adm.from("recipes").select("id,servings,image_url").eq("url", r.url).maybeSingle();
+          if (rec) {
+            await adm.from("recipes").update({ ingredients: ings, amounts: Object.fromEntries(Object.entries(amts).filter(([k]) => ings.includes(k))),
+              servings: rec.servings || (r.servings ? String(r.servings).slice(0, 60) : null), image_url: rec.image_url || (r.image ? String(r.image) : null) }).eq("id", rec.id);
+            filled++;
+          }
+          done.push(r.url);
+        }
+        for (const u of (Array.isArray(q.failed) ? q.failed : [])) done.push(String(u));
+        queue = queue.filter((u) => !done.includes(u));
+        await adm.from("app_settings").upsert({ key: "home_read", updated_at: new Date().toISOString(), value: JSON.stringify(queue) });
+        return json({ filled, left: queue.length });
+      }
+      return json({ error: "Unknown request." }, 400);
+    }
+
     const sb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_ANON_KEY")!, {
       global: { headers: { Authorization: req.headers.get("Authorization") ?? "" } },
     });

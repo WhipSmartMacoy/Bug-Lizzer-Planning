@@ -2180,6 +2180,19 @@ function renderUseup(){
     +(almost.length?`<details class="almost"><summary>Show ${almost.length} from the box that need 1–3 things</summary>${almost.map(x=>card(x.r,body(x))).join('')}</details>`:'');
 }
 // A recipe found online goes on the plan as "new"; it joins the recipe box once it's cooked.
+async function saveForLaptop(url,hit){
+  const ings=[...new Set([...(hit.all||[]),...(hit.uses||[]),...(hit.need||[])])];
+  const {data:row,error}=await sb.from('recipes').insert({url,title:hit.title,image_url:hit.image||null,site:hit.site||null,servings:hit.servings||null,
+    ingredients:ings,amounts:{},status:'new'}).select().single();
+  if(error){ toast('Could not save: '+error.message); return null; }
+  const {data:q}=await sb.from('app_settings').select('value').eq('key','home_read').maybeSingle();
+  let list=[]; try{ list=q?.value?JSON.parse(q.value):[]; }catch(e){}
+  if(!list.includes(url)) list.push(url);
+  await sb.from('app_settings').upsert({key:'home_read',value:JSON.stringify(list),updated_at:new Date().toISOString()});
+  await sb.from('home_commands').insert({cmd:'recipes_read'});
+  setTimeout(()=>toast('The home laptop is filling in the amounts for '+hit.title+' (a minute or two; at 6:30 am if it\'s off).',6000),4200);
+  return row;
+}
 async function importWeb(url){
   let r=S.recipes.find(x=>x.url===url);
   if(!r){
@@ -2187,8 +2200,12 @@ async function importWeb(url){
     const hit=web?.results?.find(x=>x.url===url);
     // Allrecipes and Serious Eats ideas were read by the home laptop; send what it read (those sites block the server).
     const read=hit?.lines?.length?{title:hit.title,image:hit.image,site:hit.site,servings:hit.servings,lines:hit.lines}:undefined;
+    // Not read yet by the laptop: save it now with the ingredients the idea already lists, and ask the
+    // laptop to read the page and fill in amounts and servings (right away if it's on, else at 6:30 am).
+    if(!read&&hit&&/allrecipes\.com|seriouseats\.com/.test(url)) return await saveForLaptop(url,hit);
     const {data,error}=await sb.functions.invoke('import-recipe',{body:{url,read}});
-    if(error||data?.error||!data?.title){ toast(data?.error&&/403/.test(data.error)?"That site blocks our server. Tap Search now (or wait for the 6:30 am search) so the home laptop can read it, then try again.":"Couldn't read that recipe page. Try again in a minute."); return null; }
+    if(data?.error&&/403/.test(data.error)&&hit) return await saveForLaptop(url,hit);
+    if(error||data?.error||!data?.title){ toast("Couldn't read that recipe page. Try again in a minute."); return null; }
     const {data:row,error:e2}=await sb.from('recipes').insert({url,title:data.title,image_url:data.image||hit?.image||null,site:data.site||hit?.site||null,servings:data.servings||null,nutrition:data.nutrition||null,
       ingredients:data.ingredients,amounts:Object.fromEntries(Object.entries(data.amounts||{}).filter(([k])=>data.ingredients.includes(k))),status:'new'}).select().single();
     if(e2){ toast('Could not save: '+e2.message); return null; }

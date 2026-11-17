@@ -9,6 +9,8 @@ shell_command:
   # Morning recipe search from home (Allrecipes, Serious Eats block cloud servers). Runs in the
   # background (it takes 10–15 minutes); its log is /config/bug_lizzer/home_recipes.log.
   bug_lizzer_home_recipes: "nohup python3 /config/bug_lizzer/home_recipes.py > /config/bug_lizzer/home_recipes.log 2>&1 &"
+  # Reads recipes just saved from Allrecipes / Serious Eats (asked by the app) and fills in their amounts.
+  bug_lizzer_home_read: "nohup python3 /config/bug_lizzer/home_recipes.py --read > /config/bug_lizzer/home_read.log 2>&1 &"
 
 rest_command:
   bug_lizzer_poll:
@@ -133,7 +135,7 @@ automation:
           for_each: "{{ r.content }}"
           sequence:
             - variables:
-                script_id: "{{ {'jeopardy': 'script.bug_lizzer_jeopardy', 'rest': 'script.bug_lizzer_rest', 'recipes': 'script.bug_lizzer_home_recipes'}.get(repeat.item.cmd, '') }}"
+                script_id: "{{ {'jeopardy': 'script.bug_lizzer_jeopardy', 'rest': 'script.bug_lizzer_rest', 'recipes': 'script.bug_lizzer_home_recipes', 'recipes_read': 'script.bug_lizzer_home_read'}.get(repeat.item.cmd, '') }}"
             - if: "{{ script_id != '' }}"
               then:
                 - action: script.turn_on
@@ -165,6 +167,12 @@ automation:
                 milliseconds: 400
 
 script:
+  bug_lizzer_home_read:
+    alias: Bug-Lizzer · read saved Allrecipes / Serious Eats recipes
+    icon: mdi:book-open-variant
+    mode: single
+    sequence:
+      - action: shell_command.bug_lizzer_home_read
   bug_lizzer_home_recipes:
     alias: Bug-Lizzer · search Allrecipes and Serious Eats
     icon: mdi:chef-hat

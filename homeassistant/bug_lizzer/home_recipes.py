@@ -21,6 +21,7 @@ from concurrent.futures import ThreadPoolExecutor
 from html import unescape
 
 FN = "https://ndbanzpiwhaqvtsepszf.supabase.co/functions/v1/find-recipes"
+IMPORT = "https://ndbanzpiwhaqvtsepszf.supabase.co/functions/v1/import-recipe"
 APIKEY = "sb_publishable_ShdakQ72QP9DFFyTPcg0_g_IBZBdNcc"   # publishable key: safe to share
 SECRETS = "/config/secrets.yaml"
 UA = ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
@@ -46,8 +47,8 @@ def token():
     raise SystemExit("bug_lizzer_token not found in secrets.yaml")
 
 
-def call(tok, body):
-    req = urllib.request.Request(FN, data=json.dumps(body).encode(), method="POST", headers={
+def call(tok, body, fn=FN):
+    req = urllib.request.Request(fn, data=json.dumps(body).encode(), method="POST", headers={
         "Content-Type": "application/json", "apikey": APIKEY, "x-ha-token": tok})
     with urllib.request.urlopen(req, timeout=60) as r:
         return json.loads(r.read().decode())
@@ -104,8 +105,25 @@ def read_recipe(site_url):
     return None
 
 
+def read_saved(tok):
+    """Recipes saved to the recipe box from Allrecipes or Serious Eats: read them and fill in their amounts."""
+    urls = call(tok, {"home": "queue"}, IMPORT).get("urls", [])
+    if not urls:
+        return
+    log("saved recipes to read:", len(urls))
+    site = lambda u: "Serious Eats" if "seriouseats" in u else "Allrecipes"
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        got = list(pool.map(read_recipe, [(site(u), u) for u in urls]))
+    items = [r for r in got if r]
+    failed = [u for u, r in zip(urls, got) if not r]
+    log("filled:", call(tok, {"home": "fill", "items": items, "failed": failed}, IMPORT))
+
+
 def main():
     tok = token()
+    read_saved(tok)
+    if "--read" in sys.argv:      # asked by the app right after a save: just those recipes
+        return
     plan = call(tok, {"home": "plan"}).get("queries", [])
     log("searches planned:", len(plan))
     if not plan:
