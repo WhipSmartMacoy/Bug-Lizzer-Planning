@@ -2031,7 +2031,7 @@ function renderTomorrow(){
         ${n>=EAT?`<button class="btn small primary" data-lo="${lo.id}" type="button">Plan for tomorrow's dinner</button>`:`<button class="btn small" data-add="${T}||dinner" type="button">Add to tomorrow…</button>`}</div>`; }).join('');
     } else {
       const atHome=homeSet(S.pantry.filter(p=>+p.q>0).map(p=>p.ingredient));
-      const box=S.recipes.filter(r=>r.status==='past').filter(r=>r.ingredients.some(i=>atHome.has(i)&&!optional(i))&&r.ingredients.every(i=>atHome.has(i)||optional(i)))
+      const box=S.recipes.filter(r=>r.ingredients.some(i=>atHome.has(i)&&!optional(i))&&r.ingredients.every(i=>atHome.has(i)||optional(i)))
         .sort((a,b)=>b.ingredients.filter(i=>atHome.has(i)&&storeOf(i)==='fridge').length-a.ingredients.filter(i=>atHome.has(i)&&storeOf(i)==='fridge').length||(lastCooked(a.id)?.cooked_at||'').localeCompare(lastCooked(b.id)?.cooked_at||''))[0];
       const inBox=new Set(S.recipes.map(r=>r.url));
       const webPick=(web?.results||[]).find(x=>!inBox.has(x.url)&&x.need.every(i=>atHome.has(i)||optional(i)));
@@ -2153,11 +2153,11 @@ function renderRecipes(){
   if(s==='name') list.sort((a,b)=>a.title.localeCompare(b.title));
   $('#recGrid').innerHTML=list.map(r=>card(r)).join('')||`<div class="empty">${S.recipes.length?'No matches.':'The recipe box is empty. Paste the link to a recipe you\'ve cooked above.'}</div>`;
 }
-// What "Make it now" offers: recipes from the box that can be made entirely from what's At Home, plus the web finds for today's At Home.
+// What "Make it now" offers: recipes from the box (cooked before or just saved) that can be made entirely from what's At Home, plus the web finds for today's At Home.
 function makeableNow(){
   const on=S.pantry.filter(p=>+p.q>0&&!optional(p.ingredient)), have=homeSet(on.map(p=>p.ingredient));
   const fresh=homeSet(on.filter(p=>storeOf(p.ingredient)==='fridge').map(p=>p.ingredient)), haveAll=homeSet(S.pantry.filter(p=>+p.q>0).map(p=>p.ingredient));
-  return S.recipes.filter(r=>r.status==='past').map(r=>({r,hit:r.ingredients.filter(i=>have.has(i)),f:r.ingredients.filter(i=>fresh.has(i)),buy:r.ingredients.filter(i=>!haveAll.has(i)&&!optional(i))}))
+  return S.recipes.map(r=>({r,hit:r.ingredients.filter(i=>have.has(i)),f:r.ingredients.filter(i=>fresh.has(i)),buy:r.ingredients.filter(i=>!haveAll.has(i)&&!optional(i))}))
     .filter(x=>x.hit.length&&!x.buy.length).sort((a,b)=>b.f.length-a.f.length||b.hit.length-a.hit.length);
 }
 const webNow=()=>{ try{ return web&&web.key===useupInputs().key?(web.results||[]):[]; }catch(e){ return []; } };
