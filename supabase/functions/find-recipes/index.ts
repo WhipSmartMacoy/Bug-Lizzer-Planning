@@ -201,9 +201,10 @@ Deno.serve(async (req) => {
         if (!inp?.value || !hr?.value) return json({ added: 0 });
         const out: any = await search(JSON.parse(inp.value), true, { queries: [], seen: [], home: JSON.parse(hr.value).items || [] });
         const cur = wi?.value ? JSON.parse(wi.value) : { results: [] };
-        const urls = new Set((cur.results || []).map((r: any) => r.url));
+        const urls = new Set((cur.results || []).map((r: any) => r.url)), fresh = new Set((out.results || []).map((r: any) => r.url));
         const add = (out.results || []).filter((r: any) => !urls.has(r.url));
-        const results = [...(cur.results || []), ...add].sort((a: any, b: any) => a.need.length - b.need.length || (b.uses.length + b.fresh.length) - (a.uses.length + a.fresh.length));
+        // The laptop's fresh copy replaces an older one of the same recipe (it carries the ingredient lines).
+        const results = [...(cur.results || []).filter((r: any) => !fresh.has(r.url)), ...(out.results || [])].sort((a: any, b: any) => a.need.length - b.need.length || (b.uses.length + b.fresh.length) - (a.uses.length + a.fresh.length));
         await adm.from("app_settings").upsert({ key: "web_ideas", updated_at: new Date().toISOString(),
           value: JSON.stringify({ ...cur, at: new Date().toISOString(), results, fromHome: (cur.fromHome || 0) + add.length }) });
         return json({ added: add.length, makeNow: add.filter((r: any) => !r.need.length).length });
