@@ -14,7 +14,7 @@ const json = (b: unknown, status = 200) =>
 
 // Longest names first so "chicken broth" wins over "chicken", etc.
 const KW: [string, string][] = ([
-  ["peppercorn",""],["black pepper",""],["kosher salt",""],["sea salt",""],["corn tortilla","tortillas"],["flour tortilla","tortillas"],
+  ["peppercorn",""],["butternut squash","butternut squash"],["butternut","butternut squash"],["butter bean","butter beans"],["cornish hen","cornish hens"],["beef stock","broth"],["bone broth","broth"],["turkey stock","broth"],["eggnog","eggnog"],["lemon juice","lemons"],["lemon zest","lemons"],["lime juice","limes"],["lime zest","limes"],["orange juice","oranges"],["orange zest","oranges"],["vanilla extract","vanilla"],["vanilla bean","vanilla"],["pure vanilla","vanilla"],["garlic clove","garlic"],["ginger root","ginger"],["egg white","eggs"],["chicken skin","chicken"],["black pepper",""],["kosher salt",""],["sea salt",""],["corn tortilla","tortillas"],["flour tortilla","tortillas"],
   ["bread crumb","breadcrumbs"],["butter lettuce","lettuce"],["paneer","paneer"],["lasagna noodle","lasagna noodles"],["lasagna","lasagna noodles"],["juniper berr","juniper berries"],
   ["potato gnocchi","gnocchi"],["egg noodle","noodles"],["egg yolk","eggs"],["chicken bouillon","broth"],["bouillon","broth"],
   ["garlic powder","garlic"],["onion powder","onion"],["coconut cream","coconut milk"],["half-and-half","heavy cream"],
@@ -67,6 +67,8 @@ function wordRe(k: string): RegExp {
   if (!r) { r = new RegExp("(^|[^a-zà-ÿ])" + k.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "(?=[a-zà-ÿ]{0,3}(?![a-zà-ÿ]))"); RE_CACHE.set(k, r); }
   return r;
 }
+// Words that, right after an ingredient's name, make it a different food.
+const OTHER_FOOD = /^(greens|seeds?|powder|flour|milk|juice|oil|butter|paste|sauce|wrappers?|chips?|extract|liqueur|jam|jelly|preserves|syrup|wine|water|cream|rolls?|buns?|bread|starch|flakes|crumbs|cakes?|crackers?|cookies?|bars?|sausages?|meatballs?|nuggets?|jerky|rinds|ale|beer|soda|tea|paper|noodles?|chocolate|candy|curd|marmalade|vinegar|salsa|relish|dressing|soup|broth|stock|bouillon|seasoning|rub|mix|spread|sprouts|blossoms?|flowers?|shoots)$/;
 function lineNames(raw: string): string[] {
   const found: string[] = [];
   // "1 (4-pound) chicken" with no cut named is a whole bird.
@@ -80,6 +82,16 @@ function lineNames(raw: string): string[] {
     const m = re.exec(l);
     if (m) {
       const at = m.index + m[1].length;
+      // A word right after the name that makes it a different food ("mustard greens", "almond milk",
+      // "corn syrup", "chicken sausage") means it isn't that ingredient: keep the whole phrase as its
+      // own name instead, so it only counts as on hand if that exact thing is At Home.
+      const after = l.slice(at + m[0].length - m[1].length).match(/^\s*([a-zà-ÿ]+)/);
+      if (v && after && OTHER_FOOD.test(after[1]) && !k.split(" ").includes(after[1]) && !v.split(" ").some((x) => x.replace(/s$/, "") === after[1].replace(/s$/, ""))) {
+        const phrase = l.slice(at, at + m[0].length - m[1].length).trim() + " " + after[1];
+        if (!found.some((f) => f.split("\u0000")[0] === phrase)) found.push(phrase + "\u0000" + at);
+        l = l.slice(0, at) + " ".repeat(phrase.length) + l.slice(at + phrase.length);
+        continue;
+      }
       // Remember where the word appeared so the first-mentioned ingredient is treated as the main one.
       if (v && !found.some((f) => f.split("\u0000")[0] === v)) found.push(v + "\u0000" + at);
       l = l.replace(new RegExp(re.source, "g"), (all, pre) => pre + " ".repeat(all.length - pre.length));

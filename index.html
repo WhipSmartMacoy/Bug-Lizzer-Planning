@@ -512,7 +512,6 @@ html[data-theme="dark"] .shophead{background:rgba(15,21,18,.95)}
   <nav class="tabs" id="tabs">
     <button data-p="plan" class="on"><i>🗓️</i><span>Plan &amp; shop</span><em>Plan</em></button>
     <button data-p="pantry"><i>🧊</i><span>At Home</span><em>Home</em></button>
-    <button data-p="house"><i>🧻</i><span>Household</span><em>House</em></button>
     <button data-p="useup"><i>🍳</i><span>Make it now</span><em>Cook</em></button>
     <button data-p="recipes"><i>📖</i><span>Recipe box</span><em>Recipes</em></button>
     <button data-p="nutrition"><i>📊</i><span>Nutrition</span><em>Food</em></button>
@@ -2020,7 +2019,7 @@ function renderShopMode(){
   const items=all.filter(o=>(!o.staple||o.needed)&&(o.buy>0||got.has(o.i)));
   const check=all.filter(o=>o.staple&&!o.needed&&!got.has(o.i)).sort((a,b)=>a.i.localeCompare(b.i));
   // Household supplies: their own aisle. Ones checked off this trip stay visible (ticked) until Done.
-  const hh=(S.house||[]).filter(x=>x.status!=='stocked'||hhTrip.has(x.id)).sort((a,b)=>a.name.localeCompare(b.name));
+  const hh=(HH_ON?S.house||[]:[]).filter(x=>x.status!=='stocked'||hhTrip.has(x.id)).sort((a,b)=>a.name.localeCompare(b.name));
   const hhPrice=x=>{ const v=parseFloat(String(x.price||'').replace(/[^0-9.]/g,'')); return v>0?v:null; };
   const left=items.filter(o=>o.buy>0).length+hh.filter(x=>x.status!=='stocked').length;
   // Estimated cost: packages to buy × the Fairway price. Checked items keep what they were going to cost.
@@ -2415,7 +2414,9 @@ const HH_CATS=[['cleaning','🧽 Cleaning'],['paper','🧻 Paper goods'],['bathr
 const HH_SUGGEST=[['toilet paper','paper'],['paper towels','paper'],['tissues','paper'],['napkins','paper'],['dish soap','cleaning'],['dishwasher pods','cleaning'],['all-purpose cleaner','cleaning'],['disinfecting wipes','cleaning'],['sponges','cleaning'],['glass cleaner','cleaning'],['bleach','cleaning'],
   ['hand soap','bathroom'],['shampoo','bathroom'],['conditioner','bathroom'],['body wash','bathroom'],['toothpaste','bathroom'],['deodorant','bathroom'],['laundry detergent','laundry'],['dryer sheets','laundry'],['stain remover','laundry'],
   ['trash bags','kitchen'],['aluminum foil','kitchen'],['plastic wrap','kitchen'],['zip-top bags','kitchen'],['parchment paper','kitchen'],['coffee filters','kitchen'],['batteries','other'],['light bulbs','other']];
-const hhToBuy=()=>(S.house||[]).filter(x=>x.status!=='stocked');
+// Household supplies are switched off for now (HH_ON): the list, Shopping mode and the iPad skip them. Data is kept.
+const HH_ON=false;
+const hhToBuy=()=>HH_ON?(S.house||[]).filter(x=>x.status!=='stocked'):[];
 let hhOpen=null;
 function renderHouse(){
   const el=$('#houseList'); if(!el) return; const all=S.house||[], have=new Set(all.map(x=>x.name));
