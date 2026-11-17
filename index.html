@@ -817,7 +817,7 @@ const ING_SYN = {'peperoncini':'pepperoncini','chicken thigh':'chicken thighs','
   'orzo':'orzo','spaghetti':'pasta','angel hair':'pasta','pasta':'pasta','gnocchi':'gnocchi','rice':'rice','couscous':'couscous','lentils':'lentils','tortillas':'tortillas','pita':'pita',
   'milk':'milk','almondmilk':'almond milk','almond milk':'almond milk','mayonnaise':'mayonnaise','dijon':'mustard','mustard':'mustard','oyster sauce':'oyster sauce','curry paste':'curry paste',
   'chili crisp':'chile crisp','chili garlic sauce':'chili garlic sauce','walnuts':'walnuts','sesame seed':'sesame seeds','turmeric':'turmeric','vanilla':'vanilla','yeast':'yeast','vinegar':'vinegar',
-  'white wine vinegar':'white wine vinegar','spinach':'spinach','kale':'kale','lettuce':'lettuce','romaine':'lettuce','butter leaf':'lettuce','broccoli':'broccoli','snap peas':'sugar snap peas',
+  'white wine vinegar':'white wine vinegar','spinach':'spinach','kale':'kale','lettuce':'lettuce','romaine':'romaine','little gem':'little gem','iceberg':'iceberg lettuce','bibb':'butter lettuce','boston lettuce':'butter lettuce','butter lettuce':'butter lettuce','butterhead':'butter lettuce','butter leaf':'butter lettuce','broccoli':'broccoli','snap peas':'sugar snap peas',
   'edamame':'edamame','corn':'corn','squash':'zucchini','butternut':'butternut squash','eggplant':'eggplant','garlic':'garlic','blueberries':'berries','apples':'apples','bread':'bread',
   'clam juice':'clam juice','almond butter':'almond butter','peanut butter':'peanut butter','garlic aioli':'mayonnaise','lupini':'lupini','nutritional yeast':'nutritional yeast','green chiles':'green chiles','salsa':'salsa','guacamole':'guacamole','hummus':'hummus'};
 // Things on a usual / receipt that are never recipe ingredients, so they're never suggested.
@@ -853,6 +853,8 @@ function homeSet(items){ const out=new Set(); for(const i of items){ out.add(i);
   if([...out].some(x=>PASTA_SHAPES.includes(x)||PASTA_RE.test(x))) PASTA_SHAPES.forEach(x=>out.add(x));
   // Any chicken pieces cover a recipe that just says "chicken"; a specific cut (thighs, whole bird) needs that cut.
   if([...out].some(x=>CHICKEN_CUTS.includes(x))) out.add('chicken');
+  // Same for lettuce: any kind covers a recipe's plain "lettuce"; romaine needs romaine.
+  if([...out].some(x=>/^(butter lettuce|romaine|little gem|iceberg lettuce|red leaf lettuce|green leaf lettuce)$/.test(x))) out.add('lettuce');
   return out; }
 function ingFrom(text){
   const t=' '+String(text).toLowerCase().replace(/[^a-z0-9 ]+/g,' ').replace(/\s+/g,' ')+' ';
