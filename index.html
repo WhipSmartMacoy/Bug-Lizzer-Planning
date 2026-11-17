@@ -740,8 +740,21 @@ function pkgOf(i){
     if(W[u]) return {q:n*W[u],u:'g',price,label:`${n} ${u}`};
   }
   if(/\b(each|bunch|head)\b/.test(text)) return {q:1,u:'each',price,label:/bunch/.test(text)?'1 bunch':'1'};
+  // No size known: use the usual US package, so cooking can take part of one out of At Home
+  // (½ cup of buttermilk from a quart) instead of skipping it.
+  const d=STD_PKG[i]; if(d) return {q:d[0],u:d[1],price,label:'about '+d[2]};
   return {q:1,u:'pkg',price,label:'1 package'};
 }
+const STD_PKG={buttermilk:[946,'ml','1 qt'],'sour cream':[473,'ml','16 oz'],'heavy cream':[473,'ml','1 pint'],'half-and-half':[473,'ml','1 pint'],
+  milk:[1893,'ml','½ gallon'],butter:[473,'ml','1 lb (4 sticks)'],'cream cheese':[227,'g','8 oz'],yogurt:[907,'g','32 oz'],'greek yogurt':[907,'g','32 oz'],
+  ricotta:[425,'g','15 oz'],feta:[170,'g','6 oz'],parmesan:[227,'g','8 oz'],cheddar:[227,'g','8 oz'],mozzarella:[227,'g','8 oz'],'monterey jack':[227,'g','8 oz'],
+  mayonnaise:[887,'ml','30 oz'],broth:[946,'ml','32 oz'],'coconut milk':[400,'ml','13.5 oz can'],'tomato paste':[170,'g','6 oz can'],
+  chickpeas:[425,'g','15 oz can'],'kidney beans':[425,'g','15 oz can'],'black beans':[425,'g','15 oz can'],'cannellini beans':[425,'g','15 oz can'],
+  pasta:[454,'g','1 lb'],rice:[907,'g','2 lb'],flour:[2268,'g','5 lb'],sugar:[1814,'g','4 lb'],'brown sugar':[907,'g','2 lb'],honey:[340,'g','12 oz'],
+  pepperoncini:[473,'ml','16 oz jar'],olives:[170,'g','6 oz jar'],capers:[100,'g','3.5 oz jar'],
+  chives:[118,'ml','1 bunch (½ cup chopped)'],parsley:[237,'ml','1 bunch (1 cup chopped)'],cilantro:[237,'ml','1 bunch (1 cup chopped)'],
+  dill:[118,'ml','1 bunch (½ cup chopped)'],mint:[118,'ml','1 bunch (½ cup chopped)'],basil:[118,'ml','1 bunch (½ cup chopped)'],
+  'olive oil':[1000,'ml','1 liter'],'neutral oil':[1420,'ml','48 oz'],'soy sauce':[296,'ml','10 oz'],'fish sauce':[200,'ml','7 oz'],vinegar:[473,'ml','16 oz']};
 // Convert q from unit a to unit b for ingredient i (pk = its package, for "pkg" and per-item weights).
 // Returns null when it can't be converted (e.g. "1 package" of something with an unknown package size).
 function conv(q,a,b,i,pk){
