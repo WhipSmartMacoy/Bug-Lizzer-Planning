@@ -80,7 +80,9 @@ automation:
       - trigger: time
         at: "06:00:00"
     actions:
-      - action: shell_command.bug_lizzer_home_recipes
+      - action: script.turn_on
+        target:
+          entity_id: script.bug_lizzer_home_recipes
   # Safety net: if JEOPARDY! ever stops before putting the picture back, fix it within a minute.
   - id: bug_lizzer_tv_picture_safety
     alias: Bug-Lizzer · TV picture never left black
@@ -131,7 +133,7 @@ automation:
           for_each: "{{ r.content }}"
           sequence:
             - variables:
-                script_id: "{{ {'jeopardy': 'script.bug_lizzer_jeopardy', 'rest': 'script.bug_lizzer_rest'}.get(repeat.item.cmd, '') }}"
+                script_id: "{{ {'jeopardy': 'script.bug_lizzer_jeopardy', 'rest': 'script.bug_lizzer_rest', 'recipes': 'script.bug_lizzer_home_recipes'}.get(repeat.item.cmd, '') }}"
             - if: "{{ script_id != '' }}"
               then:
                 - action: script.turn_on
@@ -163,6 +165,12 @@ automation:
                 milliseconds: 400
 
 script:
+  bug_lizzer_home_recipes:
+    alias: Bug-Lizzer · search Allrecipes and Serious Eats
+    icon: mdi:chef-hat
+    mode: single
+    sequence:
+      - action: shell_command.bug_lizzer_home_recipes
   bug_lizzer_jeopardy:
     alias: JEOPARDY!
     icon: mdi:television-classic

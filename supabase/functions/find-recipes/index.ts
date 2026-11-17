@@ -195,6 +195,19 @@ Deno.serve(async (req) => {
         await adm.from("app_settings").upsert({ key: "home_recipes", updated_at: cur.at, value: JSON.stringify(cur) });
         return json({ ok: true, stored: cur.items.length });
       }
+      if (q.home === "judge") {   // after a Search now: add the laptop's finds to the list straight away
+        const [{ data: inp }, { data: hr }, { data: wi }] = await Promise.all(["web_input", "home_recipes", "web_ideas"].map((k) =>
+          adm.from("app_settings").select("value").eq("key", k).maybeSingle()));
+        if (!inp?.value || !hr?.value) return json({ added: 0 });
+        const out: any = await search(JSON.parse(inp.value), true, { queries: [], seen: [], home: JSON.parse(hr.value).items || [] });
+        const cur = wi?.value ? JSON.parse(wi.value) : { results: [] };
+        const urls = new Set((cur.results || []).map((r: any) => r.url));
+        const add = (out.results || []).filter((r: any) => !urls.has(r.url));
+        const results = [...(cur.results || []), ...add].sort((a: any, b: any) => a.need.length - b.need.length || (b.uses.length + b.fresh.length) - (a.uses.length + a.fresh.length));
+        await adm.from("app_settings").upsert({ key: "web_ideas", updated_at: new Date().toISOString(),
+          value: JSON.stringify({ ...cur, at: new Date().toISOString(), results, fromHome: (cur.fromHome || 0) + add.length }) });
+        return json({ added: add.length, makeNow: add.filter((r: any) => !r.need.length).length });
+      }
       return json({ error: "Unknown request." }, 400);
     }
 

@@ -2222,6 +2222,24 @@ async function loadDailyIdeas(){
     web={v:9,key:d.key,at:new Date(d.at).getTime(),daily:!!d.daily,results:d.results,error:null}; LS.set('web',web);
   }
 }
+// Search now also asks the Home Assistant laptop to search Allrecipes and Serious Eats (they block the
+// cloud). It takes 10–15 minutes; the app checks back every 90 seconds and shows the new finds.
+let homeTimer=null;
+async function homeSearch(){
+  const last=+LS.get('homeSearchAt',0); if(Date.now()-last<20*60e3) return;
+  const {error}=await sb.from('home_commands').insert({cmd:'recipes'});
+  if(error) return;
+  LS.set('homeSearchAt',Date.now()); watchHome();
+}
+function watchHome(){
+  clearInterval(homeTimer);
+  const until=+LS.get('homeSearchAt',0)+25*60e3; if(Date.now()>until) return;
+  homeTimer=setInterval(async()=>{
+    if(Date.now()>until){ clearInterval(homeTimer); renderWeb(); return; }
+    webShared=0; const before=web?.results?.length||0; await loadDailyIdeas();
+    if((web?.results?.length||0)!==before) renderWeb();
+  },90e3);
+}
 async function findOnline(force){
   const {have,key}=useupInputs();
   if(!$('#useup').classList.contains('on')&&!force){ renderWeb(); return; }
@@ -2239,6 +2257,7 @@ async function findOnline(force){
   const err=error?'The search didn\'t go through. Try again in a minute.':data?.error||null;
   web={v:9,key,at:Date.now(),daily:false,results:err?prev:results,error:err,added:found.filter(x=>!prev.some(p=>p.url===x.url)).length};
   LS.set('web',web); renderWeb();
+  if(!webFocus) homeSearch();
   if(!webFocus&&!err) sb.from('app_settings').upsert({key:'web_ideas',value:JSON.stringify({at:new Date().toISOString(),key,daily:false,results}),updated_at:new Date().toISOString()}).then(()=>{});
 }
 // While the web search runs: a bar that fills left to right with Parker's cat or Amy's dog walking
@@ -2281,7 +2300,8 @@ function renderWeb(){
   const atHome=homeSet(S.pantry.filter(p=>+p.q>0).map(p=>p.ingredient)), out=stapleOut();
   const all=web.results.filter(x=>!inBox.has(x.url)).map(x=>({...x,need:x.need.filter(i=>!atHome.has(i)&&!(optional(i)&&!out.has(i)))})).filter(x=>x.need.length<=3).sort((a,b)=>a.need.length-b.need.length||(b.uses.length+b.fresh.length)-(a.uses.length+a.fresh.length));
   const list=all.filter(x=>!x.need.length), near=all.filter(x=>x.need.length);
-  $('#webStatus').innerHTML=web.error?esc(web.error):`${list.length} recipe${list.length===1?'':'s'} you can make now, found ${ago(web.at)}${web.daily?' in the 7 am search':''}${web.key&&web.key.replace(/#.*$/,'')!==key.replace(/#.*$/,'')?' · At Home has changed since; <b>Search now</b> for a fresh look':''}`;
+  const homeBusy=Date.now()-(+LS.get('homeSearchAt',0))<20*60e3;
+  $('#webStatus').innerHTML=web.error?esc(web.error):`${list.length} recipe${list.length===1?'':'s'} you can make now, found ${ago(web.at)}${web.daily?' in the 7 am search':''}${homeBusy?' · 🏠 Searching Allrecipes and Serious Eats at home; their recipes appear here in about 15 minutes':''}${web.key&&web.key.replace(/#.*$/,'')!==key.replace(/#.*$/,'')?' · At Home has changed since; <b>Search now</b> for a fresh look':''}`;
   const wcard=x=>`<div class="card">
     ${x.image?`<a href="${esc(x.url)}" target="_blank" rel="noopener"><img class="thumb" src="${esc(x.image)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()"></a>`:''}
     <h3><a href="${esc(x.url)}" target="_blank" rel="noopener">${esc(x.title)}</a></h3>
@@ -2919,7 +2939,7 @@ async function boot(){
     booted=true;
     let t; sb.channel('household').on('postgres_changes',{event:'*',schema:'public'},()=>{clearTimeout(t);t=setTimeout(async()=>{await DB.load(); if(!editingPrice) renderAll()},300)}).subscribe();
   }
-  await DB.load(); renderAll();
+  await DB.load(); renderAll(); watchHome();
   // One time: dried herbs and spices saved under Pantry before the Spice rack existed move there.
   if(!LS.get('spiceRack1',false)){
     const mv=S.pantry.filter(p=>p.location==='pantry'&&isSpice(p.ingredient));

@@ -130,6 +130,8 @@ def main():
     for i in range(0, max(len(recipes), 1), 100):
         r = call(tok, {"home": "recipes", "start": i == 0, "items": recipes[i:i + 100]})
         log("sent", min(i + 100, len(recipes)), r)
+    # Add them to the recipe ideas now (the 7 am search also adds them when it rebuilds the list).
+    log("added to ideas:", call(tok, {"home": "judge"}))
 
 
 if __name__ == "__main__":
