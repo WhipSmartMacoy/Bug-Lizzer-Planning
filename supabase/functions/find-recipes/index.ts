@@ -194,12 +194,14 @@ Deno.serve(async (req) => {
       qs.push(focus);
       for (const x of lead.filter((h) => h !== focus).slice(0, 6)) qs.push(`${focus} ${x}`);
     } else {
-      // Every item at home gets its own search, plus a few fridge pairs.
-      if (lead.length >= 2) qs.push(`${lead[0]} ${lead[1]}`);
-      if (lead.length >= 3) qs.push(`${lead[0]} ${lead[2]}`, `${lead[1]} ${lead[2]}`);
+      // Fridge items (they spoil first, and are what a meal is built around: ground beef, chicken…) get
+      // their own search plus pairings with each other; then every other item at home gets a search.
+      const fr = lead.filter((x) => fresh.includes(x)).slice(0, 8);
+      for (const x of fr) qs.push(x);
+      for (let i = 0; i < fr.length; i++) for (let j = i + 1; j < fr.length && qs.length < 20; j++) qs.push(`${fr[i]} ${fr[j]}`);
       for (const x of lead) qs.push(x);
     }
-    const queries = [...new Set(qs)].slice(0, 36);
+    const queries = [...new Set(qs)].slice(0, 40);
 
     // Fetch in small batches so dozens of searches don't overwhelm the site or this function.
     const inBatches = async <T, R>(xs: T[], n: number, f: (x: T) => Promise<R>) => { const out: R[] = []; for (let i = 0; i < xs.length; i += n) out.push(...await Promise.all(xs.slice(i, i + n).map(f))); return out; };
@@ -207,9 +209,12 @@ Deno.serve(async (req) => {
     const cand: string[] = [], seen = new Set<string>(), perSite: Record<string, number> = {};
     // Interleave sites so one site doesn't crowd out the others.
     const lists = pages.map(({ s, html }) => [...html.matchAll(s.link)].map((m) => ((s as any).base || "") + m[1].replace(/\/$/, "")));
-    // Round-robin: every search contributes its best few before any contributes more.
-    for (let k = 0; k < 15; k++) for (const l of lists) { const u = l[k]; if (u && !seen.has(u) && !skip.has(u)) { seen.add(u); cand.push(u); } }
-    const pick = cand.slice(0, Math.max(60, Math.min(100, queries.length * 3)));
+    // Round-robin so every search contributes, but searches built on fridge items go much deeper
+    // (up to 12 recipes each) than the rest (3 each): those are the meals worth finding.
+    const deep = (q: string) => fresh.some((f) => q.includes(f));
+    const qOf = pages.map((_, n) => queries[Math.floor(n / SITES.length)] || "");
+    for (let k = 0; k < 15; k++) lists.forEach((l, n) => { if (k >= (deep(qOf[n]) ? 12 : 3)) return; const u = l[k]; if (u && !seen.has(u) && !skip.has(u)) { seen.add(u); cand.push(u); } });
+    const pick = cand.slice(0, 150);
 
     const results = (await inBatches(pick, 15, async (url: string) => {
       const html = await get(url, 8000); if (!html) return null;
