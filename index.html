@@ -514,7 +514,6 @@ html[data-theme="dark"] .shophead{background:rgba(15,21,18,.95)}
     <button data-p="pantry"><i>🧊</i><span>At Home</span><em>Home</em></button>
     <button data-p="useup"><i>🍳</i><span>Make it now</span><em>Cook</em></button>
     <button data-p="recipes"><i>📖</i><span>Recipe box</span><em>Recipes</em></button>
-    <button data-p="nutrition"><i>📊</i><span>Nutrition</span><em>Food</em></button>
     <button data-p="settings"><i>⚙️</i><span>Settings</span><em>Settings</em></button>
   </nav>
 </header>
@@ -1513,7 +1512,11 @@ function leftPicker(m){
 // Meals out: estimate from a short description using USDA FoodData Central typical portions (no questions asked).
 const FDC_N={1008:'calories',1003:'protein',1005:'carbs',1004:'fat',1079:'fiber',2000:'sugar',1093:'sodium'};
 const NUMW={a:1,an:1,one:1,two:2,three:3,four:4,half:0.5};
+// Nutrition is switched off for now (NUTR_ON): no Food tab, no calorie numbers, no meal scanning,
+// no nutrition lookups. Data already saved is kept.
+const NUTR_ON=false;
 async function estimateFood(text){
+  if(!NUTR_ON) return null;
   const parts=String(text).toLowerCase().split(/,|\+|&|\band\b|;/).map(x=>x.trim()).filter(x=>x.length>1);
   const tot={}; let found=0;
   for(const raw of parts.slice(0,6)){
@@ -1640,7 +1643,7 @@ document.addEventListener('submit',e=>{ if(e.target.dataset?.scan==='codeform'){
 // Everything logged for one meal (both people), then one "＋ Add …" that opens the full sheet, the same as Dinner.
 function mealRow(m,d,meal){
   const p=m.person;
-  if(isScan(m)) return `<div class="lrow" data-who="${p}"><b class="who">${p}</b> <span class="lwhat">📷 ${esc(m.note||'')}${m.nutrition?.calories!=null?` <span class="meta">· ${Math.round(m.nutrition.calories)} cal</span>`:''}</span><button data-unplan="${m.id}" title="Remove">✕</button></div>`;
+  if(isScan(m)) return `<div class="lrow" data-who="${p}"><b class="who">${p}</b> <span class="lwhat">📷 ${esc(m.note||'')}${NUTR_ON&&m.nutrition?.calories!=null?` <span class="meta">· ${Math.round(m.nutrition.calories)} cal</span>`:''}</span><button data-unplan="${m.id}" title="Remove">✕</button></div>`;
   const r=rec(m.recipe_id);
   if(!m.recipe_id&&!m.note) return `<div class="lrow" data-who="${p}"><b class="who">${p}</b> <input class="outnote" data-outnote="${m.id}" placeholder="🥡 What did you have?" enterkeyhint="done"><button data-unplan="${m.id}" title="Clear">✕</button></div>`;
   if(isRest(m)&&!restDish(m)) return `<div class="lrow" data-who="${p}"><b class="who">${p}</b> <span class="lwhat">${outLabel(m)}</span><input class="outnote dish" data-dish="${m.id}" placeholder="What did you get?" enterkeyhint="done"><button data-unplan="${m.id}" title="Clear">✕</button></div>`;
@@ -1675,18 +1678,18 @@ function snackRows(d,p,opts){
   const label=m=>{ if(isScan(m)) return `📷 ${esc(m.note||'')}`; if(!m.recipe_id) return m.note?outLabel(m):null; const r=rec(m.recipe_id); return m.leftover_of?`🍱 ${esc(r?.title||'')}`:esc(r?.title||''); };
   return `<div class="snacks" data-who="${p}"><b class="who">${p}</b>${items.map(m=>{ const l=label(m);
       return l==null?`<div class="lrow"><input class="outnote" data-outnote="${m.id}" placeholder="🥡 What did you have?" enterkeyhint="done"><button data-unplan="${m.id}" title="Remove">✕</button></div>`
-        :`<div class="lrow"><span class="lwhat">${l}${m.nutrition?.calories!=null&&isScan(m)?` <span class="meta">· ${Math.round(m.nutrition.calories)} cal</span>`:''}</span><button data-unplan="${m.id}" title="Remove">✕</button></div>`;}).join('')}
+        :`<div class="lrow"><span class="lwhat">${l}${NUTR_ON&&m.nutrition?.calories!=null&&isScan(m)?` <span class="meta">· ${Math.round(m.nutrition.calories)} cal</span>`:''}</span><button data-unplan="${m.id}" title="Remove">✕</button></div>`;}).join('')}
     <div class="lrow"><button class="addbtn" data-add="${d}|${p}|snack" type="button">＋ ${items.length?'Add another':'Add a snackie'}</button>
-      <button data-scanday="${d}" data-person="${p}" data-slot="snack" title="Scan a snack">📷</button></div></div>`;
+      ${NUTR_ON?`<button data-scanday="${d}" data-person="${p}" data-slot="snack" title="Scan a snack">📷</button>`:''}</div></div>`;
 }
-const scanLine=m=>`<div class="lrow scanned"><span class="lwhat">📷 ${esc(m.note||'')}${m.nutrition?.calories!=null?` <span class="meta">· ${Math.round(m.nutrition.calories)} cal</span>`:''}</span><button data-unplan="${m.id}" title="Remove">✕</button></div>`;
+const scanLine=m=>`<div class="lrow scanned"><span class="lwhat">📷 ${esc(m.note||'')}${NUTR_ON&&m.nutrition?.calories!=null?` <span class="meta">· ${Math.round(m.nutrition.calories)} cal</span>`:''}</span><button data-unplan="${m.id}" title="Remove">✕</button></div>`;
 const scansFor=(d,p,slot)=>S.meals.filter(m=>isScan(m)&&m.planned_for===d&&m.slot===slot&&(!p||m.person===p));
-const scanBtn=(d,p,slot)=>`<button data-scanday="${d}" data-person="${p}" data-slot="${slot}" title="Scan ${p}'s ${SLOT_LABEL[slot].toLowerCase()}">📷</button>`;
+const scanBtn=(d,p,slot)=>!NUTR_ON?'':`<button data-scanday="${d}" data-person="${p}" data-slot="${slot}" title="Scan ${p}'s ${SLOT_LABEL[slot].toLowerCase()}">📷</button>`;
 function lunchRow(d,p,opts,meal='lunch'){
   return lunchRow1(d,p,opts,meal)+scansFor(d,p,meal).map(scanLine).join('');
 }
 function pDinRows(d){ return `<div class="pdin">${PEOPLE.map(p=>{ const m=pDinOf(d,p);
-  const what=m&&(m.recipe_id?(m.leftover_of?'🍱 ':'🍳 ')+esc(rec(m.recipe_id)?.title||''):'🍴 '+esc(m.note||'')+(m.nutrition?' <span class="meta">(est.)</span>':''));
+  const what=m&&(m.recipe_id?(m.leftover_of?'🍱 ':'🍳 ')+esc(rec(m.recipe_id)?.title||''):'🍴 '+esc(m.note||'')+(NUTR_ON&&m.nutrition?' <span class="meta">(est.)</span>':''));
   return m?`<div class="lrow" data-who="${p}"><b class="who">${p}</b> <span class="lwhat">${what}</span>${scanBtn(d,p,'dinner')}<button data-unplan="${m.id}" title="Clear">✕</button></div>`
           :`<div class="lrow" data-who="${p}"><b class="who">${p}</b><button class="addbtn" data-add="${d}|${p}|pdin">＋ Leftovers, Make it now…</button>${scanBtn(d,p,'dinner')}</div>`; }).join('')}</div>`; }
 function lunchRow1(d,p,opts,meal='lunch'){
@@ -1790,7 +1793,7 @@ function renderAdd0(){
     <h3>🍳 Make something${addS.who&&!addS.whoChosen?' <span class="meta" style="font-weight:400">· adds for both</span>':''}</h3>
     <input id="addQ" type="search" placeholder="Search recipes or an ingredient" value="${esc(q)}">
     <div class="picks">${recs.map(r=>`<button type="button" class="pick" data-addpick="r:${r.id}">${r.image_url?`<img src="${esc(r.image_url)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">`:''}<span><b>${esc(r.title)}</b><span class="meta">${r.status==='past'?(lastCooked(r.id)?'made '+ago(lastCooked(r.id).cooked_at):'in the recipe box'):'new to try'}</span></span></button>`).join('')||'<p class="meta">No recipes match.</p>'}</div>
-    <button type="button" class="btn" data-addscan style="margin-top:12px;width:100%">📷 Scan a barcode or label instead</button></div>`;
+    ${NUTR_ON?'<button type="button" class="btn" data-addscan style="margin-top:12px;width:100%">📷 Scan a barcode or label instead</button>':''}</div>`;
 }
 document.addEventListener('click',async e=>{
   const a=e.target.closest('[data-add]'); if(a){ e.preventDefault(); return openAdd(a.dataset.add); }
