@@ -155,7 +155,7 @@ async function get(url: string, ms = 9000): Promise<string> {
 // Each site's search page, and the pattern its recipe links follow. (Serious Eats and Allrecipes
 // refuse server requests, so NYT Cooking is the one searched.)
 const SITES = [
-  { name: "NYT Cooking", search: (q: string) => `https://cooking.nytimes.com/search?q=${encodeURIComponent(q)}`,
+  { name: "NYT Cooking", search: (q: string) => { const [t, pg] = q.split("|"); return `https://cooking.nytimes.com/search?q=${encodeURIComponent(t)}${pg ? "&page=" + pg : ""}`; },
     link: /href="(\/recipes\/\d+-[a-z0-9-]+)"/g, base: "https://cooking.nytimes.com" },
 ];
 
@@ -176,10 +176,39 @@ Deno.serve(async (req) => {
       const { data: row } = await adm.from("app_settings").select("value").eq("key", "web_input").maybeSingle();
       if (!row?.value) return json({ skipped: "nothing saved from the app yet" });
       const input = JSON.parse(row.value);
+      const now = () => new Date().toISOString();
+      const save = (key: string, v: unknown) => adm.from("app_settings").upsert({ key, updated_at: now(), value: JSON.stringify(v) });
       const job = (async () => {
-        const out = await search(input, true);
-        await adm.from("app_settings").upsert({ key: "web_ideas", updated_at: new Date().toISOString(),
-          value: JSON.stringify({ at: new Date().toISOString(), key: input.key || null, daily: true, ...out }) });
+        // Round 0 plans the rounds; each round checks its searches, adds what fits to the build,
+        // then starts the next round (a fresh run of this function). The last round publishes the list.
+        let build: any;
+        if (q.round === undefined) {
+          const { plan } = await search({ ...input, planOnly: true }, true) as any;
+          build = { started: now(), key: input.key || null, rounds: plan || [], done: 0, seen: [], results: [], searched: [] };
+        } else {
+          const { data: b } = await adm.from("app_settings").select("value").eq("key", "web_ideas_build").maybeSingle();
+          build = b?.value ? JSON.parse(b.value) : null;
+          if (!build || build.done !== q.round) return;   // stale or repeated call
+        }
+        const i = build.done;
+        if (i < build.rounds.length) {
+          const out: any = await search(input, true, { queries: build.rounds[i], seen: build.seen });
+          const have = new Set(build.results.map((r: any) => r.url));
+          for (const r of out.results || []) if (!have.has(r.url)) build.results.push(r);
+          build.seen.push(...(out.picked || []));
+          build.searched.push(...(out.searched || []));
+          build.done = i + 1;
+        }
+        if (build.done < build.rounds.length) {
+          await save("web_ideas_build", build);
+          await fetch(Deno.env.get("SUPABASE_URL") + "/functions/v1/find-recipes", { method: "POST",
+            headers: { "Content-Type": "application/json", "x-daily-key": dk }, body: JSON.stringify({ now: true, round: build.done }) }).catch(() => {});
+          return;
+        }
+        build.results.sort((a: any, b: any) => a.need.length - b.need.length || (b.uses.length + b.fresh.length) - (a.uses.length + a.fresh.length));
+        await save("web_ideas", { at: now(), key: build.key, daily: true, results: build.results.slice(0, 120),
+          searched: build.searched, checked: build.seen.length, rounds: build.rounds.length });
+        await save("web_ideas_build", { ...build, seen: [], results: [], finished: now() });
       })();
       // Answer right away; the search keeps running after the reply.
       (globalThis as any).EdgeRuntime?.waitUntil ? (globalThis as any).EdgeRuntime.waitUntil(job) : await job;
@@ -198,7 +227,20 @@ Deno.serve(async (req) => {
 });
 
 // The search itself. daily=true is the unhurried morning run: more searches and more recipes checked.
-async function search(body: any, daily: boolean) {
+// The morning search runs in rounds so each stays within the function's limits: one round per protein
+// At Home (its own search, pages 1–3, plus pairings with what it could be cooked with), then the rest.
+function planRounds(qs: string[], proteins: string[]): string[][] {
+  const all = [...new Set(qs)], rounds: string[][] = [], used = new Set<string>();
+  for (const p of proteins) {
+    const r = [p, `${p}|2`, `${p}|3`, ...all.filter((q) => q !== p && q.startsWith(p + " "))];
+    r.forEach((q) => used.add(q)); rounds.push(r);
+  }
+  const rest = all.filter((q) => !used.has(q));
+  for (let i = 0; i < rest.length; i += 25) rounds.push(rest.slice(i, i + 25));
+  return rounds.slice(0, 12);
+}
+
+async function search(body: any, daily: boolean, round?: { queries: string[]; seen: string[] }) {
     const t0 = Date.now(), budget = daily ? 125000 : 100000;   // stop starting new fetches before the function's time limit
     // At Home names can be product names ("certified organic tahini", "red kidney beans"): count each
     // as the plain ingredient recipes use too, so nothing in the house is missed.
@@ -233,7 +275,17 @@ async function search(body: any, daily: boolean) {
     // others from home. Otherwise every item at home gets searched on its own (fridge items first,
     // they spoil first), plus a couple of fridge pairs; "Search again" rotates which items lead.
     const focus = String(body.focus || "").toLowerCase().trim();
-    let lead = [...fresh, ...main.filter((h) => !fresh.includes(h))];
+    // What to search for. Only real cooking ingredients lead a search (not snacks, drinks, jams);
+    // a meal is built around its protein, so every protein At Home gets its own searches first,
+    // alone and paired with the fresh things it could be cooked with; then fresh produce; then the rest.
+    const KNOWN = new Set(KW.map(([, v]) => v).filter(Boolean));
+    const known = main.filter((x) => KNOWN.has(x));
+    const PROTEIN = /^(ground (beef|turkey|pork|chicken)|chicken( .*)?|whole chicken|rotisserie chicken|beef|steak|flank steak|pork|sausage|bacon|prosciutto|lamb|salmon|tuna|shrimp|cod|crab|anchovies|scallops|mussels|tofu|tempeh|eggs|chickpeas|white beans|black beans|kidney beans|lentils|halloumi|paneer)$/;
+    const CONDIMENT = /^(mustard|mayonnaise|sriracha|hot sauce|fish sauce|soy sauce|oyster sauce|hoisin|worcestershire|chile crisp|gochujang|miso|tahini|honey|maple syrup|ketchup|salsa|.*vinegar|.*oil|broth|capers|pepperoncini|olives)$/;
+    const proteins = [...known.filter((x) => PROTEIN.test(x) && fresh.includes(x)), ...known.filter((x) => PROTEIN.test(x) && !fresh.includes(x))];
+    const sides = [...known.filter((x) => fresh.includes(x) && !PROTEIN.test(x) && !CONDIMENT.test(x)), ...known.filter((x) => !fresh.includes(x) && !PROTEIN.test(x) && !CONDIMENT.test(x))];
+    const starches = known.filter((x) => /^(pasta|rice|noodles|tortillas|potatoes|sweet potatoes|bread|gnocchi|orzo|couscous|quinoa|farro|polenta|cornmeal|pita)$/.test(x) || PASTA.has(x));
+    let lead = [...proteins, ...sides, ...known.filter((x) => CONDIMENT.test(x))];
     const off = Math.max(0, Number(body.offset) || 0) * 6;
     if (off && lead.length) { const k = off % lead.length; lead = [...lead.slice(k), ...lead.slice(0, k)]; }
     const qs: string[] = [];
@@ -241,14 +293,17 @@ async function search(body: any, daily: boolean) {
       qs.push(focus);
       for (const x of lead.filter((h) => h !== focus).slice(0, 6)) qs.push(`${focus} ${x}`);
     } else {
-      // Fridge items (they spoil first, and are what a meal is built around: ground beef, chicken…) get
-      // their own search plus pairings with each other; then every other item at home gets a search.
-      const fr = lead.filter((x) => fresh.includes(x)).slice(0, 8);
-      for (const x of fr) qs.push(x);
-      for (let i = 0; i < fr.length; i++) for (let j = i + 1; j < fr.length && qs.length < (daily ? 36 : 20); j++) qs.push(`${fr[i]} ${fr[j]}`);
+      const ps = off ? lead.filter((x) => proteins.includes(x)) : proteins;
+      for (const p of ps) qs.push(p);
+      for (const p of ps) {
+        for (const x of sides.slice(0, daily ? 8 : 4)) qs.push(`${p} ${x}`);
+        for (const x of starches.slice(0, 3)) qs.push(`${p} ${x}`);
+      }
+      for (const x of sides) qs.push(x);
       for (const x of lead) qs.push(x);
     }
-    const queries = [...new Set(qs)].slice(0, daily ? 60 : 40);
+    if (body.planOnly) return { plan: planRounds(qs, proteins) };
+    const queries = round ? round.queries : [...new Set(qs)].slice(0, daily ? 90 : 40);
 
     // Fetch in small batches so dozens of searches don't overwhelm the site or this function.
     const inBatches = async <T, R>(xs: T[], n: number, f: (x: T) => Promise<R>) => { const out: R[] = []; for (let i = 0; i < xs.length && Date.now() - t0 < budget; i += n) out.push(...await Promise.all(xs.slice(i, i + n).map(f))); return out; };
@@ -257,15 +312,18 @@ async function search(body: any, daily: boolean) {
       const html = await get(s.search(q));
       return { s, links: [...html.matchAll(s.link)].map((m) => ((s as any).base || "") + m[1].replace(/\/$/, "")) };
     });
-    const cand: string[] = [], seen = new Set<string>(), perSite: Record<string, number> = {};
+    const cand: string[] = [], seen = new Set<string>(round?.seen || []), perSite: Record<string, number> = {};
     // Interleave sites so one site doesn't crowd out the others.
     const lists = pages.map((p) => p.links);
     // Round-robin so every search contributes, but searches built on fridge items go much deeper
     // (up to 12 recipes each) than the rest (3 each): those are the meals worth finding.
-    const deep = (q: string) => fresh.some((f) => q.includes(f));
+    // Searches built on a protein go deepest (those are the meals); fresh produce next; the rest skim the top.
+    const deep = (q: string) => { const t = q.split("|")[0]; return proteins.includes(t) && round ? 48 : proteins.some((p) => t.startsWith(p)) ? (daily ? 24 : 12) : fresh.some((f) => t.includes(f)) ? (daily ? 8 : 5) : 3; };
     const qOf = pages.map((_, n) => queries[Math.floor(n / SITES.length)] || "");
-    for (let k = 0; k < 15; k++) lists.forEach((l, n) => { if (k >= (deep(qOf[n]) ? (daily ? 15 : 12) : (daily ? 5 : 3))) return; const u = l[k]; if (u && !seen.has(u) && !skip.has(u)) { seen.add(u); cand.push(u); } });
-    const pick = cand.slice(0, daily ? 220 : 150);
+    // Protein searches are checked first (all of their results), then fresh-produce searches, then the rest,
+    // taking turns between searches within each group so no single search crowds out the others.
+    for (const tier of [48, 24, 12, 8, 5, 3]) for (let k = 0; k < 48; k++) lists.forEach((l, n) => { if (deep(qOf[n]) !== tier || k >= tier) return; const u = l[k]; if (u && !seen.has(u) && !skip.has(u)) { seen.add(u); cand.push(u); } });
+    const pick = cand.slice(0, round ? 160 : daily ? 220 : 150);
 
     const results = (await inBatches(pick, daily ? 8 : 15, async (url: string) => {
       let html = await get(url, 8000); if (!html) return null;
@@ -293,5 +351,5 @@ async function search(body: any, daily: boolean) {
     })).filter(Boolean) as any[];
     // Best first: needs the fewest extra things, then uses the most from home (fridge items count extra).
     results.sort((a, b) => a.need.length - b.need.length || (b.uses.length + b.fresh.length) - (a.uses.length + a.fresh.length));
-    return { results: results.slice(0, daily ? 60 : 40), searched: queries, candidates: cand.length, checked: results.length, perSite };
+    return { results: round ? results : results.slice(0, daily ? 60 : 40), searched: queries, candidates: cand.length, checked: results.length, picked: pick, perSite };
 }
