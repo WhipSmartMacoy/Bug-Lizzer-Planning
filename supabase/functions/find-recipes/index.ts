@@ -236,10 +236,14 @@ async function search(body: any, daily: boolean) {
 
     // Fetch in small batches so dozens of searches don't overwhelm the site or this function.
     const inBatches = async <T, R>(xs: T[], n: number, f: (x: T) => Promise<R>) => { const out: R[] = []; for (let i = 0; i < xs.length && Date.now() - t0 < budget; i += n) out.push(...await Promise.all(xs.slice(i, i + n).map(f))); return out; };
-    const pages = await inBatches(queries.flatMap((q) => SITES.map((s) => ({ s, q }))), daily ? 20 : 12, async ({ s, q }) => ({ s, html: await get(s.search(q)) }));
+    const pages = await inBatches(queries.flatMap((q) => SITES.map((s) => ({ s, q }))), daily ? 8 : 12, async ({ s, q }) => {
+      // Keep only the recipe links, not the whole page: dozens of full pages would run out of memory.
+      const html = await get(s.search(q));
+      return { s, links: [...html.matchAll(s.link)].map((m) => ((s as any).base || "") + m[1].replace(/\/$/, "")) };
+    });
     const cand: string[] = [], seen = new Set<string>(), perSite: Record<string, number> = {};
     // Interleave sites so one site doesn't crowd out the others.
-    const lists = pages.map(({ s, html }) => [...html.matchAll(s.link)].map((m) => ((s as any).base || "") + m[1].replace(/\/$/, "")));
+    const lists = pages.map((p) => p.links);
     // Round-robin so every search contributes, but searches built on fridge items go much deeper
     // (up to 12 recipes each) than the rest (3 each): those are the meals worth finding.
     const deep = (q: string) => fresh.some((f) => q.includes(f));
@@ -247,8 +251,8 @@ async function search(body: any, daily: boolean) {
     for (let k = 0; k < 15; k++) lists.forEach((l, n) => { if (k >= (deep(qOf[n]) ? (daily ? 15 : 12) : (daily ? 5 : 3))) return; const u = l[k]; if (u && !seen.has(u) && !skip.has(u)) { seen.add(u); cand.push(u); } });
     const pick = cand.slice(0, daily ? 220 : 150);
 
-    const results = (await inBatches(pick, daily ? 20 : 15, async (url: string) => {
-      const html = await get(url, 8000); if (!html) return null;
+    const results = (await inBatches(pick, daily ? 8 : 15, async (url: string) => {
+      let html = await get(url, 8000); if (!html) return null;
       let recipe: any = null;
       for (const m of html.matchAll(/<script[^>]*application\/ld\+json[^>]*>([\s\S]*?)<\/script>/gi)) {
         try { recipe = findRecipe(JSON.parse(m[1].trim())); } catch { /* skip */ }
