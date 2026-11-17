@@ -2196,7 +2196,7 @@ function useupInputs(){
   const fresh=on.filter(i=>storeOf(i)==='fridge');
   return {have:on,fresh,key:[...on].sort().join('|')+'#'+webFocus};
 }
-// Ideas from the web come from a search Supabase runs every morning at 7 (supabase/031_daily_ideas.sql),
+// Ideas from the web come from a search Supabase runs every morning at 6:30 (supabase/031_daily_ideas.sql),
 // shared by both of you, so Cook opens with them straight away. A new search only runs on "Search now"
 // (or a tapped ingredient). The app keeps the morning search's list of what's At Home up to date.
 function webBody(focus,offset){
@@ -2256,7 +2256,7 @@ async function findOnline(force){
   const {data,error}=await sb.functions.invoke('find-recipes',{body:webBody(webFocus,++webOffset)});
   await finishWebProgress();
   webBusy=false;
-  // New finds are added to the list already there (the deeper 7 am search), never replacing it.
+  // New finds are added to the list already there (the deeper 6:30 am search), never replacing it.
   const prev=web&&web.v===9?web.results:[], found=data?.results||[], urls=new Set(found.map(x=>x.url));
   const results=[...found,...prev.filter(x=>!urls.has(x.url))];
   const err=error?'The search didn\'t go through. Try again in a minute.':data?.error||null;
@@ -2300,13 +2300,13 @@ function renderWeb(){
   if(webBusy){ renderWebProgress(have.length); return; }
   stopWebProgress();
   if(!have.length){ $('#webStatus').textContent=''; $('#webResults').innerHTML=''; return; }
-  if(!web||web.v!==9){ $('#webStatus').innerHTML='New ideas arrive every morning at 7. Tap <b>Search now</b> to look right away.'; $('#webResults').innerHTML=''; return; }
+  if(!web||web.v!==9){ $('#webStatus').innerHTML='New ideas arrive every morning at 6:30. Tap <b>Search now</b> to look right away.'; $('#webResults').innerHTML=''; return; }
   const inBox=new Set(S.recipes.map(r=>r.url));
   const atHome=homeSet(S.pantry.filter(p=>+p.q>0).map(p=>p.ingredient)), out=stapleOut();
   const all=web.results.filter(x=>!inBox.has(x.url)).map(x=>({...x,need:x.need.filter(i=>!atHome.has(i)&&!(optional(i)&&!out.has(i)))})).filter(x=>x.need.length<=3).sort((a,b)=>a.need.length-b.need.length||(b.uses.length+b.fresh.length)-(a.uses.length+a.fresh.length));
   const list=all.filter(x=>!x.need.length), near=all.filter(x=>x.need.length);
   const homeBusy=Date.now()-(+LS.get('homeSearchAt',0))<20*60e3;
-  $('#webStatus').innerHTML=web.error?esc(web.error):`${list.length} recipe${list.length===1?'':'s'} you can make now, found ${ago(web.at)}${web.daily?' in the 7 am search':''}${homeBusy?' · 🏠 Searching Allrecipes and Serious Eats at home; their recipes appear here in about 15 minutes':''}${web.key&&web.key.replace(/#.*$/,'')!==key.replace(/#.*$/,'')?' · At Home has changed since; <b>Search now</b> for a fresh look':''}`;
+  $('#webStatus').innerHTML=web.error?esc(web.error):`${list.length} recipe${list.length===1?'':'s'} you can make now, found ${ago(web.at)}${web.daily?' in the 6:30 am search':''}${homeBusy?' · 🏠 Searching Allrecipes and Serious Eats at home; their recipes appear here in about 15 minutes':''}${web.key&&web.key.replace(/#.*$/,'')!==key.replace(/#.*$/,'')?' · At Home has changed since; <b>Search now</b> for a fresh look':''}`;
   const wcard=x=>`<div class="card">
     ${x.image?`<a href="${esc(x.url)}" target="_blank" rel="noopener"><img class="thumb" src="${esc(x.image)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()"></a>`:''}
     <h3><a href="${esc(x.url)}" target="_blank" rel="noopener">${esc(x.title)}</a></h3>
@@ -2315,7 +2315,7 @@ function renderWeb(){
     ${x.all?`<div class="meta">Full list, besides pantry basics: ${x.all.map(i=>x.need.includes(i)?`<b style="color:var(--rust,#b5542b)">${esc(i)}</b>`:esc(i)).join(', ')}</div>`:''}
     <div class="actions"><a class="btn small" href="${esc(x.url)}" target="_blank" rel="noopener">Open recipe</a><button type="button" class="btn small" data-websave="${esc(x.url)}">＋ Save to recipe box</button><select class="btn small" data-webplan-sel="${esc(x.url)}"><option value="">+ Plan for…</option>${dayOptions()}</select></div></div>`;
   $('#webResults').innerHTML=list.map(wcard).join('')
-    ||(web.error?'':'<div class="empty">Nothing online can be made with only what\'s At Home this time. <b>Search now</b> tries more recipes. The 7 am search digs deeper too.</div>');
+    ||(web.error?'':'<div class="empty">Nothing online can be made with only what\'s At Home this time. <b>Search now</b> tries more recipes. The 6:30 am search digs deeper too.</div>');
   if(near.length&&!web.error) $('#webResults').innerHTML+=`<details class="almost"><summary>Show ${near.length} online that need 1–3 things</summary>${near.map(wcard).join('')}</details>`;
 }
 document.addEventListener('click',e=>{

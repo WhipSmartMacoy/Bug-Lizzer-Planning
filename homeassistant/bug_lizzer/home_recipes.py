@@ -2,11 +2,11 @@
 """Bug-Lizzer · morning recipe search from home (Allrecipes and Serious Eats).
 
 Those two sites block requests from Supabase's servers, but not from a home internet connection,
-so this runs on the Home Assistant laptop at 6:00 each morning (automation bug_lizzer_home_recipes):
+so this runs on the Home Assistant laptop at 6:30 each morning (automation bug_lizzer_home_recipes):
 
-1. asks the find-recipes function what to search for (the same protein-first plan as the 7 am search),
+1. asks the find-recipes function what to search for (the same protein-first plan as the 6:30 am search),
 2. searches both sites and reads each recipe's ingredient list,
-3. sends the recipes back; the 7 am search judges them against At Home like the NYT ones.
+3. sends the recipes back; the 6:30 am search judges them against At Home like the NYT ones.
 
 Uses only Python's standard library. Signs in with the Home Assistant token in secrets.yaml
 (bug_lizzer_token) — nothing secret is stored in this file.
@@ -130,7 +130,7 @@ def main():
     for i in range(0, max(len(recipes), 1), 100):
         r = call(tok, {"home": "recipes", "start": i == 0, "items": recipes[i:i + 100]})
         log("sent", min(i + 100, len(recipes)), r)
-    # Add them to the recipe ideas now (the 7 am search also adds them when it rebuilds the list).
+    # Add them to the recipe ideas now (the 6:30 am search also adds them when it rebuilds the list).
     log("added to ideas:", call(tok, {"home": "judge"}))
 
 

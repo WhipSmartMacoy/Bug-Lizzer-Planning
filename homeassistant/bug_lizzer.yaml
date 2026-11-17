@@ -74,7 +74,7 @@ input_text:
 automation:
   - id: bug_lizzer_home_recipes
     alias: Bug-Lizzer · morning recipe search from home
-    description: Searches Allrecipes and Serious Eats at 6:00 so the 7 am recipe ideas include them.
+    description: Searches Allrecipes and Serious Eats at 6:30, alongside the NYT search; whichever finishes second adds to the other.
     mode: single
     triggers:
       - trigger: time

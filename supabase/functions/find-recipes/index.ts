@@ -165,7 +165,7 @@ const SITES = [
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
   try {
-    // The daily 7 am run (pg_cron, see supabase/031_daily_ideas.sql) sends the household's own job key
+    // The daily 6:30 am run (pg_cron, see supabase/031_daily_ideas.sql) sends the household's own job key
     // instead of a sign-in; it searches with what the app last saved and stores the results for both.
     // The Home Assistant laptop searches Allrecipes and Serious Eats from home (they block this server).
     // It signs in with its own Home Assistant token, checked by the database (ha_check, see 033).
@@ -176,13 +176,13 @@ Deno.serve(async (req) => {
       if (!okHa) return json({ error: "Not allowed." }, 403);
       const adm = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
       const q = await req.json().catch(() => ({}));
-      if (q.home === "plan") {   // what to search for: proteins first, the same plan as the 7 am search
+      if (q.home === "plan") {   // what to search for: proteins first, the same plan as the 6:30 am search
         const { data: row } = await adm.from("app_settings").select("value").eq("key", "web_input").maybeSingle();
         if (!row?.value) return json({ queries: [] });
         const { plan } = await search({ ...JSON.parse(row.value), planOnly: true }, true) as any;
         return json({ queries: [...new Set((plan || []).flat())].slice(0, 60) });
       }
-      if (q.home === "recipes") {   // recipes the laptop read: kept until the 7 am search judges them
+      if (q.home === "recipes") {   // recipes the laptop read: kept until the 6:30 am search judges them
         const items = (Array.isArray(q.items) ? q.items : []).slice(0, 300).map((r: any) => ({
           url: String(r.url || "").slice(0, 500), title: String(r.title || "").slice(0, 200), image: r.image ? String(r.image).slice(0, 500) : null,
           site: String(r.site || "").slice(0, 60), lines: (Array.isArray(r.lines) ? r.lines : []).slice(0, 60).map((l: any) => String(l).slice(0, 300)) }))
@@ -216,7 +216,7 @@ Deno.serve(async (req) => {
       const adm = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
       const { data: k } = await adm.from("daily_job_key").select("key").limit(1).maybeSingle();
       if (!k || k.key !== dk) return json({ error: "Not allowed." }, 403);
-      // Cron fires at 11:00 and 12:00 UTC; only the one that is 7 am in New York runs (daylight saving).
+      // Cron fires at 10:30 and 11:30 UTC; only the one that is 6:30 am in New York runs (daylight saving).
       const hr = Number(new Intl.DateTimeFormat("en-US", { timeZone: "America/New_York", hour: "numeric", hour12: false }).format(new Date()));
       const q = await req.json().catch(() => ({}));
       // Check how a site answers this server (status, size, recipe links found) — for troubleshooting.
@@ -230,7 +230,7 @@ Deno.serve(async (req) => {
         }
         return json(out);
       }
-      if (hr !== 7 && !q.now) return json({ skipped: "not 7 am in New York" });
+      if (hr !== 6 && !q.now) return json({ skipped: "not 6:30 am in New York" });
       const { data: row } = await adm.from("app_settings").select("value").eq("key", "web_input").maybeSingle();
       if (!row?.value) return json({ skipped: "nothing saved from the app yet" });
       const input = JSON.parse(row.value);
