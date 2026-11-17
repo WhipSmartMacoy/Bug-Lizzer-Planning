@@ -206,7 +206,7 @@ Deno.serve(async (req) => {
           return;
         }
         build.results.sort((a: any, b: any) => a.need.length - b.need.length || (b.uses.length + b.fresh.length) - (a.uses.length + a.fresh.length));
-        await save("web_ideas", { at: now(), key: build.key, daily: true, results: build.results.slice(0, 120),
+        await save("web_ideas", { at: now(), key: build.key, daily: true, results: build.results.slice(0, 250),
           searched: build.searched, checked: build.seen.length, rounds: build.rounds.length });
         await save("web_ideas_build", { ...build, seen: [], results: [], finished: now() });
       })();
