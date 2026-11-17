@@ -96,7 +96,10 @@ def read_recipe(site_url):
                 img = img[0] if img else None
             if isinstance(img, dict):
                 img = img.get("url")
-            return {"url": url, "site": site, "title": unescape(str(r.get("name", ""))),
+            y = r.get("recipeYield")
+            y = [str(v) for v in (y if isinstance(y, list) else [y] if y is not None else []) if str(v).strip()]
+            servings = next((v for v in y if re.search(r"serv|people|portion", v, re.I)), None) or (y[0] + " servings" if y and y[0].isdigit() else (y[0] if y else None))
+            return {"url": url, "site": site, "title": unescape(str(r.get("name", ""))), "servings": servings,
                     "image": img, "lines": [unescape(str(l)) for l in r["recipeIngredient"]][:60]}
     return None
 

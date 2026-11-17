@@ -2184,9 +2184,11 @@ async function importWeb(url){
   let r=S.recipes.find(x=>x.url===url);
   if(!r){
     toast('Reading the recipe page…',8000);
-    const {data,error}=await sb.functions.invoke('import-recipe',{body:{url}});
-    if(error||data?.error||!data?.title){ toast("Couldn't read that recipe page. Try again in a minute."); return null; }
     const hit=web?.results?.find(x=>x.url===url);
+    // Allrecipes and Serious Eats ideas were read by the home laptop; send what it read (those sites block the server).
+    const read=hit?.lines?.length?{title:hit.title,image:hit.image,site:hit.site,servings:hit.servings,lines:hit.lines}:undefined;
+    const {data,error}=await sb.functions.invoke('import-recipe',{body:{url,read}});
+    if(error||data?.error||!data?.title){ toast(data?.error&&/403/.test(data.error)?"That site blocks our server. Tap Search now (or wait for the 6:30 am search) so the home laptop can read it, then try again.":"Couldn't read that recipe page. Try again in a minute."); return null; }
     const {data:row,error:e2}=await sb.from('recipes').insert({url,title:data.title,image_url:data.image||hit?.image||null,site:data.site||hit?.site||null,servings:data.servings||null,nutrition:data.nutrition||null,
       ingredients:data.ingredients,amounts:Object.fromEntries(Object.entries(data.amounts||{}).filter(([k])=>data.ingredients.includes(k))),status:'new'}).select().single();
     if(e2){ toast('Could not save: '+e2.message); return null; }

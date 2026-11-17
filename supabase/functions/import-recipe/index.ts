@@ -217,9 +217,17 @@ Deno.serve(async (req) => {
     const { data: ok } = await sb.rpc("is_member");
     if (!ok) return json({ error: "Only approved household members can add recipes." }, 403);
 
-    const { url } = await req.json();
+    const { url, read } = await req.json();
     const u = new URL(url);
     if (!/^https?:$/.test(u.protocol)) return json({ error: "That doesn't look like a web link." }, 400);
+    // Allrecipes and Serious Eats block this server; the Home Assistant laptop already read those recipes
+    // (title, photo, servings and ingredient lines), so the app sends what it read instead.
+    if (read && /(^|\.)(allrecipes|seriouseats)\.com$/.test(u.hostname) && Array.isArray(read.lines) && read.lines.length) {
+      const lines: string[] = read.lines.slice(0, 80).map((l: unknown) => String(l).slice(0, 300));
+      return json({ title: String(read.title || "").slice(0, 200), image: read.image ? String(read.image) : null,
+        site: String(read.site || u.hostname.replace(/^www\./, "")), servings: read.servings ? String(read.servings).slice(0, 60) : null,
+        ingredients: names(lines), amounts: amounts(lines), found_ingredients: true, nutrition: null });
+    }
     const res = await fetch(u.toString(), {
       headers: {
         "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130 Safari/537.36",

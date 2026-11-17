@@ -185,7 +185,7 @@ Deno.serve(async (req) => {
       if (q.home === "recipes") {   // recipes the laptop read: kept until the 6:30 am search judges them
         const items = (Array.isArray(q.items) ? q.items : []).slice(0, 300).map((r: any) => ({
           url: String(r.url || "").slice(0, 500), title: String(r.title || "").slice(0, 200), image: r.image ? String(r.image).slice(0, 500) : null,
-          site: String(r.site || "").slice(0, 60), lines: (Array.isArray(r.lines) ? r.lines : []).slice(0, 60).map((l: any) => String(l).slice(0, 300)) }))
+          site: String(r.site || "").slice(0, 60), servings: r.servings ? String(r.servings).slice(0, 60) : null, lines: (Array.isArray(r.lines) ? r.lines : []).slice(0, 60).map((l: any) => String(l).slice(0, 300)) }))
           .filter((r: any) => /^https:\/\/(www\.)?(allrecipes|seriouseats)\.com\//.test(r.url) && r.lines.length);
         let cur: any = { at: new Date().toISOString(), items: [] };
         if (!q.start) { const { data: b } = await adm.from("app_settings").select("value").eq("key", "home_recipes").maybeSingle(); if (b?.value) cur = JSON.parse(b.value); }
@@ -423,7 +423,7 @@ async function search(body: any, daily: boolean, round?: { queries: string[]; se
         site: html && meta(html, "og:site_name") ? decode(meta(html, "og:site_name")) : host,
         uses, fresh: uses.filter((i) => fresh.includes(i)), need, all: ings };
     };
-    const results = round?.home ? round.home.map((r: any) => { const j = judge(r.url, { name: r.title, image: r.image, recipeIngredient: r.lines }, ""); return j && { ...j, site: r.site || j.site }; }).filter(Boolean) as any[] : await judgeAll(pick);
+    const results = round?.home ? round.home.map((r: any) => { const j = judge(r.url, { name: r.title, image: r.image, recipeIngredient: r.lines }, ""); return j && { ...j, site: r.site || j.site, lines: r.lines, servings: r.servings || null }; }).filter(Boolean) as any[] : await judgeAll(pick);
     // Best first: needs the fewest extra things, then uses the most from home (fridge items count extra).
     results.sort((a, b) => a.need.length - b.need.length || (b.uses.length + b.fresh.length) - (a.uses.length + a.fresh.length));
     return { results: round ? results : results.slice(0, daily ? 60 : 40), searched: queries, candidates: cand.length, checked: results.length, picked: pick, perSite };
