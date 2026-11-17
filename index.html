@@ -292,8 +292,8 @@ table{border-radius:14px}
 .sheet input{font:inherit;padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:var(--card);min-width:0}
 .hometop{display:flex;gap:8px;margin:4px 0 10px}
 #homeQ{flex:1;min-width:0;font:inherit;padding:11px 14px;border:1px solid var(--line);border-radius:14px;background:var(--card)}
-.homefilt{display:grid;grid-template-columns:repeat(4,1fr);gap:4px;margin-bottom:14px;background:var(--tint2);padding:4px;border-radius:14px}
-.homefilt button{font:inherit;font-size:13px;padding:7px 2px;border-radius:10px;border:0;background:none;color:inherit;cursor:pointer;white-space:nowrap;display:flex;flex-direction:column;align-items:center;line-height:1.25}
+.homefilt{display:grid;grid-template-columns:repeat(5,1fr);gap:4px;margin-bottom:14px;background:var(--tint2);padding:4px;border-radius:14px}
+.homefilt button{font:inherit;font-size:12.5px;padding:7px 1px;border-radius:10px;border:0;background:none;color:inherit;cursor:pointer;white-space:nowrap;display:flex;flex-direction:column;align-items:center;line-height:1.25}
 .homefilt button.on{background:var(--card);box-shadow:0 1px 3px rgba(23,33,28,.12);font-weight:600}
 .homefilt button span{opacity:.55;font-size:11.5px;font-weight:500}
 .hgroup{margin:0 0 18px}
@@ -773,7 +773,18 @@ const FRIDGE = new Set(['butter','milk','heavy cream','sour cream','yogurt','but
   'fresh chiles','ginger','basil','parsley','cilantro','dill','mint','thyme','rosemary','sage','chives','tarragon','berries','apples','melon','corn','cherry tomatoes','eggplant',
   'radishes','fennel','white wine','edamame']);
 const FREEZER = new Set(['peas','puff pastry','dumplings','frozen dumplings']);
-const defaultStore = i => FREEZER.has(i)?'freezer':FRIDGE.has(i)?'fridge':'pantry';
+// Spice rack: dried herbs and spices (dried dill, ground mint, cumin, peppercorns…). Fresh herbs stay in the fridge.
+const SPICE_WORDS=/\b(seeds?|powder|flakes|peppercorns?|seasoning|spice|masala|paprika|cumin|cinnamon|nutmeg|turmeric|cayenne|cloves|allspice|cardamom|coriander|star anise|saffron|za'?atar|sumac|five-spice|bay leaves?|salt|pepper)\b/;
+const NOT_SPICE=/\b(ground (beef|pork|turkey|chicken|lamb|meat|sausage|veal|bison)|sesame seeds|chia|flax|pumpkin seeds|sunflower|baking powder|cocoa|protein|bell peppers?|peppers|pepperoncini|chicken|beef|pork|fish|oats|salted|garlic cloves?)\b/;
+const isSpice = i => {
+  if(/\b(seasoning|rub|spice blend)\b/.test(i)) return true;
+  if(NOT_SPICE.test(i)) return false;
+  if(/^(dried|ground) /.test(i)){ const rest=i.replace(/^(dried|ground) /,''); return HERBS.has(rest)||/chil|pepper|bay|ginger|garlic|onion|herb|mustard|lemongrass/.test(rest)||/^ground /.test(i); }
+  if(i==='bay leaves'||/^(vanilla|italian seasoning)$/.test(i)) return true;
+  if(FRESH_HERBS.has(i)||FRIDGE.has(i)) return false;
+  return HERBS.has(i)&&!FRESH_HERBS.has(i)||SPICE_WORDS.test(i);
+};
+const defaultStore = i => FREEZER.has(i)?'freezer':FRIDGE.has(i)?'fridge':isSpice(i)?'spices':'pantry';
 // Shelf-stable until opened: a partly used package goes in the fridge.
 const FRIDGE_ONCE_OPEN = new Set(['broth','coconut milk','canned tomatoes','tomato paste','chipotle','white wine','red wine','shaoxing wine','mirin','fish sauce',
   'oyster sauce','hoisin','mayonnaise','mustard','tahini','miso','worcestershire','maple syrup','black beans','white beans','chickpeas','kidney beans','sriracha','hot sauce']);
@@ -782,8 +793,10 @@ function storeOf(i){
   if(p&&FRIDGE_ONCE_OPEN.has(i)){ const pk=pkgOf(i); const n=conv(+p.q,p.u,pk.u,i,pk)/pk.q; if(n>0&&Math.abs(n-Math.round(n))>0.02) return 'fridge'; }
   return defaultStore(i);
 }
-const STORE_LABEL = {fridge:'the fridge',freezer:'the freezer',pantry:'the pantry'};
-const STORE_ICON = {fridge:'🧊',freezer:'❄️',pantry:'🥫'};
+const STORE_LABEL = {fridge:'the fridge',freezer:'the freezer',pantry:'the pantry',spices:'the spice rack'};
+const STORE_ICON = {fridge:'🧊',freezer:'❄️',pantry:'🥫',spices:'🧂'};
+const STORE_NAME = {fridge:'Fridge',freezer:'Freezer',pantry:'Pantry',spices:'Spice rack'};
+const LOCS=['fridge','freezer','pantry','spices'];
 function haveIn(i,u,pk){ const p=pantryOf(i); return p?conv(+p.q,p.u,u,i,pk):0; }
 
 // ---------------- receipts & Fairway usuals ----------------
@@ -819,6 +832,9 @@ const PROCESSED=/\b(pickled|pickle|dried|dehydrated|freeze dried|canned|tinned|j
 const OK_PROCESSED={pepperoncini:/pickled|pickle|jarred/,capers:/pickled|jarred/,olives:/pickled|jarred|canned/,chickpeas:/canned|tinned/,'kidney beans':/canned|tinned/,'black beans':/canned|tinned/,'cannellini beans':/canned|tinned/,beans:/canned|tinned/,lentils:/canned|tinned/,tuna:/canned|tinned/,'coconut milk':/canned|tinned/,chipotle:/canned|tinned/};
 function canonOf(i){
   if(!_canon.has(i)){
+    // Dried or ground herbs are their own ingredient (ground mint isn't fresh mint), named like recipes use them.
+    const dh=String(i).toLowerCase().match(/^(?:dried|ground|crushed)\s+(basil|parsley|cilantro|dill|mint|thyme|oregano|rosemary|sage|tarragon|marjoram|chives?|lemongrass|bay leaves|bay)\b/);
+    if(dh){ const h=dh[1]==='chive'?'chives':dh[1]==='bay'?'bay leaves':dh[1]; _canon.set(i,'dried '+h); return _canon.get(i); }
     let c=ingFrom(i)||i;
     if(c!==i){
       const words=i.match(PROCESSED)||[];
@@ -2364,9 +2380,8 @@ function renderPantry(){
   if(!$('#panU').options.length) $('#panU').innerHTML=unitOpts();
   $('#ingList').innerHTML=allIngredients().map(i=>`<option value="${esc(i)}">`).join('');
   const onHand=S.pantry.filter(p=>+p.q>0);
-  const LOCS=['fridge','freezer','pantry'];
   const count=l=>onHand.filter(p=>l==='all'||storeOf(p.ingredient)===l).length;
-  $('#homeFilt').innerHTML=onHand.length?['all',...LOCS].map(l=>`<button type="button" data-homeloc="${l}" class="${homeLoc===l?'on':''}">${l==='all'?'All':STORE_ICON[l]+' '+cap(l)}<span>${count(l)}</span></button>`).join(''):'';
+  $('#homeFilt').innerHTML=onHand.length?['all',...LOCS].map(l=>`<button type="button" data-homeloc="${l}" class="${homeLoc===l?'on':''}">${l==='all'?'All':STORE_ICON[l]+' '+(l==='spices'?'Spices':STORE_NAME[l])}<span>${count(l)}</span></button>`).join(''):'';
   const q=homeQ.trim().toLowerCase();
   const shown=onHand.filter(p=>(homeLoc==='all'||storeOf(p.ingredient)===homeLoc)&&(!q||p.ingredient.includes(q)));
   const amtOf=p=>{const pk=pkgOf(p.ingredient), L=p.unit_label&&UNITS[p.unit_label];
@@ -2376,12 +2391,12 @@ function renderPantry(){
     return `<div class="hitem ${open?'open':''}"><button type="button" class="hrow" data-hopen="${esc(p.ingredient)}"><b>${esc(cap(p.ingredient))}</b><span class="amt">${amtOf(p)}</span><span class="chev">›</span></button>${open?`<div class="hmore">
       <form class="row" data-panedit="${esc(p.ingredient)}"><input name="q" type="number" step="any" min="0" value="${(()=>{const L=p.unit_label&&UNITS[p.unit_label]; return round(L&&L[0]===p.u?+p.q/L[1]:+p.q,100);})()}" aria-label="Amount"><select name="u">${Object.keys(UNITS).map(u=>`<option ${(p.unit_label&&UNITS[p.unit_label]?.[0]===p.u)?(u===p.unit_label?'selected':''):(UNITS[u][0]===p.u&&UNITS[u][1]===1?'selected':'')}>${u}</option>`).join('')}</select><button class="btn small primary">Save</button></form>
       <form class="row" data-panrename="${esc(p.ingredient)}"><input name="n" type="text" list="ingList" value="${esc(p.ingredient)}" aria-label="Name" style="flex:1 1 140px"><button class="btn small">Rename</button></form>
-      <div class="row"><select data-moveto="${esc(p.ingredient)}" aria-label="Kept in">${LOCS.map(l=>`<option value="${l}" ${l===loc?'selected':''}>${STORE_ICON[l]} ${cap(l)}</option>`).join('')}</select><button type="button" class="btn small" data-panzero="${esc(p.ingredient)}">Used up</button></div>
+      <div class="row"><select data-moveto="${esc(p.ingredient)}" aria-label="Kept in">${LOCS.map(l=>`<option value="${l}" ${l===loc?'selected':''}>${STORE_ICON[l]} ${STORE_NAME[l]}</option>`).join('')}</select><button type="button" class="btn small" data-panzero="${esc(p.ingredient)}">Used up</button></div>
       <span class="meta">Updated ${p.updated_by?'by '+esc(nameOf(p.updated_by))+' ':''}${ago(p.updated_at)}</span></div>`:''}</div>`;};
-  const group=(loc,rows)=>{const main=rows.filter(p=>!optional(p.ingredient)), basics=rows.filter(p=>optional(p.ingredient));
+  const group=(loc,rows)=>{const tuck=p=>loc!=='spices'&&optional(p.ingredient), main=rows.filter(p=>!tuck(p)), basics=rows.filter(tuck);
     const sortN=(a,b)=>a.ingredient.localeCompare(b.ingredient); main.sort(sortN); basics.sort(sortN);
     const openBasic=basics.some(p=>p.ingredient===editingPantry)||!!q;
-    return `<div class="hgroup">${homeLoc==='all'?`<h2>${STORE_ICON[loc]} ${cap(loc)} <span class="meta">${rows.length}</span></h2>`:''}<div class="hlist">${main.map(item).join('')}${basics.length?(main.length||!q?`<details class="hstaples" ${openBasic?'open':''}><summary>＋ ${basics.length} staple${basics.length>1?'s':''}, herb${basics.length>1?'s':''} & spice${basics.length>1?'s':''}</summary>${openBasic?basics.map(item).join(''):`<div class="stchips">${basics.map(p=>`<button type="button" data-hopen="${esc(p.ingredient)}">${esc(cap(p.ingredient))}</button>`).join('')}</div>`}</details>`:basics.map(item).join('')):''}</div></div>`;};
+    return `<div class="hgroup">${homeLoc==='all'?`<h2>${STORE_ICON[loc]} ${STORE_NAME[loc]} <span class="meta">${rows.length}</span></h2>`:''}<div class="hlist">${main.map(item).join('')}${basics.length?(main.length||!q?`<details class="hstaples" ${openBasic?'open':''}><summary>＋ ${basics.length} staple${basics.length>1?'s':''}, herb${basics.length>1?'s':''} & spice${basics.length>1?'s':''}</summary>${openBasic?basics.map(item).join(''):`<div class="stchips">${basics.map(p=>`<button type="button" data-hopen="${esc(p.ingredient)}">${esc(cap(p.ingredient))}</button>`).join('')}</div>`}</details>`:basics.map(item).join('')):''}</div></div>`;};
   if(!onHand.length){ $('#pantryList').innerHTML='<div class="empty">Nothing tracked yet. Tap <b>＋ Add</b> to type things in or scan a receipt, or tap <b>Got it ✓</b> on the shopping list after shopping.</div>'; return; }
   if(!shown.length){ $('#pantryList').innerHTML=`<div class="empty">${q?`No “${esc(q)}” at home${homeLoc!=='all'?' in '+STORE_LABEL[homeLoc]:''}.`:`Nothing in ${STORE_LABEL[homeLoc]}.`}</div>`; return; }
   $('#pantryList').innerHTML=LOCS.map(l=>[l,shown.filter(p=>storeOf(p.ingredient)===l)]).filter(([,r])=>r.length).map(([l,r])=>group(l,r)).join('');
@@ -2646,7 +2661,7 @@ function renderReview(){
       <td><input type="number" min="0" step="any" data-rv="${k}" data-f="count" value="${r.count}" style="width:64px"> × ${esc(r.size.label)}</td>
       <td><input type="text" inputmode="decimal" data-rv="${k}" data-f="price" value="${esc(r.price||'')}" placeholder="$" style="width:72px;padding:6px 8px">${r.lb?`<div class="meta">${r.lb} lb</div>`:''}</td>
       <td class="meta">${r.ingredient?esc(fmtAmt(r.count*r.size.q,r.size.u)):'—'}</td>
-      <td><select data-rv="${k}" data-f="where" style="font-size:12.5px;padding:4px 6px">${['fridge','freezer','pantry'].map(l=>`<option value="${l}" ${l===r.where?'selected':''}>${STORE_ICON[l]} ${cap(l)}</option>`).join('')}</select></td></tr>`).join('')}</table></div>`
+      <td><select data-rv="${k}" data-f="where" style="font-size:12.5px;padding:4px 6px">${LOCS.map(l=>`<option value="${l}" ${l===r.where?'selected':''}>${STORE_ICON[l]} ${STORE_NAME[l]}</option>`).join('')}</select></td></tr>`).join('')}</table></div>`
     :'<p class="meta">No item lines could be read. Try a flatter, brighter photo, or add items from your usuals.</p>'}
     ${review.text?`<details><summary class="meta">What the scanner read</summary><pre style="white-space:pre-wrap;font-size:12px">${esc(review.text)}</pre></details>`:''}
     <div class="row"><button class="btn primary" id="reviewSave" type="button" ${review.rows.some(r=>r.on&&r.ingredient)?'':'disabled'}>Add to At Home</button><button class="btn" id="reviewCancel" type="button">Cancel</button></div></div>`;
@@ -2726,7 +2741,7 @@ function renderBc(){
       <div class="bc2"><label>How many<input type="number" min="0" step="any" id="bcCount" value="${c.count}"></label>
         <label>Each is<span class="bcamt"><input type="number" min="0" step="any" id="bcSizeN" value="${esc(c.sizeN)}" placeholder="size"><select id="bcSizeU">${BC_UNITS.map(([u])=>`<option ${u===c.sizeU?'selected':''}>${u}</option>`).join('')}</select></span></label></div>
       <div class="bc2"><label>Price paid (each)<input type="text" inputmode="decimal" id="bcPrice" value="${esc(c.price)}" placeholder="$ optional"></label>
-        <label>Kept in<select id="bcWhere">${['fridge','freezer','pantry'].map(l=>`<option value="${l}" ${l===c.where?'selected':''}>${STORE_ICON[l]} ${cap(l)}</option>`).join('')}</select></label></div>
+        <label>Kept in<select id="bcWhere">${LOCS.map(l=>`<option value="${l}" ${l===c.where?'selected':''}>${STORE_ICON[l]} ${STORE_NAME[l]}</option>`).join('')}</select></label></div>
       <div class="needprice" id="bcErr" style="display:none"></div>
       <div class="bcrow"><button class="btn primary" type="button" id="bcAdd">Add to At Home</button><button class="btn" type="button" id="bcSkip">Skip</button></div></div>`; return; }
   box.innerHTML=bc.added.length?`<div class="meta">Added: ${bc.added.map(esc).join(', ')}</div><div class="meta">Scan the next item, or tap Done.</div>`:'<span class="meta">Hold the barcode inside the box, about a hand\'s length away (closer is blurry). You\'ll check each item before it\'s added.</span>';
@@ -2900,6 +2915,12 @@ async function boot(){
     let t; sb.channel('household').on('postgres_changes',{event:'*',schema:'public'},()=>{clearTimeout(t);t=setTimeout(async()=>{await DB.load(); if(!editingPrice) renderAll()},300)}).subscribe();
   }
   await DB.load(); renderAll();
+  // One time: dried herbs and spices saved under Pantry before the Spice rack existed move there.
+  if(!LS.get('spiceRack1',false)){
+    const mv=S.pantry.filter(p=>p.location==='pantry'&&isSpice(p.ingredient));
+    let ok=true; for(const p of mv) ok=(await DB.moveTo(p.ingredient,'spices'))!==false&&ok;
+    if(ok) LS.set('spiceRack1',true); if(mv.length){ await DB.load(); renderAll(); }
+  }
 }
 if(ONLINE) sb.auth.onAuthStateChange((ev)=>{ if(ev==='SIGNED_IN'&&!me) startAuth(); });
 startAuth().catch(err=>{ console.error(err); document.querySelector('main').innerHTML='<div class="empty">Something went wrong loading the page. Try refreshing.</div>'; });
