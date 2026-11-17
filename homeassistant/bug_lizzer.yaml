@@ -5,6 +5,11 @@
 
 wake_on_lan:   # lets Home Assistant switch the LG TV on
 
+shell_command:
+  # Morning recipe search from home (Allrecipes, Serious Eats block cloud servers). Runs in the
+  # background (it takes 10–15 minutes); its log is /config/bug_lizzer/home_recipes.log.
+  bug_lizzer_home_recipes: "nohup python3 /config/bug_lizzer/home_recipes.py > /config/bug_lizzer/home_recipes.log 2>&1 &"
+
 rest_command:
   bug_lizzer_poll:
     url: https://ndbanzpiwhaqvtsepszf.supabase.co/rest/v1/rpc/ha_poll
@@ -67,6 +72,15 @@ input_text:
 
 
 automation:
+  - id: bug_lizzer_home_recipes
+    alias: Bug-Lizzer · morning recipe search from home
+    description: Searches Allrecipes and Serious Eats at 6:00 so the 7 am recipe ideas include them.
+    mode: single
+    triggers:
+      - trigger: time
+        at: "06:00:00"
+    actions:
+      - action: shell_command.bug_lizzer_home_recipes
   # Safety net: if JEOPARDY! ever stops before putting the picture back, fix it within a minute.
   - id: bug_lizzer_tv_picture_safety
     alias: Bug-Lizzer · TV picture never left black

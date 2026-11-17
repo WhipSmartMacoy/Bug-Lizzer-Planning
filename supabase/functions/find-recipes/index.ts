@@ -167,6 +167,37 @@ Deno.serve(async (req) => {
   try {
     // The daily 7 am run (pg_cron, see supabase/031_daily_ideas.sql) sends the household's own job key
     // instead of a sign-in; it searches with what the app last saved and stores the results for both.
+    // The Home Assistant laptop searches Allrecipes and Serious Eats from home (they block this server).
+    // It signs in with its own Home Assistant token, checked by the database (ha_check, see 033).
+    const ht = req.headers.get("x-ha-token");
+    if (ht) {
+      const anon = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_ANON_KEY")!, { global: { headers: { "x-ha-token": ht } } });
+      const { data: okHa } = await anon.rpc("ha_check");
+      if (!okHa) return json({ error: "Not allowed." }, 403);
+      const adm = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+      const q = await req.json().catch(() => ({}));
+      if (q.home === "plan") {   // what to search for: proteins first, the same plan as the 7 am search
+        const { data: row } = await adm.from("app_settings").select("value").eq("key", "web_input").maybeSingle();
+        if (!row?.value) return json({ queries: [] });
+        const { plan } = await search({ ...JSON.parse(row.value), planOnly: true }, true) as any;
+        return json({ queries: [...new Set((plan || []).flat())].slice(0, 60) });
+      }
+      if (q.home === "recipes") {   // recipes the laptop read: kept until the 7 am search judges them
+        const items = (Array.isArray(q.items) ? q.items : []).slice(0, 300).map((r: any) => ({
+          url: String(r.url || "").slice(0, 500), title: String(r.title || "").slice(0, 200), image: r.image ? String(r.image).slice(0, 500) : null,
+          site: String(r.site || "").slice(0, 60), lines: (Array.isArray(r.lines) ? r.lines : []).slice(0, 60).map((l: any) => String(l).slice(0, 300)) }))
+          .filter((r: any) => /^https:\/\/(www\.)?(allrecipes|seriouseats)\.com\//.test(r.url) && r.lines.length);
+        let cur: any = { at: new Date().toISOString(), items: [] };
+        if (!q.start) { const { data: b } = await adm.from("app_settings").select("value").eq("key", "home_recipes").maybeSingle(); if (b?.value) cur = JSON.parse(b.value); }
+        const seenU = new Set(cur.items.map((r: any) => r.url));
+        for (const r of items) if (!seenU.has(r.url) && cur.items.length < 2000) { cur.items.push(r); seenU.add(r.url); }
+        cur.at = new Date().toISOString();
+        await adm.from("app_settings").upsert({ key: "home_recipes", updated_at: cur.at, value: JSON.stringify(cur) });
+        return json({ ok: true, stored: cur.items.length });
+      }
+      return json({ error: "Unknown request." }, 400);
+    }
+
     const dk = req.headers.get("x-daily-key");
     if (dk) {
       const adm = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
@@ -219,9 +250,18 @@ Deno.serve(async (req) => {
             headers: { "Content-Type": "application/json", "x-daily-key": dk }, body: JSON.stringify({ now: true, round: build.done }) }).catch(() => {});
           return;
         }
+        // Add what the laptop found on Allrecipes and Serious Eats this morning (sent within the last 12 hours).
+        const { data: hr } = await adm.from("app_settings").select("value").eq("key", "home_recipes").maybeSingle();
+        const home = hr?.value ? JSON.parse(hr.value) : null;
+        if (home && Date.now() - new Date(home.at).getTime() < 12 * 3600e3 && home.items?.length) {
+          const out: any = await search(input, true, { queries: [], seen: [], home: home.items });
+          const have = new Set(build.results.map((r: any) => r.url));
+          for (const r of out.results || []) if (!have.has(r.url)) build.results.push(r);
+          build.home = home.items.length;
+        }
         build.results.sort((a: any, b: any) => a.need.length - b.need.length || (b.uses.length + b.fresh.length) - (a.uses.length + a.fresh.length));
         await save("web_ideas", { at: now(), key: build.key, daily: true, results: build.results.slice(0, 250),
-          searched: build.searched, checked: build.seen.length, rounds: build.rounds.length });
+          searched: build.searched, checked: build.seen.length + (build.home || 0), fromHome: build.home || 0, rounds: build.rounds.length });
         await save("web_ideas_build", { ...build, seen: [], results: [], finished: now() });
       })();
       // Answer right away; the search keeps running after the reply.
@@ -254,7 +294,7 @@ function planRounds(qs: string[], proteins: string[]): string[][] {
   return rounds.slice(0, 12);
 }
 
-async function search(body: any, daily: boolean, round?: { queries: string[]; seen: string[] }) {
+async function search(body: any, daily: boolean, round?: { queries: string[]; seen: string[]; home?: any[] }) {
     const t0 = Date.now(), budget = daily ? 125000 : 100000;   // stop starting new fetches before the function's time limit
     // At Home names can be product names ("certified organic tahini", "red kidney beans"): count each
     // as the plain ingredient recipes use too, so nothing in the house is missed.
@@ -342,13 +382,17 @@ async function search(body: any, daily: boolean, round?: { queries: string[]; se
     for (const tier of [48, 24, 12, 8, 5, 3]) for (let k = 0; k < 48; k++) lists.forEach((l, n) => { if (deep(qOf[n]) !== tier || k >= tier) return; const u = l[k]; if (u && !seen.has(u) && !skip.has(u)) { seen.add(u); cand.push(u); } });
     const pick = cand.slice(0, round ? 240 : daily ? 220 : 150);
 
-    const results = (await inBatches(pick, daily ? 8 : 15, async (url: string) => {
+    const judgeAll = async (pick: string[]) => (await inBatches(pick, daily ? 8 : 15, async (url: string) => {
       let html = await get(url, 8000); if (!html) return null;
       let recipe: any = null;
       for (const m of html.matchAll(/<script[^>]*application\/ld\+json[^>]*>([\s\S]*?)<\/script>/gi)) {
         try { recipe = findRecipe(JSON.parse(m[1].trim())); } catch { /* skip */ }
         if (recipe) break;
       }
+      return judge(url, recipe, html);
+    })).filter(Boolean) as any[];
+    // Recipes found by the Home Assistant laptop (Allrecipes, Serious Eats) arrive already read; judge them the same way.
+    const judge = (url: string, recipe: any, html: string) => {
       const lines: string[] = Array.isArray(recipe?.recipeIngredient) ? recipe.recipeIngredient.map(String) : [];
       if (!lines.length) return null;
       const ings = names(lines).filter((i) => !staples.has(i));
@@ -362,10 +406,11 @@ async function search(body: any, daily: boolean, round?: { queries: string[]; se
       let image = recipe.image; if (Array.isArray(image)) image = image[0]; if (image && typeof image === "object") image = image.url || image.contentUrl;
       const host = new URL(url).hostname.replace(/^www\./, "");
       perSite[host] = (perSite[host] || 0) + 1;
-      return { url, title: decode(recipe.name || meta(html, "og:title") || ""), image: image || meta(html, "og:image") || null,
-        site: meta(html, "og:site_name") ? decode(meta(html, "og:site_name")) : host,
+      return { url, title: decode(recipe.name || (html && meta(html, "og:title")) || ""), image: image || (html && meta(html, "og:image")) || null,
+        site: html && meta(html, "og:site_name") ? decode(meta(html, "og:site_name")) : host,
         uses, fresh: uses.filter((i) => fresh.includes(i)), need, all: ings };
-    })).filter(Boolean) as any[];
+    };
+    const results = round?.home ? round.home.map((r: any) => { const j = judge(r.url, { name: r.title, image: r.image, recipeIngredient: r.lines }, ""); return j && { ...j, site: r.site || j.site }; }).filter(Boolean) as any[] : await judgeAll(pick);
     // Best first: needs the fewest extra things, then uses the most from home (fridge items count extra).
     results.sort((a, b) => a.need.length - b.need.length || (b.uses.length + b.fresh.length) - (a.uses.length + a.fresh.length));
     return { results: round ? results : results.slice(0, daily ? 60 : 40), searched: queries, candidates: cand.length, checked: results.length, picked: pick, perSite };
