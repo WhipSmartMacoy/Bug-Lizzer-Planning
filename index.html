@@ -2227,9 +2227,14 @@ async function loadDailyIdeas(){
 let homeTimer=null;
 async function homeSearch(){
   const last=+LS.get('homeSearchAt',0); if(Date.now()-last<20*60e3) return;
-  const {error}=await sb.from('home_commands').insert({cmd:'recipes'});
+  const {data:c,error}=await sb.from('home_commands').insert({cmd:'recipes'}).select('id').single();
   if(error) return;
-  LS.set('homeSearchAt',Date.now()); watchHome();
+  // Only say it's searching once Home Assistant confirms it started (the laptop may be off).
+  for(let i=0;i<15;i++){
+    await new Promise(r=>setTimeout(r,1000));
+    const {data:x}=await sb.from('home_commands').select('done_at,result').eq('id',c.id).single();
+    if(x?.done_at){ if(/^Started/.test(x.result||'')){ LS.set('homeSearchAt',Date.now()); watchHome(); renderWeb(); } return; }
+  }
 }
 function watchHome(){
   clearInterval(homeTimer);
