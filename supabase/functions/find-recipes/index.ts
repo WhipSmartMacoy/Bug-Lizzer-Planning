@@ -155,8 +155,7 @@ async function get(url: string, ms = 9000): Promise<string> {
   try { const r = await fetch(url, { headers: UA, redirect: "follow", signal: c.signal }); return r.ok ? await r.text() : ""; }
   catch { return ""; } finally { clearTimeout(t); }
 }
-// Each site's search page, and the pattern its recipe links follow. (Serious Eats and Allrecipes
-// refuse server requests, so NYT Cooking is the one searched.)
+// Each site's search page, and the pattern its recipe links follow.
 const SITES = [
   { name: "NYT Cooking", search: (q: string) => { const [t, pg] = q.split("|"); return `https://cooking.nytimes.com/search?q=${encodeURIComponent(t)}${pg ? "&page=" + pg : ""}`; },
     link: /href="(\/recipes\/\d+-[a-z0-9-]+)"/g, base: "https://cooking.nytimes.com" },
@@ -180,6 +179,17 @@ Deno.serve(async (req) => {
       // Cron fires at 11:00 and 12:00 UTC; only the one that is 7 am in New York runs (daylight saving).
       const hr = Number(new Intl.DateTimeFormat("en-US", { timeZone: "America/New_York", hour: "numeric", hour12: false }).format(new Date()));
       const q = await req.json().catch(() => ({}));
+      // Check how a site answers this server (status, size, recipe links found) — for troubleshooting.
+      if (q.probe) {
+        const out: any[] = [];
+        for (const u of [].concat(q.probe)) {
+          try { const r = await fetch(u, { headers: UA, redirect: "follow" }); const t = await r.text();
+            out.push({ u, status: r.status, bytes: t.length, title: (t.match(/<title>([^<]*)/) || [])[1] || "",
+              links: SITES.map((s) => [s.name, [...t.matchAll(s.link)].length]) }); }
+          catch (e) { out.push({ u, error: String(e) }); }
+        }
+        return json(out);
+      }
       if (hr !== 7 && !q.now) return json({ skipped: "not 7 am in New York" });
       const { data: row } = await adm.from("app_settings").select("value").eq("key", "web_input").maybeSingle();
       if (!row?.value) return json({ skipped: "nothing saved from the app yet" });
