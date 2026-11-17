@@ -109,6 +109,9 @@ function plainName(raw: string): string {
     .replace(/\b(of|about|fresh|freshly|finely|roughly|thinly|chopped|minced|diced|sliced|grated|peeled|trimmed|optional|or more|to taste|store-bought|homemade|a few|a|an)\b/g, " ")
     .replace(/[^a-zà-ÿ' ]/g, " ").replace(/\s+/g, " ").trim();
   if (l.length > 40) l = l.split(" ").slice(-4).join(" ");   // long names keep their last words (the food), never dropped
+  // Wording that isn't a food: amounts and serving notes ("a few shakes", "kosher", "toppings and condiments").
+  l = l.replace(/\b(few|shakes?|dash(es)?|pinch(es)?|splash(es)?|drizzle|generous|good|quality|your favorite|any|assorted|kosher)\b/g, " ").replace(/\s+/g, " ").trim();
+  if (/^(toppings?|condiments?|garnish(es)?|toppings and condiments|condiments and toppings|accompaniments?|sides?|serving|and|or)$/.test(l)) return "";
   return l.length >= 3 && !/^(salt|pepper|water|ice)$/.test(l) ? l : "";
 }
 
