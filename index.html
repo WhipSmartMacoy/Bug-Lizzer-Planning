@@ -1164,11 +1164,15 @@ const isScr = m => m.meal==='dinner'&&!m.person&&!m.recipe_id&&/^Scrunge/i.test(
 const isRest = m => !m.recipe_id&&/ —( |$)/.test(m.note||'');          // a restaurant pick: "Name — dish"
 const restName = m => (m.note||'').split(' —')[0];
 const restDish = m => (m.note||'').split(' —').slice(1).join(' —').trim();
-const isOutDin = m => m.meal==='dinner'&&!m.person&&!m.recipe_id&&!isScr(m);
+const isOutDin = m => m.meal==='dinner'&&!m.person&&!m.recipe_id&&!isScr(m);   // any dinner without a recipe (eating out, or typed in)
+// A typed-in dinner made at home (no recipe) is saved as "🏠 what it was"; anything else without a recipe is eating out.
+const HOME_MARK='🏠 ';
+const isHomeDin = m => !m.recipe_id&&String(m.note||'').startsWith(HOME_MARK);
+const homeText = m => String(m.note||'').slice(HOME_MARK.length);
 const mapsUrl = n => 'https://maps.apple.com/?q='+encodeURIComponent(n);
 const outLabel = m => isRest(m)?`🍽️ <a href="${mapsUrl(restName(m))}" target="_blank" rel="noopener">${esc(restName(m))}</a>${restDish(m)?' · '+esc(restDish(m)):''}`:`${/^Scrunge/i.test(m.note||'')?'🫙':'🍴'} ${esc(m.note||'')}`;
 const scrDesc = m => (m.note||'').replace(/^Scrunge:?\s*/i,'');
-const dTitle = m => isScr(m)?'Scrunge'+(scrDesc(m)?': '+scrDesc(m):''):isOutDin(m)?(isRest(m)?restName(m)+(restDish(m)?' · '+restDish(m):''):m.note||'Out'):rec(m.recipe_id)?.title||'';
+const dTitle = m => isScr(m)?'Scrunge'+(scrDesc(m)?': '+scrDesc(m):''):isOutDin(m)?(isHomeDin(m)?homeText(m):isRest(m)?restName(m)+(restDish(m)?' · '+restDish(m):''):m.note||'Out'):rec(m.recipe_id)?.title||'';
 const isDin = m => m.meal==='dinner'&&!m.person;
 const pDinOf = (d,p) => S.meals.find(m=>m.planned_for===d&&isPDin(m)&&m.person===p);
 const hasDinner = d => S.meals.some(m=>m.planned_for===d&&isDin(m));
@@ -1389,13 +1393,13 @@ function renderToday(){
   const tonight=tonightAll.find(isDin)||tonightAll[0];
   const both=m=>!m.person||dins.some(x=>String(x.leftover_of)===String(m.id)&&x.person!==m.person);
   const ttl=m=>isScan(m)?(m.note||'Photo'):m.person?(rec(m.recipe_id)?.title||(isScr(m)||isOutDin(m)?dTitle(m):m.note)||''):dTitle(m);
-  const icon=m=>m.leftover_of&&!ids.has(String(m.leftover_of))?'🍱 ':isScr(m)?'🫙 ':isOutDin(m)?'🍽️ ':isScan(m)?'📷 ':'';
+  const icon=m=>m.leftover_of&&!ids.has(String(m.leftover_of))?'🍱 ':isScr(m)?'🫙 ':isHomeDin(m)?'🏠 ':isOutDin(m)?'🍽️ ':isScan(m)?'📷 ':'';
   let missing=[]; try{ const w=week; week=mondayOf(TODAY); missing=shopRows().filter(o=>o.buy>0&&o.uses.some(m=>m.planned_for===TODAY)).map(o=>o.i); week=w; }catch(e){}
   const line=p=>{ const ms=personMeals(p,TODAY).filter(m=>m.when!=='Dinner');
     return `<div class="trow" data-who="${p}"><b class="who">${p}</b><span>${ms.length?ms.map(m=>`<span class="tchip">${m.when==='Snackies'?'🍪':m.when==='Breakfast'?'☀️':'🥪'} ${esc(m.scan||m.out?(m.note||'out'):m.r?.title||'')}</span>`).join(''):'<span class="meta">nothing logged yet</span>'}</span></div>`; };
   el.innerHTML=`<div class="today">
     <div class="tdin"><span class="meta">Tonight</span>${tonight?`${tonightAll.map(m=>`<b class="tdish">${both(m)?'':`<span class="who" data-who="${m.person}">${m.person}</span>`}${icon(m)}${esc(ttl(m))}</b>`).join('')}
-        <span class="${missing.length&&rec(tonight.recipe_id)?'needprice':'okline'}">${isOutDin(tonight)?(isRest(tonight)?`<a href="${mapsUrl(restName(tonight))}" target="_blank" rel="noopener">Eating out · map</a>`:'Eating out'):isScr(tonight)?'Whatever’s at home':tonight.leftover_of?'Leftovers, nothing to buy':missing.length?`Still need ${missing.slice(0,4).map(esc).join(', ')}${missing.length>4?'…':''}`:'Everything is at home ✓'}</span>
+        <span class="${missing.length&&rec(tonight.recipe_id)?'needprice':'okline'}">${isHomeDin(tonight)?'Made at home':isOutDin(tonight)?(isRest(tonight)?`<a href="${mapsUrl(restName(tonight))}" target="_blank" rel="noopener">Eating out · map</a>`:'Eating out'):isScr(tonight)?'Whatever’s at home':tonight.leftover_of?'Leftovers, nothing to buy':missing.length?`Still need ${missing.slice(0,4).map(esc).join(', ')}${missing.length>4?'…':''}`:'Everything is at home ✓'}</span>
         <button class="btn small" data-add="${TODAY}||dinner" type="button" style="margin-top:6px">＋ Add to dinner</button>`
       :`<b>Nothing planned</b><button class="btn small" data-add="${TODAY}||dinner" type="button">＋ Add dinner</button>`}</div>
     <div class="tmeals">${PEOPLE.map(line).join('')}</div>
@@ -1506,7 +1510,10 @@ function renderPlan(){
       <div class="lunch"><div class="lh">Breakfast</div>${mealList(d,'breakfast')}</div>
       <div class="lunch"><div class="lh">Lunch</div>${mealList(d,'lunch')}</div>
       <div class="lunch dinnerbox"><div class="lh">Dinner</div>
-      ${ms.map(m=>{const r=rec(m.recipe_id); if(isOutDin(m)) return `<div class="meal scr">
+      ${ms.map(m=>{const r=rec(m.recipe_id); if(isHomeDin(m)) return `<div class="meal scr">
+        <div class="scrt">🏠 ${esc(homeText(m))}</div>
+        <div class="meta">made at home · added by ${esc(nameOf(m.added_by))}</div>
+        <div class="mrow"><button data-unplan="${m.id}" title="Remove">✕</button></div></div>`; if(isOutDin(m)) return `<div class="meal scr">
         <div class="scrt">${isRest(m)?`🍽️ <a href="${mapsUrl(restName(m))}" target="_blank" rel="noopener">${esc(restName(m))}</a>`:'🥡 '+esc(m.note||'Out')}</div>
         ${isRest(m)&&restDish(m)?`<div>${esc(restDish(m))}</div>`:''}
         <div class="meta">eating out · added by ${esc(nameOf(m.added_by))}</div>
@@ -1567,7 +1574,7 @@ async function estimateFood(text){
 async function saveOutNote(id,note){
   note=note.trim(); if(!note) return;
   await DB.run(sb.from('meal_plan').update({note}).eq('id',id)); renderAll();
-  const food=/ —( |$)/.test(note)?note.split(' —').slice(1).join(' ').trim():note; if(!food) return;
+  const food=/ —( |$)/.test(note)?note.split(' —').slice(1).join(' ').trim():note.replace(HOME_MARK,''); if(!food) return;
   const n=await estimateFood(food); if(n) await DB.run(sb.from('meal_plan').update({nutrition:n}).eq('id',id)); renderAll();
 }
 document.addEventListener('keydown',e=>{ if(e.key==='Enter'&&e.target.dataset.outnote){ e.preventDefault(); saveOutNote(e.target.dataset.outnote,e.target.value); } });
@@ -1855,11 +1862,12 @@ document.addEventListener('click',async e=>{
 });
 document.addEventListener('input',e=>{ if(e.target.id==='addQ'&&addS){ addS.q=e.target.value; const pos=e.target.selectionStart; renderAdd(); const i=$('#addQ'); i.focus(); i.setSelectionRange(pos,pos); } });
 document.addEventListener('submit',async e=>{ if(!e.target.matches?.('[data-addout]')) return; e.preventDefault(); e.stopImmediatePropagation();
-  const note=$('#addOut').value.trim(); if(!note||!addS) return; const {d,p,meal}=addS, ps=addS.who||[p], hh=hhMode(); closeAdd();
+  const typed=$('#addOut').value.trim(); if(!typed||!addS) return; const {d,p,meal}=addS, ps=addS.who||[p], hh=hhMode(); closeAdd();
+  const note=(meal==='dinner'||meal==='pdin')?HOME_MARK+typed:typed;   // a typed dinner was made at home (eating out has its own picker)
   if(meal==='pdin'&&pDinOf(d,p)) return toast(`${p} already has dinner logged`);
   let data=null;
   for(const pp of (hh?[null]:ps)){ const r=await sb.from('meal_plan').insert({planned_for:d,meal:meal==='pdin'?'dinner':meal,person:pp,recipe_id:null,note}).select('id').single(); if(r.data&&pp!==ps[0]&&pp!==null) saveOutNote(r.data.id,note); else data=r.data; }
-  toast(`Added: ${note}`); await DB.load(); renderAll(); if(data?.id) saveOutNote(data.id,note); },true);
+  toast(`Added: ${typed}`); await DB.load(); renderAll(); if(data?.id) saveOutNote(data.id,note); },true);
 document.addEventListener('keydown',e=>{ if(e.key==='Escape'&&addS) closeAdd(true); });
 document.addEventListener('submit',async e=>{ if(!e.target.matches?.('[data-addscrm]')) return; e.preventDefault(); e.stopImmediatePropagation();
   if(!addS) return; const {d,p,meal}=addS, ps=addS.who||[p], desc=$('#addScrM').value.trim(); closeAdd();
@@ -2012,7 +2020,7 @@ function renderTomorrow(){
   const T=addDays(TODAY,1), planned=S.meals.filter(m=>m.planned_for===T&&isDin(m));
   const head=`<div class="row" style="justify-content:space-between;align-items:baseline"><h2 style="margin:0">Dinner tomorrow · ${dayName(T,'long')}</h2></div>`;
   let body;
-  if(planned.length) body=`<p class="meta" style="margin:6px 0 0">Planned: <b>${planned.map(m=>(m.leftover_of?'🍱 Leftovers: ':isScr(m)?'🫙 ':isOutDin(m)?'🍽️ ':'')+esc(dTitle(m))).join(', ')}</b></p>`;
+  if(planned.length) body=`<p class="meta" style="margin:6px 0 0">Planned: <b>${planned.map(m=>(m.leftover_of?'🍱 Leftovers: ':isScr(m)?'🫙 ':isHomeDin(m)?'🏠 ':isOutDin(m)?'🍽️ ':'')+esc(dTitle(m))).join(', ')}</b></p>`;
   else{
     // Every cooked leftover, even a single serving. Enough for both → one tap makes it tomorrow's dinner;
     // one serving → open tomorrow's dinner to give it to one of us.
@@ -2463,7 +2471,7 @@ function publishStation(){
     const w=week; week=mondayOf(TODAY);
     const days=[0,1,2,3,4,5,6].map(i=>addDays(week,i));
     const dinners=days.map(d=>{ const m=S.meals.find(x=>x.planned_for===d&&isDin(x));
-      return {d, day:dayName(d), what:m?dTitle(m):null, kind:m?(m.leftover_of?'leftovers':isScr(m)?'scrunge':isOutDin(m)?'out':'cook'):null, cooked:!!(m&&m.cooked_at)}; });
+      return {d, day:dayName(d), what:m?dTitle(m):null, kind:m?(m.leftover_of?'leftovers':isScr(m)?'scrunge':isHomeDin(m)?'home':isOutDin(m)?'out':'cook'):null, cooked:!!(m&&m.cooked_at)}; });
     const plan=shopRows(); week=w;
     const buy=plan.filter(o=>o.buy>0).map(o=>({i:o.i, aisle:aisleOf(o.i)[1], tonight:o.uses.some(m=>m.planned_for===TODAY)}))
       .concat(hhToBuy().map(x=>({i:x.name, aisle:'Household', tonight:false})));

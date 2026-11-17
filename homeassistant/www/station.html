@@ -206,7 +206,7 @@
     // ---- column 2: this week's dinners, calendar, shopping ----
     var todayIso = now.getFullYear() + '-' + pad(now.getMonth() + 1) + '-' + pad(now.getDate());
     var c2 = '<div class="card"><h2>Dinners this week</h2>' + (sum && sum.dinners ? sum.dinners.map(function(d){
-      var ic = d.kind === 'leftovers' ? '🍱 ' : d.kind === 'scrunge' ? '🫙 ' : d.kind === 'out' ? '🍽️ ' : '';
+      var ic = d.kind === 'leftovers' ? '🍱 ' : d.kind === 'scrunge' ? '🫙 ' : d.kind === 'out' ? '🍽️ ' : d.kind === 'home' ? '🏠 ' : '';
       return '<div class="row' + (d.d === todayIso ? ' today' : '') + '"><span class="k">' + esc(d.day) + '</span><span class="v' + (d.what ? '' : ' none') + '">' +
         (d.what ? ic + esc(cleanWhat(d.what)) + (d.cooked ? ' ✓' : '') : '—') + '</span></div>'; }).join('')
       : '<div class="sub">Open the Bug-Lizzer app once to fill this in.</div>') + '</div>';
