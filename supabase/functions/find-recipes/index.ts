@@ -104,11 +104,12 @@ function lineNames(raw: string): string[] {
 // dropping it, so it still reaches the shopping list. Amounts, sizes and prep notes are stripped.
 const UNITS = "cups?|tablespoons?|tbsps?|teaspoons?|tsps?|ounces?|oz|pounds?|lbs?|grams?|g|kilograms?|kg|ml|liters?|quarts?|pints?|cans?|jars?|packages?|pkgs?|bunch(?:es)?|heads?|cloves?|sprigs?|stalks?|slices?|pieces?|sheets?|pinch(?:es)?|dash(?:es)?|large|medium|small|whole|handful|knob";
 function plainName(raw: string): string {
-  let l = raw.toLowerCase().replace(/\(.*?\)/g, " ").split(/,| for | to serve| plus /)[0];
+  let l = raw.toLowerCase().replace(/\(.*?\)/g, " ").split(/,| for | to serve| plus | or /)[0];   // "chuck roast or round roast": the first choice
   l = l.replace(/[\d½⅓⅔¼¾⅛\/.\-–]+/g, " ").replace(new RegExp("\\b(" + UNITS + ")\\b", "g"), " ")
     .replace(/\b(of|about|fresh|freshly|finely|roughly|thinly|chopped|minced|diced|sliced|grated|peeled|trimmed|optional|or more|to taste|store-bought|homemade|a few|a|an)\b/g, " ")
     .replace(/[^a-zà-ÿ' ]/g, " ").replace(/\s+/g, " ").trim();
-  return l.length >= 3 && l.length <= 40 && !/^(salt|pepper|water|ice)$/.test(l) ? l : "";
+  if (l.length > 40) l = l.split(" ").slice(-4).join(" ");   // long names keep their last words (the food), never dropped
+  return l.length >= 3 && !/^(salt|pepper|water|ice)$/.test(l) ? l : "";
 }
 
 function names(lines: string[]): string[] {

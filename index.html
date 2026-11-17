@@ -1995,7 +1995,7 @@ document.addEventListener('click',e=>{ const t=e.target.closest('#nutPrev,#nutNe
   week=t.id==='nutPrev'?addDays(week,-7):t.id==='nutNext'?addDays(week,7):mondayOf(TODAY); renderAll(); });
 function renderTomorrow(){
   const T=addDays(TODAY,1), planned=S.meals.filter(m=>m.planned_for===T&&isDin(m));
-  const head=`<div class="row" style="justify-content:space-between;align-items:baseline"><h2 style="margin:0">Dinner tomorrow · ${dayName(T,'long')}</h2><span class="meta">dinners are for 2</span></div>`;
+  const head=`<div class="row" style="justify-content:space-between;align-items:baseline"><h2 style="margin:0">Dinner tomorrow · ${dayName(T,'long')}</h2></div>`;
   let body;
   if(planned.length) body=`<p class="meta" style="margin:6px 0 0">Planned: <b>${planned.map(m=>(m.leftover_of?'🍱 Leftovers: ':isScr(m)?'🫙 ':isOutDin(m)?'🍽️ ':'')+esc(dTitle(m))).join(', ')}</b></p>`;
   else{
