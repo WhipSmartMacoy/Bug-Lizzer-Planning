@@ -155,15 +155,11 @@ async function get(url: string, ms = 9000): Promise<string> {
   try { const r = await fetch(url, { headers: UA, redirect: "follow", signal: c.signal }); return r.ok ? await r.text() : ""; }
   catch { return ""; } finally { clearTimeout(t); }
 }
-// Each site's search page, and the pattern its recipe links follow.
+// Each site's search page, and the pattern its recipe links follow. Allrecipes and Serious Eats answer
+// this server with 403 (blocked; checked with the probe, Nov 2026), so only NYT Cooking is searched here.
 const SITES = [
   { name: "NYT Cooking", search: (q: string) => { const [t, pg] = q.split("|"); return `https://cooking.nytimes.com/search?q=${encodeURIComponent(t)}${pg ? "&page=" + pg : ""}`; },
     link: /href="(\/recipes\/\d+-[a-z0-9-]+)"/g, base: "https://cooking.nytimes.com" },
-  // Allrecipes and Serious Eats share a search page layout: 24 results a page, next pages by offset.
-  { name: "Allrecipes", search: (q: string) => { const [t, pg] = q.split("|"); return `https://www.allrecipes.com/search?q=${encodeURIComponent(t)}${pg ? "&offset=" + (Number(pg) - 1) * 24 : ""}`; },
-    link: /href="(https:\/\/www\.allrecipes\.com\/recipe\/\d+\/[a-z0-9-]+)\/?"/g },
-  { name: "Serious Eats", search: (q: string) => { const [t, pg] = q.split("|"); return `https://www.seriouseats.com/search?q=${encodeURIComponent(t)}${pg ? "&offset=" + (Number(pg) - 1) * 24 : ""}`; },
-    link: /href="(https:\/\/www\.seriouseats\.com\/[a-z0-9-]*recipe[a-z0-9-]*)"/g },
 ];
 
 Deno.serve(async (req) => {
